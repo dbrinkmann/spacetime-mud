@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.local-db/
+.env
+.env.local
+*.log
+test-results/
+playwright-report/
+.bridge/
+.tools/
+spacetimedb/target/
+spacetime.local.json
+spacetimedb/spacetime.local.json

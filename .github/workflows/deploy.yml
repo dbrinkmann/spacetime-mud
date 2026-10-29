@@ -1,0 +1,60 @@
+name: Test and deploy game
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix spacetimedb
+      - run: npm test
+      - run: npm run check:server
+      - name: Install pinned SpacetimeDB CLI
+        run: |
+          mkdir -p .tools
+          curl --fail -L https://github.com/clockworklabs/SpacetimeDB/releases/download/v2.13.0/spacetime-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C .tools
+          echo "$PWD/.tools" >> "$GITHUB_PATH"
+      - name: Start disposable integration database
+        run: |
+          spacetimedb-cli start --listen-addr 127.0.0.1:3030 --data-dir .local-db --non-interactive > /tmp/spacetime-mud.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3030/v1/ping && break || sleep 1; done
+          spacetimedb-cli publish mud-ci --server http://127.0.0.1:3030 --module-path spacetimedb --yes
+      - name: Multiplayer and React UI integration
+        env:
+          SPACETIME_HOST: http://127.0.0.1:3030
+          SPACETIME_DATABASE: mud-ci
+        run: |
+          npm run test:integration
+          npx vitest run
+      - name: Verify generated bindings
+        run: |
+          spacetimedb-cli generate --lang typescript --out-dir client/module_bindings --module-path spacetimedb
+          git diff --exit-code -- client/module_bindings
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

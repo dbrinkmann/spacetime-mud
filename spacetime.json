@@ -1,0 +1,5 @@
+{
+  "server": "maincloud",
+  "database": "dbrinkmann-spacetime-mud",
+  "module-path": "spacetimedb"
+}

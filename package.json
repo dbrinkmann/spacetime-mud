@@ -1,0 +1,31 @@
+{
+  "name": "spacetime-mud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "check:server": "tsc --noEmit -p spacetimedb/tsconfig.json",
+    "bridge": "tsx bridge/index.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:integration": "tsx tests/integration.ts"
+  },
+  "dependencies": {
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "spacetimedb": "2.13.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.20.0",
+    "typescript": "~5.6.2",
+    "vite": "^7.0.0",
+    "vitest": "^5.0.5"
+  }
+}
