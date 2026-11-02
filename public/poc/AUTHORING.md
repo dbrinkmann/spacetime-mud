@@ -69,11 +69,11 @@ Read-only `window.boxWorld.inspect()` reports position, pose, selected/occupied 
 
 ## Publish in the shared game
 
-Connect your agent using the instructions under **Create**. Its MCP tools inspect existing definitions, validate geometry, save private drafts and render previews. In Explore, choose **Review creation** or **Review character**, then **Keep it** to publish. **Ask for changes** directs you back to your agent conversation. **Discard** removes an unwanted visual draft. New zones start with an empty floor and new players have a neutral fallback silhouette.
+Connect your agent using the instructions under **Create**. Its MCP tools inspect existing definitions, validate geometry, stage changes and render previews. Agents publish live with `world_publish_visual` (exact draft key and revision) and `world_publish_object` (tested version ID). Watch results in Explore; no player review is required. Manual review remains available for deliberately staged work.
 
-Room geometry and scripted-object behavior remain separate definitions. Set a placement's optional `objectId` to the decimal ID of an object in that room: selecting the published prop exposes its published action buttons. Agents save and test behavior with `world_save_object` and `world_test_object`; players review and keep behaviors in Explore. Private geometry preview does not execute linked scripts.
+Room geometry and scripted-object behavior remain separate definitions. Set a placement's optional `objectId` to the decimal ID of an object in that room: selecting the published prop exposes its published action buttons. Agents save and test behavior with `world_save_object` and `world_test_object`; then publish them directly with `world_publish_object`. Private geometry preview does not execute linked scripts.
 
-The MCP server is model-neutral and uses stdio. The authoritative `agentBuild` reducer checks pairing and permissions for every mutation. It does not expose publication to the paired agent. No inference runs in the game or MCP server.
+The MCP server is model-neutral and uses stdio. The authoritative `agentBuild` reducer checks pairing and permissions for every mutation. It permits live publication within the paired player's editing permissions. No inference runs in the game or MCP server.
 
 Publication checks geometry, navigation, references, permissions, and the base revision. Conflicting publications are rejected. Publishing a room resets its occupants to spawn and releases seats so old paths cannot run through new geometry. Each builder has one current draft per room and one avatar draft; there is no visual revision history yet, so export your definitions to source control before replacing them.
 

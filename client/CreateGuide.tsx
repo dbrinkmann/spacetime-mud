@@ -80,10 +80,9 @@ export function CreateGuide({
             one.
           </blockquote>
           <p>
-            Your agent builds and tests it. In Explore, choose{" "}
-            <strong>Review creation</strong> to try the private preview, then{" "}
-            <strong>Keep it</strong> to share it. Ask your agent for changes in
-            the same conversation.
+            Your agent builds, tests, and publishes directly into the world.
+            Watch changes appear in Explore. Ask for revisions in the same
+            agent conversation; there is no review or Keep it step required.
           </p>
         </li>
       </ol>
@@ -94,8 +93,8 @@ export function CreateGuide({
         {data.grants.length ? (
           <>
             <p>
-              This agent can build drafts in your own or shared zones and for
-              your character. Publishing stays in your hands.
+              This agent can build and publish live in your own or shared zones
+              and for your character. Disconnect it here to revoke access.
             </p>
             <button
               disabled={!enabled}
@@ -128,7 +127,7 @@ export function CreateGuide({
                 onChange={(e) => setConsent(e.target.checked)}
               />
               Allow this agent to read my game context, create places, and
-              prepare drafts for my character and editable rooms. I can revoke
+              publish changes live to my character and editable rooms. I can revoke
               access anytime.
             </label>
             <button

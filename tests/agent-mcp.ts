@@ -54,7 +54,8 @@ try {
   await mcp.connect(transport);
   const tools = await mcp.listTools();
   assert(tools.tools.some((t) => t.name === "world_render_preview"));
-  assert(!tools.tools.some((t) => /publish/.test(t.name)));
+  assert(tools.tools.some((t) => t.name === "world_publish_visual"));
+  assert(tools.tools.some((t) => t.name === "world_publish_object"));
   const info = value(await call("world_connect"));
   assert.equal(info.paired, false);
   await assert.rejects(
@@ -220,10 +221,85 @@ try {
   const unwanted = [...player.c.db.myVersions.iter()].find(
     (version) => version.name === "Discard me",
   )!;
-  await page.getByRole("button", { name: "Review Discard me", exact: true }).click();
-  await page.getByRole("button", { name: "Discard behavior", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Review Discard me", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Discard behavior", exact: true })
+    .click();
   await until(() => !player.c.db.myVersions.id.find(unwanted.id));
   assert(!player.c.db.visibleObjects.id.find(unwanted.objectId));
+  // Paired agents can finish work live without a browser approval step.
+  await call("world_save_visual", {
+    kind: "scene",
+    room_id: String(roomId),
+    source,
+  });
+  const liveDraft = [...player.c.db.myVisualDrafts.iter()][0];
+  assert(
+    (
+      await mcp.callTool({
+        name: "world_publish_visual",
+        arguments: {
+          key: liveDraft.key,
+          revision: liveDraft.revision + 1,
+          room_id: String(roomId),
+        },
+      })
+    ).isError,
+  );
+  await call("world_publish_visual", {
+    key: liveDraft.key,
+    revision: liveDraft.revision,
+    room_id: String(roomId),
+  });
+  await until(
+    () => other.c.db.visibleScenes.roomId.find(roomId)?.revision === 2,
+  );
+  await call("world_save_visual", {
+    kind: "avatar",
+    room_id: String(roomId),
+    source: readFileSync("public/poc/examples/wizard.json", "utf8"),
+  });
+  const avatarDraft = [...player.c.db.myVisualDrafts.iter()][0];
+  await call("world_publish_visual", {
+    key: avatarDraft.key,
+    revision: avatarDraft.revision,
+    room_id: String(roomId),
+  });
+  await until(() =>
+    other.c.db.visibleAvatars.identity.find(player.c.identity!),
+  );
+  await call("world_save_object", {
+    name: "Live bell",
+    description: "Published by the agent.",
+    kind: "scenery",
+    source: 'function on_ring(ctx){ctx.say("Live bell rings.");}',
+    actions: [{ id: "ring", label: "Ring live bell" }],
+    room_id: String(roomId),
+  });
+  const liveVersion = [...player.c.db.myVersions.iter()].find(
+    (v) => v.name === "Live bell",
+  )!;
+  assert(
+    (
+      await mcp.callTool({
+        name: "world_publish_object",
+        arguments: { versionId: String(liveVersion.id) },
+      })
+    ).isError,
+  );
+  await call("world_test_object", {
+    versionId: String(liveVersion.id),
+    event: "on_ring",
+  });
+  await call("world_publish_object", {
+    versionId: String(liveVersion.id),
+    room_id: String(roomId),
+  });
+  await until(
+    () => other.c.db.visibleObjects.id.find(liveVersion.objectId)?.active,
+  );
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({
@@ -244,9 +320,17 @@ try {
     arguments: { kind: "scene", room_id: String(roomId), source },
   });
   assert(revoked.isError);
+  assert(
+    (
+      await mcp.callTool({
+        name: "world_publish_object",
+        arguments: { versionId: String(liveVersion.id) },
+      })
+    ).isError,
+  );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS generic MCP client: pairing, permissions, inspect, geometry validation, drafts, image preview, no agent publication, in-world keep/discard, script testing/review, provider-neutral Create UI, mobile, revocation.",
+    "PASS generic MCP client: pairing, private staging, optional review, live room/avatar/behavior publication, stale revision and untested behavior rejection, mobile, revocation.",
   );
 } finally {
   await mcp.close();

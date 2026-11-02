@@ -25,29 +25,31 @@ Environment overrides: `SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`, and `
 | `world_save_visual` | Validated private room or avatar draft |
 | `world_save_object` | Private scripted-object draft |
 | `world_test_object` | Isolated server-side handler test and report |
-| `world_render_preview` | PNG of private geometry in the isolated renderer |
+| `world_render_preview` | PNG of staged or published geometry in the isolated renderer |
+| `world_publish_visual` | Publish the exact staged room/avatar revision live |
+| `world_publish_object` | Publish a tested behavior version live |
 
 The renderer's screenshot shows the authored geometry and character; it is not a live multiplayer snapshot. Script tests are separate from geometry previews. A missing browser or renderer failure produces a tool error, never a false claim of visual verification.
 
 ## Authoritative API
 
-MCP mutations call the generated SDK reducer `agentBuild({operation, roomId, payload})`. `payload` is JSON. Supported operations are `create_zone`, `create_room`, `save_visual`, `save_object`, and `test_object`; their typed MCP input schemas document the payloads. Other integrations can call the same reducer through the SpacetimeDB client SDK using a separately paired agent identity.
+MCP mutations call the generated SDK reducer `agentBuild({operation, roomId, payload})`. `payload` is JSON. Supported operations are `create_zone`, `create_room`, `save_visual`, `save_object`, `test_object`, `publish_visual`, and `publish_object`; their typed MCP input schemas document the payloads. Other integrations can call the same reducer through the SpacetimeDB client SDK using a separately paired agent identity.
 
-The server derives the player from the authenticated sender's grant. It never trusts an owner ID in the payload. Existing ownership/collaborator checks, geometry budgets, script validation, and isolated preview machinery still apply. Pairing permits creating places immediately and preparing drafts; it does not permit publishing visuals or behavior as the player. The agent cannot choose a publication operation or call the player's publication reducer with its own identity.
+The server derives the player from the authenticated sender's grant. It never trusts an owner ID in the payload. Existing ownership/collaborator checks, geometry budgets, script validation, and isolated preview machinery still apply. Pairing permits creating places, staging content, and publishing live within the player's editing permissions. Publication derives the actor from the authenticated grant, preserves revision checks and requires tested scripts. The agent does not need the player's identity token. Revocation blocks publication as well as staging.
 
-## Player review
+## Live creation
 
-Visual drafts appear in the current room as **Review creation** or **Review character**. The preview replaces only that player's local geometry; movement/poses during review are local, and linked script actions are disabled in that preview. **Keep it** publishes the exact reviewed revision. Changed drafts require another review. **Discard** removes the selected draft. **Ask for changes** explains that revisions happen in the existing agent conversation; it does not silently send an inference request.
+Agents stage geometry with `world_save_visual`, validate/render it, and finish with `world_publish_visual` using the returned key and revision. Scripts are staged with `world_save_object`, tested with `world_test_object`, then published with `world_publish_object`. There is no per-change player approval requirement. All connected players see published changes immediately. Room publication resets occupants to spawn; previous behavior timers are cancelled when publishing a new version.
 
-Script drafts appear as an interaction review with their intended actions and test report. **Keep behavior** is enabled only after a successful isolated test. Existing scripts continue running independently of any agent connection.
+The older manual review controls remain available for deliberately staged work, but are not the default creator workflow. Ask for revisions in the external agent conversation and watch updates in Explore. The agent's building skill directs it to complete publication itself.
 
 ## Validation
 
-`npm run test:agent` drives a generic MCP SDK client and actual Chromium. It checks pairing, denied unpaired writes, guidance, validation failures, draft privacy, screenshot output, denied agent publication, the Create UI, in-world keep/discard, script testing/review, mobile layout, and revoked writes. It needs a disposable database and matching frontend (`SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`). It does not consume model quota.
+`npm run test:agent` drives a generic MCP SDK client and actual Chromium. It checks pairing, denied unpaired writes, guidance, validation failures, draft privacy, screenshot output, live room/avatar/behavior publication, stale revision and untested script rejection, the Create UI, in-world keep/discard, script testing/review, mobile layout, and revoked writes. It needs a disposable database and matching frontend (`SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`). It does not consume model quota.
 
 The downloadable [skill](../public/agent/SKILL.md) can also be given directly to an agent. The legacy Claude bridge remains for old integrations but is unnecessary for this workflow.
 
-### Release verification — 2026-11-02
+### Historical review-flow release verification — 2026-11-02
 
 Deployed `a0e6452` to GitHub Pages with the updated Maincloud module. [Release checks](https://github.com/dbrinkmann/spacetime-mud/actions/runs/41543344738) passed, including multiplayer, timers, UI, MCP, desktop/mobile browsers, generated bindings, and production build.
 

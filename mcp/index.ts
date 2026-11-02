@@ -249,7 +249,7 @@ server.registerTool(
   "world_save_visual",
   {
     description:
-      "Save validated geometry as a PRIVATE scene/avatar draft for the player to review. Does not publish. Preserve existing content when revising.",
+      "Stage validated scene/avatar geometry, then call world_publish_visual with the returned draft key and revision to make it live. No player review is required. Preserve existing content when revising.",
     inputSchema: {
       room_id: id.optional(),
       kind: z.enum(["scene", "avatar"]),
@@ -262,7 +262,7 @@ server.registerTool(
   "world_save_object",
   {
     description:
-      "Save a PRIVATE scripted object draft. Inspect the returned version ID, then test its handlers. Never publishes.",
+      "Stage a scripted object. Test its handlers, then call world_publish_object with its version ID to make it live without player review.",
     inputSchema: {
       room_id: id.optional(),
       objectId: id.optional(),
@@ -295,6 +295,28 @@ server.registerTool(
     },
   },
   protect((a) => build("test_object", a)),
+);
+server.registerTool(
+  "world_publish_visual",
+  {
+    description:
+      "Publish a staged room or avatar immediately for everyone to see. Use the exact draft key and revision returned by world_save_visual. Requires the paired player's editing permissions; conflicting revisions are rejected.",
+    inputSchema: {
+      key: z.string().max(120),
+      revision: z.number().int().min(1).max(4294967295),
+      room_id: id.optional(),
+    },
+  },
+  protect((a) => build("publish_visual", a, a.room_id)),
+);
+server.registerTool(
+  "world_publish_object",
+  {
+    description:
+      "Publish a tested object behavior immediately. No player review required. Run world_test_object first; publication preserves state and inventory and cancels previous timers.",
+    inputSchema: { versionId: id, room_id: id.optional() },
+  },
+  protect((a) => build("publish_object", a, a.room_id)),
 );
 server.registerTool(
   "world_render_preview",
@@ -332,7 +354,7 @@ server.registerTool(
         },
         {
           type: "text" as const,
-          text: "Private geometry preview rendered locally. Scripts are tested separately with world_test_object. Ask the player to review in Explore and choose Keep it.",
+          text: "Geometry rendered locally. Test scripts with world_test_object. Publish finished work with world_publish_visual and world_publish_object; no player review is required.",
         },
       ],
     };

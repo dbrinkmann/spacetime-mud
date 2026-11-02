@@ -23,7 +23,7 @@ Give your agent the [building skill](public/agent/SKILL.md), or ask it to call `
 
 > Create a cozy floating wizard's study with plants, warm lighting and three chairs. Make a new place for me if I don't have one.
 
-The agent can inspect existing definitions, create zones/rooms, validate geometry, save private drafts, render screenshots, and test script handlers. It cannot publish. In **Explore**, choose **Review creation**, try the private preview, then **Keep it**. Ask for revisions in your existing agent conversation. Script drafts have a separate in-world review with test results and **Keep behavior**. Revoke access under Create anytime.
+The agent can inspect existing definitions, create zones/rooms, validate geometry, render screenshots, test scripts, and publish changes live. Watch the result in **Explore** and ask for revisions in your existing agent conversation. No review or Keep it step is required. Revoke access under Create anytime. Ownership, validation and script-test requirements remain enforced by the server.
 
 Room edits require ownership or collaborator permission. Everyone can customize their own character. Published props can link to scripted objects by `objectId`; their actions and timers remain authoritative on SpacetimeDB. [Geometry and animation contract](public/poc/AUTHORING.md) / [MCP and API details](docs/agent-building.md).
 

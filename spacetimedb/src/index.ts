@@ -297,45 +297,49 @@ export const saveVisualDraft = db.reducer(
   { roomId: t.u64(), kind: t.string(), source: t.string() },
   (ctx, a) => saveVisual(ctx, ctx.sender, a.roomId, a.kind, a.source),
 );
+function publishVisualFor(
+  ctx: Ctx,
+  actor: Identity,
+  a: { key: string; revision: number },
+) {
+  const draft = ctx.db.visualDraft.key.find(a.key) ?? fail("Draft not found.");
+  if (!draft.owner.equals(actor)) fail("This is not your draft.");
+  if (draft.revision !== a.revision)
+    fail("Draft changed. Preview the latest revision.");
+  const source = validateVisual(ctx, draft.roomId, draft.kind, draft.source);
+  if (draft.kind === "scene") {
+    requireEdit(ctx, getRoom(ctx, draft.roomId).zoneId, actor);
+    const old = ctx.db.roomScene.roomId.find(draft.roomId);
+    if ((old?.revision ?? 0) !== draft.baseRevision)
+      fail(
+        "Room changed since this draft. Reload and merge before saving again.",
+      );
+    const row = {
+      roomId: draft.roomId,
+      source,
+      revision: (old?.revision ?? 0) + 1,
+    };
+    if (old) ctx.db.roomScene.roomId.update(row);
+    else ctx.db.roomScene.insert(row);
+    for (const p of ctx.db.presence.roomId.filter(draft.roomId))
+      ctx.db.presence.identity.delete(p.identity);
+  } else {
+    const old = ctx.db.avatar.identity.find(actor);
+    if ((old?.revision ?? 0) !== draft.baseRevision)
+      fail("Avatar changed. Reload and save again.");
+    const row = {
+      identity: actor,
+      source,
+      revision: (old?.revision ?? 0) + 1,
+    };
+    if (old) ctx.db.avatar.identity.update(row);
+    else ctx.db.avatar.insert(row);
+  }
+  ctx.db.visualDraft.key.delete(a.key);
+}
 export const publishVisual = db.reducer(
   { key: t.string(), revision: t.u32() },
-  (ctx, a) => {
-    const draft =
-      ctx.db.visualDraft.key.find(a.key) ?? fail("Draft not found.");
-    if (!draft.owner.equals(ctx.sender)) fail("This is not your draft.");
-    if (draft.revision !== a.revision)
-      fail("Draft changed. Preview the latest revision.");
-    const source = validateVisual(ctx, draft.roomId, draft.kind, draft.source);
-    if (draft.kind === "scene") {
-      requireEdit(ctx, getRoom(ctx, draft.roomId).zoneId);
-      const old = ctx.db.roomScene.roomId.find(draft.roomId);
-      if ((old?.revision ?? 0) !== draft.baseRevision)
-        fail(
-          "Room changed since this draft. Reload and merge before saving again.",
-        );
-      const row = {
-        roomId: draft.roomId,
-        source,
-        revision: (old?.revision ?? 0) + 1,
-      };
-      if (old) ctx.db.roomScene.roomId.update(row);
-      else ctx.db.roomScene.insert(row);
-      for (const p of ctx.db.presence.roomId.filter(draft.roomId))
-        ctx.db.presence.identity.delete(p.identity);
-    } else {
-      const old = ctx.db.avatar.identity.find(ctx.sender);
-      if ((old?.revision ?? 0) !== draft.baseRevision)
-        fail("Avatar changed. Reload and save again.");
-      const row = {
-        identity: ctx.sender,
-        source,
-        revision: (old?.revision ?? 0) + 1,
-      };
-      if (old) ctx.db.avatar.identity.update(row);
-      else ctx.db.avatar.insert(row);
-    }
-    ctx.db.visualDraft.key.delete(a.key);
-  },
+  (ctx, a) => publishVisualFor(ctx, ctx.sender, a),
 );
 export const moveWithinRoom = db.reducer(
   { x: t.f64(), z: t.f64(), seat: t.string(), pose: t.string() },
@@ -1275,32 +1279,32 @@ export const testDraft = db.reducer(
   { versionId: t.u64(), event: t.string() },
   (ctx, a) => testVersionFor(ctx, ctx.sender, a.versionId, a.event),
 );
-export const publishVersion = db.reducer(
-  { versionId: t.u64() },
-  (ctx, { versionId }) => {
-    const v = ctx.db.version.id.find(versionId) ?? fail("Version not found."),
-      obj = ctx.db.object.id.find(v.objectId) ?? fail("Object not found.");
-    requireEdit(ctx, obj.zoneId);
-    if (!v.tested) fail("Test the draft before publishing.");
-    for (const a of v.actions)
-      if (!new RegExp(`function\\s+on_${a.id}\\s*\\(`).test(v.source))
-        fail(`Missing on_${a.id} handler.`);
-    cancelTimers(ctx, obj.id);
-    ctx.db.object.id.update({
-      ...obj,
-      name: v.name,
-      description: v.description,
-      actions: v.actions,
-      versionId: v.id,
-      active: true,
-    });
-    record(
-      ctx,
-      obj,
-      "publish",
-      `Published version ${v.id}; previous timers cancelled. Persistent state and inventory preserved.`,
-    );
-  },
+function publishVersionFor(ctx: Ctx, actor: Identity, versionId: bigint) {
+  const v = ctx.db.version.id.find(versionId) ?? fail("Version not found."),
+    obj = ctx.db.object.id.find(v.objectId) ?? fail("Object not found.");
+  requireEdit(ctx, obj.zoneId, actor);
+  if (!v.tested) fail("Test the draft before publishing.");
+  for (const a of v.actions)
+    if (!new RegExp(`function\\s+on_${a.id}\\s*\\(`).test(v.source))
+      fail(`Missing on_${a.id} handler.`);
+  cancelTimers(ctx, obj.id);
+  ctx.db.object.id.update({
+    ...obj,
+    name: v.name,
+    description: v.description,
+    actions: v.actions,
+    versionId: v.id,
+    active: true,
+  });
+  record(
+    ctx,
+    obj,
+    "publish",
+    `Published version ${v.id}; previous timers cancelled. Persistent state and inventory preserved.`,
+  );
+}
+export const publishVersion = db.reducer({ versionId: t.u64() }, (ctx, a) =>
+  publishVersionFor(ctx, ctx.sender, a.versionId),
 );
 export const deleteObject = db.reducer(
   { objectId: t.u64() },
@@ -1455,7 +1459,7 @@ export const revokeConsent = db.reducer((ctx) => {
   cancelJobs(ctx);
 });
 // Provider-neutral building API. The authenticated agent acts only for its paired player.
-// Publication is intentionally absent: the player's browser owns that decision.
+// Paired agents can publish within the player's existing editing permissions.
 export const agentBuild = db.reducer(
   { operation: t.string(), roomId: t.u64(), payload: t.string() },
   (ctx, a) => {
@@ -1521,7 +1525,20 @@ export const agentBuild = db.reducer(
         asId(field("versionId", 20)),
         field("event", 43),
       );
-    } else fail("Unsupported building operation. Agents cannot publish.");
+    } else if (a.operation === "publish_visual") {
+      if (
+        !Number.isInteger(v.revision) ||
+        v.revision < 1 ||
+        v.revision > 4294967295
+      )
+        fail("Invalid draft revision.");
+      publishVisualFor(ctx, actor, {
+        key: field("key", 120),
+        revision: v.revision,
+      });
+    } else if (a.operation === "publish_object") {
+      publishVersionFor(ctx, actor, asId(field("versionId", 20)));
+    } else fail("Unsupported building operation.");
   },
 );
 export const discardVisual = db.reducer(
