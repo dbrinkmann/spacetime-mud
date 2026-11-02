@@ -1,82 +1,43 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { Identity } from "spacetimedb";
 import { useGame } from "./connection";
-import { directions } from "../shared/agent";
-import { parseCommand } from "../shared/commands";
+import { WorldMap } from "./WorldMap";
+import { Builder } from "./Builder";
 import "./style.css";
-
-const help =
-  'look / l — describe this room\nnorth / n, south / s, east / e, west / w, up / u, down / d — move\nsay <message> or \'<message> — room chat\ntell AIAgent <request> or ask <request> — build with Claude Code\ntell "NPC or player name" <message> — talk privately\nbuild — open the manual builder\nwho — online players · home — return to the Nexus\n↑ / ↓ — command history';
 export function App() {
   const { conn, identity, status, data, connectionError } = useGame();
   const me = data.players.find((p) => p.identity.toHexString() === identity),
-    room = data.rooms.find((r) => r.id === me?.roomId);
+    room = data.rooms.find((r) => r.id === me?.roomId),
+    zone = data.zones.find((z) => z.id === room?.zoneId);
   const [name, setName] = useState(""),
-    [command, setCommand] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [tab, setTab] = useState<"agent" | "build" | "help">("agent");
-  const [history, setHistory] = useState<string[]>([]),
-    [historyIndex, setHistoryIndex] = useState(0),
-    [local, setLocal] = useState<{ id: number; text: string }[]>([]);
+    [tab, setTab] = useState<"play" | "build">("play"),
+    [message, setMessage] = useState(""),
+    [recipient, setRecipient] = useState(""),
+    [prompt, setPrompt] = useState("");
   const [bridge, setBridge] = useState(
       () => new URLSearchParams(location.hash.slice(1)).get("bridge") ?? "",
     ),
-    [consented, setConsented] = useState(false);
-  const [prompt, setPrompt] = useState(""),
-    [direction, setDirection] = useState("north"),
-    [buildName, setBuildName] = useState(""),
-    [description, setDescription] = useState(""),
-    [biography, setBiography] = useState(""),
-    [buildKind, setBuildKind] = useState("room");
-  const input = useRef<HTMLInputElement>(null),
-    scroll = useRef<HTMLDivElement>(null);
-  const residents = data.npcs.filter((n) => n.roomId === room?.id),
-    playersHere = data.players.filter((p) => p.roomId === room?.id && p.online),
+    [consented, setConsented] = useState(false),
+    [agentOpen, setAgentOpen] = useState(!!bridge);
+  const journal = useRef<HTMLDivElement>(null),
+    inflight = useRef(false);
+  const enabled = !!conn && status === "Live" && !busy,
     grant = data.grants[0];
-  const jobs = [...data.jobs].sort((a, b) =>
-    Number(b.createdAt.microsSinceUnixEpoch - a.createdAt.microsSinceUnixEpoch),
-  );
-  const active = jobs.find(
-    (j) => j.status === "pending" || j.status === "working",
-  );
-  const chat = data.chat.filter((c) => c.roomId === room?.id);
+  const jobs = data.jobs.slice().sort((a, b) => Number(b.id - a.id)),
+    active = jobs.find((j) => ["pending", "working"].includes(j.status));
+  const objects = data.objects.filter((o) => o.roomId === room?.id && o.active),
+    players = data.players.filter((p) => p.online && p.roomId === room?.id);
   const entries = [
-    ...chat.map((c) => ({
-      key: `chat-${c.id}`,
-      time: c.timestamp.microsSinceUnixEpoch,
-      author: c.author,
-      text: c.text,
-      kind: c.kind,
-    })),
-    ...data.inbox.map((c) => ({
-      key: `inbox-${c.id}`,
-      time: c.timestamp.microsSinceUnixEpoch,
-      author: c.author,
-      text: c.text,
-      kind: "private",
-    })),
-  ].sort((a, b) => Number(a.time - b.time));
-  useEffect(() => {
-    scroll.current?.scrollTo(0, scroll.current.scrollHeight);
-  }, [entries.length, local.length, room?.id]);
-  useEffect(() => {
-    const update = () => {
-      setBridge(
-        new URLSearchParams(location.hash.slice(1)).get("bridge") ?? "",
-      );
-      setConsented(false);
-    };
-    window.addEventListener("hashchange", update);
-    return () => window.removeEventListener("hashchange", update);
-  }, []);
-  function log(text: string) {
-    setLocal((prev) => [
-      ...prev.slice(-29),
-      { id: Date.now() + Math.random(), text },
-    ]);
-  }
+    ...data.chat.map((c) => ({ ...c, key: `c${c.id}` })),
+    ...data.inbox.map((c) => ({ ...c, key: `i${c.id}`, kind: "private" })),
+  ].sort((a, b) =>
+    Number(a.timestamp.microsSinceUnixEpoch - b.timestamp.microsSinceUnixEpoch),
+  );
   async function action(fn: () => Promise<void>) {
+    if (inflight.current) return;
+    inflight.current = true;
     setNotice("");
     setBusy(true);
     try {
@@ -84,67 +45,87 @@ export function App() {
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     } finally {
+      inflight.current = false;
       setBusy(false);
     }
   }
-  async function execute(raw: string) {
-    if (!conn || status !== "Live") return;
-    await action(async () => {
-      const c = parseCommand(raw);
-      setHistory((h) => [...h.slice(-49), raw]);
-      setHistoryIndex(0);
-      setCommand("");
-      switch (c.kind) {
-        case "go":
-          await conn.reducers.go({ direction: c.direction });
-          break;
-        case "say":
-          await conn.reducers.say({ message: c.message });
-          break;
-        case "tell":
-          await conn.reducers.tell({ target: c.target, message: c.message });
-          break;
-        case "agent":
-          await conn.reducers.requestAgent({ prompt: c.prompt });
-          break;
-        case "home":
-          await conn.reducers.home({});
-          break;
-        case "look":
-          log(`${room?.name}\n${room?.description}`);
-          break;
-        case "who":
-          log(
-            `Online: ${data.players
-              .filter((p) => p.online)
-              .map((p) => p.name)
-              .join(", ")}`,
-          );
-          break;
-        case "help":
-          setTab("help");
-          break;
-        case "build":
-          setTab("build");
-          break;
-        case "clear":
-          setLocal([]);
-          break;
-      }
-    });
-    input.current?.focus();
+  function move(direction: string) {
+    if (enabled) void action(() => conn!.reducers.go({ direction }));
   }
-  const enabled = !!conn && status === "Live" && !busy;
+  useEffect(() => {
+    const keys: Record<string, string> = {
+      w: "north",
+      a: "west",
+      s: "south",
+      d: "east",
+      ArrowUp: "north",
+      ArrowLeft: "west",
+      ArrowDown: "south",
+      ArrowRight: "east",
+    };
+    const handle = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (
+        tab !== "play" ||
+        !room ||
+        !enabled ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.metaKey ||
+        e.repeat ||
+        el.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(el.tagName)
+      )
+        return;
+      const direction = keys[e.key];
+      if (direction) {
+        e.preventDefault();
+        move(direction);
+      }
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [tab, room?.id, enabled]);
+  useEffect(() => {
+    journal.current?.scrollTo?.(0, journal.current.scrollHeight);
+  }, [entries.length, room?.id]);
+  useEffect(() => {
+    const update = () => {
+      setBridge(
+        new URLSearchParams(location.hash.slice(1)).get("bridge") ?? "",
+      );
+      setConsented(false);
+      setAgentOpen(true);
+    };
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
   return (
     <div className="app">
       <header>
         <a className="brand" href="#" onClick={(e) => e.preventDefault()}>
           <span className="sigil">✦</span>
           <span>
-            SPACETIME<span className="brand-muted">MUD</span>
+            SPACETIME <span className="brand-muted">MUD</span>
             <small>A WORLD WE MAKE TOGETHER</small>
           </span>
         </a>
+        {me && (
+          <nav className="main-tabs" aria-label="Game mode">
+            <button
+              className={tab === "play" ? "selected" : ""}
+              onClick={() => setTab("play")}
+            >
+              Explore
+            </button>
+            <button
+              className={tab === "build" ? "selected" : ""}
+              onClick={() => setTab("build")}
+            >
+              Build
+            </button>
+          </nav>
+        )}
         <div className="header-right">
           <span className={`status ${status === "Live" ? "live" : ""}`}>
             <i />
@@ -159,15 +140,9 @@ export function App() {
           </a>
         </div>
       </header>
-      {connectionError && (
+      {(notice || connectionError) && (
         <div className="notice" role="alert">
-          {connectionError}{" "}
-          <button onClick={() => location.reload()}>Reconnect</button>
-        </div>
-      )}
-      {notice && (
-        <div className="notice" role="alert">
-          {notice}
+          {notice || connectionError}
           <button aria-label="Dismiss error" onClick={() => setNotice("")}>
             ×
           </button>
@@ -178,12 +153,17 @@ export function App() {
           <div className="portal" aria-hidden="true">
             ✦
           </div>
-          <p className="eyebrow">YOUR NEXT WORLD DOESN’T EXIST. YET.</p>
-          <h1>Enter the Nexus.</h1>
-          <p>
-            A shared text adventure shaped by the people inside it.
+          <p className="eyebrow">OLD MAGIC. NEW WORLDS.</p>
+          <h1>
+            Every world begins
             <br />
-            Imagine a place. Open a path. Meet someone unexpected.
+            with a traveler.
+          </h1>
+          <p>
+            Explore forgotten places. Give ordinary things extraordinary
+            stories.
+            <br />
+            Build a realm that remembers you.
           </p>
           <form
             onSubmit={(e) => {
@@ -197,11 +177,11 @@ export function App() {
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                required
                 minLength={2}
                 maxLength={24}
-                required
-                placeholder="Your traveler’s name"
                 autoComplete="nickname"
+                placeholder="Your traveler’s name"
               />
               <button className="primary" disabled={!enabled}>
                 Enter world →
@@ -209,224 +189,302 @@ export function App() {
             </div>
           </form>
           <p className="fine">
-            Your character is remembered in this browser. No password needed.
+            Your character is remembered in this browser. Everyone can build.
             <br />
-            Building is open to everyone. Connecting Claude Code is optional and
-            requires consent.
+            Connecting your own Claude Code is optional and requires consent.
           </p>
-          {bridge && (
-            <p className="pairing-note">
-              Local bridge detected. Enter the world to review and approve
-              pairing.
-            </p>
-          )}
         </main>
       ) : (
         <>
           <div className="world-bar">
             <span>
-              THE NEXUS <span className="muted">/ Shared world</span>
+              {zone?.name ?? "The Nexus"}{" "}
+              <span className="muted">
+                / {tab === "play" ? "Exploration" : "Workshop"}
+              </span>
             </span>
             <span>
-              {data.rooms.length} rooms <b>·</b>{" "}
-              {data.players.filter((p) => p.online).length} online <b>·</b>{" "}
-              <strong>{me.name}</strong>
+              {players.length} here <b>·</b> <strong>{me.name}</strong>{" "}
+              <button
+                className="text-button"
+                disabled={!enabled || me.roomId === 1n}
+                onClick={() => void action(() => conn!.reducers.home({}))}
+              >
+                Return to Nexus
+              </button>
             </span>
           </div>
-          <main className="game-grid">
-            <section className="room-panel panel">
-              <p className="eyebrow">
-                YOU ARE HERE <span>ROOM {room?.id.toString()}</span>
-              </p>
-              <div className="room-symbol" aria-hidden="true">
-                ◇
-              </div>
-              <h1>{room?.name ?? "Finding your room…"}</h1>
-              <p className="description">{room?.description}</p>
-              <div className="section-title">
-                PASSAGES <span>{room?.exits.length ?? 0} OPEN</span>
-              </div>
-              <div className="exits">
-                {room?.exits.map((exit) => (
-                  <button
-                    key={exit.direction}
+          {room &&
+            conn &&
+            (tab === "build" ? (
+              <Builder
+                key={String(room.id)}
+                conn={conn}
+                room={room}
+                data={data}
+                identity={identity}
+                enabled={enabled}
+                action={action}
+              />
+            ) : (
+              <main className="play-grid">
+                <aside className="atlas-column">
+                  <WorldMap
+                    rooms={data.rooms}
+                    current={room}
+                    gates={data.gates}
+                    move={move}
                     disabled={!enabled}
-                    onClick={() => void execute(exit.direction)}
-                  >
-                    <span>{exit.direction} ↗</span>
-                    <small>
-                      {data.rooms.find((r) => r.id === exit.destination)?.name}
-                    </small>
-                  </button>
-                ))}
-              </div>
-              {!room?.exits.length && (
-                <div className="empty-path">
-                  An unwritten world.
-                  <br />
-                  <span>Create the first passage with AIAgent or Build.</span>
-                </div>
-              )}
-              <div className="section-title">IN THIS ROOM</div>
-              <div className="people">
-                <div>
-                  <span className="avatar">✧</span>
-                  <span>
-                    AIAgent
-                    <small>World builder · powered by your Claude Code</small>
-                  </span>
-                  <button onClick={() => setTab("agent")}>Ask</button>
-                </div>
-                {residents.map((n) => (
-                  <div key={n.id.toString()}>
-                    <span className="avatar npc">♧</span>
-                    <span title={n.description}>
-                      {n.name}
-                      <small>{n.description}</small>
-                    </span>
-                    <button
-                      onClick={() => {
-                        setCommand(`tell "${n.name}" `);
-                        input.current?.focus();
-                      }}
-                    >
-                      Talk
-                    </button>
-                  </div>
-                ))}
-                {playersHere.map((p) => (
-                  <div key={p.identity.toHexString()}>
-                    <span className="avatar">○</span>
-                    <span>
-                      {p.name}
-                      {p.identity.toHexString() === identity ? " (you)" : ""}
-                      <small>Traveler</small>
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {room?.id !== 1n && (
-                <button
-                  className="text-button"
-                  disabled={!enabled}
-                  onClick={() => void execute("home")}
-                >
-                  ↶ Return to the Nexus
-                </button>
-              )}
-            </section>
-            <section className="journal panel">
-              <div className="panel-heading">
-                <span>THE CHRONICLE</span>
-                <span className="muted">Room chat & private messages</span>
-              </div>
-              <div
-                className="journal-scroll"
-                ref={scroll}
-                role="log"
-                aria-label="Game chronicle"
-                aria-live="polite"
-              >
-                <div className="journal-intro">
-                  <span>✦</span>
-                  <h2>Every world starts with a word.</h2>
-                  <p>
-                    Say hello, sketch a new room, or ask your agent to bring an
-                    idea to life.
+                  />
+                  <section className="panel inventory">
+                    <div className="panel-heading">
+                      YOUR SATCHEL{" "}
+                      <span>{data.inventory.length} keepsakes</span>
+                    </div>
+                    {data.inventory.length ? (
+                      data.inventory.map((i) => (
+                        <div className="inventory-item" key={i.key}>
+                          <span>◇ {i.name}</span>
+                          <small>× {i.quantity}</small>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="muted">
+                        Empty, for now. There is a whole world to find.
+                      </p>
+                    )}
+                  </section>
+                </aside>
+                <section className="room-panel panel">
+                  <p className="eyebrow">
+                    YOU ARE HERE <span>ROOM {String(room.id)}</span>
                   </p>
-                </div>
-                {entries.map((e) => (
-                  <div className={`entry ${e.kind}`} key={e.key}>
-                    <span className="entry-author">
-                      {e.author}
-                      {e.kind === "private" ? " · private" : ""}
-                    </span>
-                    <p>{e.text}</p>
+                  <div className="room-symbol" aria-hidden="true">
+                    ◇
                   </div>
-                ))}
-                {local.map((e) => (
-                  <div className="entry local" key={e.id}>
-                    <p>{e.text}</p>
+                  <h1>{room.name}</h1>
+                  <p className="description">{room.description}</p>
+                  {me.roomId === 1n && (
+                    <>
+                      <div className="section-title">
+                        PORTALS TO OTHER WORLDS
+                      </div>
+                      <div className="portal-list">
+                        {data.zones
+                          .filter((z) => z.entrance !== 1n)
+                          .map((z) => (
+                            <button
+                              key={String(z.id)}
+                              disabled={!enabled}
+                              onClick={() =>
+                                void action(() =>
+                                  conn.reducers.visitZone({ zoneId: z.id }),
+                                )
+                              }
+                            >
+                              <span>✧ {z.name}</span>
+                              <small>Enter realm →</small>
+                            </button>
+                          ))}
+                      </div>
+                      <button
+                        className="text-button"
+                        onClick={() => setTab("build")}
+                      >
+                        + Imagine a new realm
+                      </button>
+                    </>
+                  )}
+                  {!!room.exits.length && (
+                    <>
+                      <div className="section-title">PASSAGES</div>
+                      <div className="exits">
+                        {room.exits.map((e) => {
+                          const closed =
+                            e.gateId &&
+                            !data.gates.find((g) => g.id === e.gateId)?.open;
+                          return (
+                            <button
+                              key={e.direction}
+                              disabled={!enabled || !!closed}
+                              onClick={() => move(e.direction)}
+                            >
+                              <span>
+                                {e.direction} {closed ? "◇" : "↗"}
+                              </span>
+                              <small>
+                                {closed
+                                  ? "Gate closed"
+                                  : (data.rooms.find(
+                                      (r) => r.id === e.destination,
+                                    )?.name ?? "Unexplored passage")}
+                              </small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  <div className="section-title">
+                    THINGS TO DISCOVER <span>{objects.length}</span>
                   </div>
-                ))}
-              </div>
-              <form
-                className="command-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void execute(command);
-                }}
-              >
-                <label htmlFor="command" className="sr-only">
-                  Game command
-                </label>
-                <span className="prompt-mark">›</span>
-                <input
-                  id="command"
-                  ref={input}
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  placeholder="say Hello · tell AIAgent… · help"
-                  autoComplete="off"
-                  maxLength={2100}
-                  disabled={!enabled}
-                  onKeyDown={(e) => {
-                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                      e.preventDefault();
-                      const next = Math.max(
-                        0,
-                        Math.min(
-                          history.length,
-                          historyIndex + (e.key === "ArrowUp" ? 1 : -1),
-                        ),
-                      );
-                      setHistoryIndex(next);
-                      setCommand(next ? history[history.length - next] : "");
-                    }
-                  }}
-                />
-                <button
-                  aria-label="Send command"
-                  disabled={!enabled || !command.trim()}
-                >
-                  ↵
-                </button>
-              </form>
-              <div className="command-hint">
-                <span>ENTER to send · ↑↓ history</span>
-                <button onClick={() => setTab("help")}>Command guide</button>
-              </div>
-            </section>
-            <aside className="tools-panel panel">
-              <nav className="tabs" aria-label="World tools">
-                {(["agent", "build", "help"] as const).map((t) => (
-                  <button
-                    className={tab === t ? "selected" : ""}
-                    key={t}
-                    onClick={() => setTab(t)}
+                  <div className="object-list">
+                    {objects.map((o) => (
+                      <article className="object-card" key={String(o.id)}>
+                        <div className="object-icon">
+                          {o.kind === "character"
+                            ? "♧"
+                            : o.kind === "container"
+                              ? "▣"
+                              : o.kind === "exit"
+                                ? "╬"
+                                : "✧"}
+                        </div>
+                        <div>
+                          <h3>{o.name}</h3>
+                          <p>{o.description}</p>
+                          <div className="button-row">
+                            {o.actions.map((a) => (
+                              <button
+                                key={a.id}
+                                disabled={!enabled}
+                                onClick={() =>
+                                  void action(() =>
+                                    conn.reducers.interact({
+                                      objectId: o.id,
+                                      action: a.id,
+                                      requestId: crypto.randomUUID(),
+                                    }),
+                                  )
+                                }
+                              >
+                                {a.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                    {!objects.length && (
+                      <p className="muted">
+                        A quiet corner of the world, waiting for a story.
+                      </p>
+                    )}
+                  </div>
+                  <div className="section-title">TRAVELERS HERE</div>
+                  <div className="travelers">
+                    {players.map((p) => (
+                      <span key={p.identity.toHexString()}>
+                        ○ {p.name}
+                        {p.identity.toHexString() === identity ? " (you)" : ""}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+                <section className="journal panel">
+                  <div className="panel-heading">
+                    <span>THE CHRONICLE</span>
+                    <span>Words leave echoes</span>
+                  </div>
+                  <div
+                    className="journal-scroll"
+                    ref={journal}
+                    role="log"
+                    aria-label="Game chronicle"
+                    aria-live="polite"
                   >
-                    {t === "agent"
-                      ? "AIAgent"
-                      : t === "build"
-                        ? "Build"
-                        : "Guide"}
-                  </button>
-                ))}
-              </nav>
-              {tab === "agent" ? (
-                <div className="tool-content">
-                  <p className="eyebrow">YOUR IMAGINATION, CONNECTED</p>
-                  <h2>Give the world an idea.</h2>
+                    <div className="journal-intro">
+                      <span>✦</span>
+                      <h2>The world is listening.</h2>
+                      <p>
+                        Every footstep, every word, another thread in the tale.
+                      </p>
+                    </div>
+                    {entries.map((e) => (
+                      <div className={`entry ${e.kind}`} key={e.key}>
+                        <span className="entry-author">
+                          {e.author}
+                          {e.kind === "private" ? " · whisper" : ""}
+                        </span>
+                        <p>{e.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <form
+                    className="chat-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void action(async () => {
+                        if (recipient)
+                          await conn.reducers.tell({
+                            target: recipient,
+                            message,
+                          });
+                        else await conn.reducers.say({ message });
+                        setMessage("");
+                      });
+                    }}
+                  >
+                    <label className="sr-only" htmlFor="recipient">
+                      Chat recipient
+                    </label>
+                    <select
+                      id="recipient"
+                      value={recipient}
+                      onChange={(e) => setRecipient(e.target.value)}
+                    >
+                      <option value="">Say to the room</option>
+                      {players
+                        .filter((p) => p.identity.toHexString() !== identity)
+                        .map((p) => (
+                          <option key={p.name} value={p.name}>
+                            Whisper to {p.name}
+                          </option>
+                        ))}
+                    </select>
+                    <div className="input-row">
+                      <input
+                        aria-label="Chat message"
+                        value={message}
+                        maxLength={1000}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Say something…"
+                      />
+                      <button
+                        aria-label="Send message"
+                        disabled={!enabled || !message.trim()}
+                      >
+                        ↵
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </main>
+            ))}
+          <section className={`agent-dock panel ${agentOpen ? "open" : ""}`}>
+            <button
+              className="agent-toggle"
+              onClick={() => setAgentOpen(!agentOpen)}
+            >
+              <span>✦ YOUR BUILDER · CLAUDE CODE</span>
+              <span>
+                {active ? "Working…" : grant ? "Paired" : "Connect your agent"}{" "}
+                {agentOpen ? "−" : "+"}
+              </span>
+            </button>
+            {agentOpen && (
+              <div className="agent-grid">
+                <div>
+                  <h2>Tell your agent what you imagine.</h2>
                   <p className="muted">
-                    Your local Claude Code creates places and characters from
-                    your requests.
+                    Your own Claude Code drafts scripts and builds rooms.
+                    Inspect and publish object drafts in Build.
                   </p>
                   {grant ? (
                     <div className="bridge-card connected">
-                      <strong>✦ Claude Code paired</strong>
+                      <strong>Claude Code paired</strong>
                       <p>
-                        Only your requests use this bridge. Keep its terminal
-                        open.
+                        Keep the local bridge running while making requests.
                       </p>
                       <button
                         disabled={!enabled}
@@ -441,65 +499,58 @@ export function App() {
                     <details className="bridge-card" open>
                       <summary>Connect your Claude Code</summary>
                       <p>
-                        On your computer, install Node.js 22+ and sign in to
-                        Claude Code. Then run:
+                        Install Node.js 22+, sign in to Claude Code, then run:
                       </p>
                       <pre>
-                        git clone
-                        https://github.com/dbrinkmann/spacetime-mud.git{`\n`}cd
-                        spacetime-mud{`\n`}npm ci{`\n`}npm run bridge
+                        {
+                          "git clone https://github.com/dbrinkmann/spacetime-mud.git\ncd spacetime-mud\nnpm ci\nnpm run bridge"
+                        }
                       </pre>
                       <p>
-                        Approve the terminal prompt, then open the pairing link
-                        it prints.
+                        Approve the terminal prompt and open its pairing link.
                       </p>
-                      <label htmlFor="bridge">
-                        Bridge identity (from the link)
+                      <label>
+                        Bridge identity
+                        <input
+                          aria-label="Bridge identity"
+                          value={bridge}
+                          onChange={(e) => {
+                            setBridge(e.target.value);
+                            setConsented(false);
+                          }}
+                        />
                       </label>
-                      <input
-                        id="bridge"
-                        value={bridge}
-                        onChange={(e) => {
-                          setBridge(e.target.value);
-                          setConsented(false);
-                        }}
-                        placeholder="64-character bridge identity"
-                      />
-                      <label className="consent">
+                      <label className="check">
                         <input
                           type="checkbox"
                           checked={consented}
                           onChange={(e) => setConsented(e.target.checked)}
                         />
-                        I consent to this local bridge using my Claude Code for
-                        my game requests. Game context is sent to Claude and
-                        counts toward my usage. I can revoke this anytime.
+                        I consent to using my Claude Code for my game requests.
+                        Game context is sent to Claude and counts toward my
+                        usage. I can revoke anytime.
                       </label>
                       <button
                         className="primary"
                         disabled={
                           !enabled ||
                           !consented ||
-                          !/^[0-9a-f]{64}$/i.test(bridge)
+                          !/^[a-fA-F0-9]{64}$/.test(bridge)
                         }
                         onClick={() =>
-                          void action(async () => {
-                            await conn!.reducers.consent({
+                          void action(() =>
+                            conn!.reducers.consent({
                               bridge: Identity.fromString(bridge),
-                            });
-                            window.history.replaceState(
-                              null,
-                              "",
-                              location.pathname + location.search,
-                            );
-                            setConsented(false);
-                          })
+                            }),
+                          )
                         }
                       >
                         Pair & enable Claude Code
                       </button>
                     </details>
                   )}
+                </div>
+                <div>
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
@@ -509,207 +560,62 @@ export function App() {
                       });
                     }}
                   >
-                    <label htmlFor="idea">Ask AIAgent</label>
-                    <textarea
-                      id="idea"
-                      rows={4}
-                      maxLength={2000}
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      placeholder="Create a moonlit garden to the north, with a fountain that remembers…"
-                      required
-                    />
+                    <label>
+                      Describe your idea
+                      <textarea
+                        aria-label="Agent request"
+                        rows={5}
+                        value={prompt}
+                        maxLength={3000}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="Make a fountain that grants each traveler a silver coin once, then whispers a different story on later visits."
+                      />
+                    </label>
                     <button
-                      className="primary wide"
-                      disabled={!enabled || !grant || !!active}
+                      className="primary"
+                      disabled={
+                        !enabled || !grant || !!active || !prompt.trim()
+                      }
                     >
-                      ✦ {active ? "Agent is working…" : "Imagine & build"}
+                      Ask Claude Code
                     </button>
+                    {active && (
+                      <button
+                        disabled={!enabled}
+                        onClick={() =>
+                          void action(() =>
+                            conn!.reducers.cancelJob({ id: active.id }),
+                          )
+                        }
+                        type="button"
+                      >
+                        Cancel request
+                      </button>
+                    )}
                   </form>
-                  {!grant && (
-                    <p className="fine">
-                      You can explore, chat, and use the Build tab without an
-                      agent.
-                    </p>
-                  )}
-                  <div className="section-title">YOUR REQUESTS</div>
-                  {!jobs.length && (
-                    <p className="fine">
-                      Your agent’s progress and replies will appear here.
-                    </p>
-                  )}
-                  {jobs.slice(0, 6).map((j) => (
-                    <article className="job" key={j.id.toString()}>
-                      <div>
-                        <span className={`job-status ${j.status}`}>
-                          {j.status}
-                        </span>
-                        {["pending", "working"].includes(j.status) && (
-                          <button
-                            disabled={!enabled}
-                            onClick={() =>
-                              void action(() =>
-                                conn!.reducers.cancelJob({ id: j.id }),
-                              )
-                            }
-                          >
-                            Cancel
+                  <div className="job-list">
+                    {jobs.slice(0, 8).map((j) => (
+                      <article key={String(j.id)}>
+                        <span className="eyebrow">{j.status}</span>
+                        <p>{j.prompt}</p>
+                        <pre>{j.result}</pre>
+                        {j.status === "done" && (
+                          <button onClick={() => setTab("build")}>
+                            Open workshop
                           </button>
                         )}
-                      </div>
-                      <p>{j.prompt}</p>
-                      {j.result && <p className="job-result">{j.result}</p>}
-                    </article>
-                  ))}
+                      </article>
+                    ))}
+                  </div>
                 </div>
-              ) : tab === "build" ? (
-                <div className="tool-content">
-                  <p className="eyebrow">LEAVE SOMETHING BEHIND</p>
-                  <h2>Shape this place.</h2>
-                  <p className="muted">
-                    Build directly. Your creations are shared with everyone,
-                    immediately.
-                  </p>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void action(async () => {
-                        if (buildKind === "room")
-                          await conn!.reducers.buildRoom({
-                            direction,
-                            name: buildName,
-                            description,
-                          });
-                        else
-                          await conn!.reducers.buildNpc({
-                            name: buildName,
-                            description,
-                            biography,
-                          });
-                        setBuildName("");
-                        setDescription("");
-                        setBiography("");
-                        log(
-                          buildKind === "room"
-                            ? "Your passage is open. Choose it under Passages to explore."
-                            : "Your character has arrived. Use Talk to start a conversation.",
-                        );
-                      });
-                    }}
-                  >
-                    <label htmlFor="kind">Create a…</label>
-                    <select
-                      id="kind"
-                      value={buildKind}
-                      onChange={(e) => setBuildKind(e.target.value)}
-                    >
-                      <option value="room">Room & two-way passage</option>
-                      <option value="npc">Character / NPC</option>
-                    </select>
-                    {buildKind === "room" && (
-                      <>
-                        <label htmlFor="direction">Direction from here</label>
-                        <select
-                          id="direction"
-                          value={direction}
-                          onChange={(e) => setDirection(e.target.value)}
-                        >
-                          {directions.map((d) => (
-                            <option
-                              value={d}
-                              key={d}
-                              disabled={room?.exits.some(
-                                (e) => e.direction === d,
-                              )}
-                            >
-                              {d}
-                              {room?.exits.some((e) => e.direction === d)
-                                ? " (occupied)"
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </>
-                    )}
-                    <label htmlFor="build-name">Name</label>
-                    <input
-                      id="build-name"
-                      required
-                      maxLength={buildKind === "room" ? 80 : 40}
-                      value={buildName}
-                      onChange={(e) => setBuildName(e.target.value)}
-                      placeholder={
-                        buildKind === "room"
-                          ? "The Glass Orchard"
-                          : "The Orchard Keeper"
-                      }
-                    />
-                    <label htmlFor="description">What do travelers see?</label>
-                    <textarea
-                      id="description"
-                      required
-                      rows={5}
-                      maxLength={buildKind === "room" ? 3000 : 1500}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Give this corner of the world a little life…"
-                    />
-                    {buildKind === "npc" && (
-                      <>
-                        <label htmlFor="biography">
-                          Personality & backstory
-                        </label>
-                        <textarea
-                          id="biography"
-                          required
-                          rows={4}
-                          maxLength={3000}
-                          value={biography}
-                          onChange={(e) => setBiography(e.target.value)}
-                          placeholder="Who are they? What do they remember?"
-                        />
-                      </>
-                    )}
-                    <button className="primary wide" disabled={!enabled}>
-                      Create {buildKind === "room" ? "room" : "character"} →
-                    </button>
-                  </form>
-                </div>
-              ) : (
-                <div className="tool-content">
-                  <p className="eyebrow">A FEW WORDS OPEN WORLDS</p>
-                  <h2>Traveler’s guide</h2>
-                  <p>
-                    Start by creating a passage from the Nexus. Ask AIAgent for
-                    a room in a free direction, or use Build.
-                  </p>
-                  <pre className="help">{help}</pre>
-                  <h3>Bring a character to life</h3>
-                  <p>
-                    Create an NPC with a biography, then use Talk. Your paired
-                    Claude Code plays that character using the room and your
-                    recent conversation.
-                  </p>
-                  <h3>A world that remembers</h3>
-                  <p>
-                    Your rooms and characters persist. Your identity stays in
-                    this browser. Clearing browser storage creates a new
-                    identity.
-                  </p>
-                  <h3>Your agent, your choice</h3>
-                  <p>
-                    Consent is required in both the bridge terminal and the
-                    game. Disconnecting revokes pending actions. The bridge
-                    receives your requests and public game context; Claude
-                    receives no computer tools.
-                  </p>
-                </div>
-              )}
-            </aside>
-          </main>
+              </div>
+            )}
+          </section>
           <footer>
-            <span>Built by travelers. Kept in SpacetimeDB.</span>
-            <span>2.13.0 · TypeScript · Local Claude Code</span>
+            <span>Built by travelers. Kept by the world.</span>
+            <span>
+              Persistent worlds · Scripted wonders · Local Claude Code
+            </span>
           </footer>
         </>
       )}

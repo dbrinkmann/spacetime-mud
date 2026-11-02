@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, basename } from "node:path";
@@ -27,14 +27,14 @@ for (const url of assets) {
 }
 const { c } = await connect();
 try {
-  const nexus = c.db.room.id.find(1n);
+  const nexus = c.db.visibleRooms.id.find(1n);
   assert.ok(nexus);
   assert.equal(nexus.name, "The Nexus");
   assert.equal(c.db.myInbox.count(), 0n);
   assert.equal(c.db.myJobs.count(), 0n);
   assert.equal(c.db.agentJobs.count(), 0n);
   console.log(
-    `PASS: ${site} returns HTTP 200, all JS/CSS assets match the validated build, and ${host}/${database} accepts a new client and synchronizes the Nexus without exposing private messages/jobs. Rooms: ${c.db.room.count()}.`,
+    `PASS: ${site} returns HTTP 200, all JS/CSS assets match the validated build, and ${host}/${database} accepts a new client and synchronizes the Nexus without exposing private messages/jobs. Rooms: ${c.db.visibleRooms.count()}.`,
   );
 } finally {
   c.disconnect();

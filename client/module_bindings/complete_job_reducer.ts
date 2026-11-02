@@ -10,6 +10,10 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+import {
+  Action,
+} from "./types";
+
 export default {
   id: __t.u64(),
   kind: __t.string(),
@@ -18,4 +22,10 @@ export default {
   description: __t.string(),
   biography: __t.string(),
   message: __t.string(),
+  objectId: __t.string(),
+  objectKind: __t.string(),
+  source: __t.string(),
+  get actions() {
+    return __t.array(Action);
+  },
 };

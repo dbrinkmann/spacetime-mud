@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCommand } from "../shared/commands.ts";
 import { validateProposal } from "../shared/agent.ts";
@@ -27,6 +27,10 @@ test("agent proposal rejects malformed and unexpected actions", () => {
     description: "Moonlight.",
     biography: "",
     message: "A garden awaits.",
+    objectId: "",
+    objectKind: "",
+    source: "",
+    actions: [],
   };
   assert.deepEqual(validateProposal(valid), valid);
   assert.throws(() => validateProposal({ ...valid, kind: "shell" }));

@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+﻿import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import { Identity } from "spacetimedb";
@@ -51,41 +51,51 @@ try {
   await c.reducers.consent({
     bridge: Identity.fromString(output.match(/#bridge=([0-9a-f]{64})/i)![1]),
   });
-  const root = c.db.room.id.find(1n)!;
-  const free = ["north", "south", "east", "west", "up", "down"].find(
-    (d) => !root.exits.some((e) => e.direction === d),
-  );
-  assert.ok(free);
+  await c.reducers.createZone({
+    name: `Claude Realm ${suffix}`,
+    description: "A realm built with an agent.",
+  });
   await request(
-    `Create a room ${free} called Lantern Court ${suffix}, a quiet courtyard lit by paper lanterns.`,
+    `Create a room north called Lantern Court ${suffix}, a quiet courtyard lit by paper lanterns.`,
   );
-  const exit = c.db.room.id.find(1n)!.exits.find((e) => e.direction === free)!;
-  assert.ok(exit);
-  await c.reducers.go({ direction: free });
+  await c.reducers.go({ direction: "north" });
   await request(
-    `Create an NPC named Mira ${suffix}, a friendly keeper of the lanterns who remembers their makers.`,
+    'Create a scripted scenery object named Singing Lantern. Give it a light action labeled Light the lantern. on_light should say "The lantern awakens." and schedule quiet in 2 seconds. on_quiet should say "The lantern sleeps." Return an object draft.',
   );
-  const n = [...c.db.npc.iter()].find((n) => n.roomId === exit.destination)!;
-  assert.ok(n);
-  await new Promise((r) => setTimeout(r, 2100));
-  await c.reducers.tell({
-    target: n.name,
-    message: "Who made these lanterns?",
+  const v = [...c.db.myVersions.iter()].find(
+    (v) => v.name === "Singing Lantern",
+  );
+  assert(v, "Agent authored a draft");
+  await c.reducers.testDraft({ versionId: v.id, event: "on_light" });
+  assert.equal(
+    c.db.myVersions.id.find(v.id)?.tested,
+    true,
+    c.db.myVersions.id.find(v.id)?.report,
+  );
+  await c.reducers.publishVersion({ versionId: v.id });
+  await c.reducers.interact({
+    objectId: v.objectId,
+    action: "light",
+    requestId: crypto.randomUUID(),
   });
   await until(
     () =>
-      [...c.db.myJobs.iter()].some(
-        (j) => j.npcId === n.id && ["done", "failed"].includes(j.status),
+      [...c.db.visibleChat.iter()].some(
+        (m) => m.text === "The lantern awakens.",
       ),
-    "real NPC conversation",
-    150000,
+    "script action",
   );
-  const conversation = [...c.db.myJobs.iter()].find((j) => j.npcId === n.id)!;
-  assert.equal(conversation.status, "done", conversation.result);
-  assert.ok([...c.db.myInbox.iter()].some((m) => m.author === n.name));
+  await until(
+    () =>
+      [...c.db.visibleChat.iter()].some(
+        (m) => m.text === "The lantern sleeps.",
+      ),
+    "agent-authored timer",
+    8000,
+  );
   await c.reducers.revokeConsent({});
   console.log(
-    `PASS: real local Claude Code bridge created a room, created an NPC, and roleplayed a private conversation on ${host}/${database}.`,
+    `PASS: real local Claude Code bridge created a room and scripted object, previewed/published it, and executed its action and timer on ${host}/${database}.`,
   );
 } finally {
   child.kill();

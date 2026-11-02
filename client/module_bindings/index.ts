@@ -34,104 +34,53 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
-import BuildNpcReducer from "./build_npc_reducer";
 import BuildRoomReducer from "./build_room_reducer";
 import CancelJobReducer from "./cancel_job_reducer";
 import ClaimJobReducer from "./claim_job_reducer";
 import CompleteJobReducer from "./complete_job_reducer";
+import ConfigurePassageReducer from "./configure_passage_reducer";
 import ConsentReducer from "./consent_reducer";
 import CreatePlayerReducer from "./create_player_reducer";
+import CreateZoneReducer from "./create_zone_reducer";
+import DeleteObjectReducer from "./delete_object_reducer";
 import FailJobReducer from "./fail_job_reducer";
 import GoReducer from "./go_reducer";
 import HomeReducer from "./home_reducer";
+import InteractReducer from "./interact_reducer";
+import LayoutRoomReducer from "./layout_room_reducer";
+import LinkRoomsReducer from "./link_rooms_reducer";
+import PublishVersionReducer from "./publish_version_reducer";
 import RequestAgentReducer from "./request_agent_reducer";
 import RevokeConsentReducer from "./revoke_consent_reducer";
+import SaveDraftReducer from "./save_draft_reducer";
 import SayReducer from "./say_reducer";
+import SetCollaboratorReducer from "./set_collaborator_reducer";
 import TellReducer from "./tell_reducer";
+import TestDraftReducer from "./test_draft_reducer";
+import VisitZoneReducer from "./visit_zone_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
 import AgentJobsRow from "./agent_jobs_table";
-import ChatRow from "./chat_table";
 import MyGrantRow from "./my_grant_table";
 import MyInboxRow from "./my_inbox_table";
+import MyInventoryRow from "./my_inventory_table";
 import MyJobsRow from "./my_jobs_table";
-import NpcRow from "./npc_table";
-import PlayerRow from "./player_table";
-import RoomRow from "./room_table";
-import WorldRow from "./world_table";
+import MyMembersRow from "./my_members_table";
+import MyTracesRow from "./my_traces_table";
+import MyVersionsRow from "./my_versions_table";
+import VisibleChatRow from "./visible_chat_table";
+import VisibleGatesRow from "./visible_gates_table";
+import VisibleObjectsRow from "./visible_objects_table";
+import VisiblePlayersRow from "./visible_players_table";
+import VisibleRoomsRow from "./visible_rooms_table";
 import ZoneRow from "./zone_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
-  chat: __table({
-    name: 'chat',
-    indexes: [
-      { accessor: 'id', name: 'chat_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'roomId', name: 'chat_room_id_idx_btree', algorithm: 'btree', columns: [
-        'roomId',
-      ] },
-    ],
-    constraints: [
-      { name: 'chat_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, ChatRow),
-  npc: __table({
-    name: 'npc',
-    indexes: [
-      { accessor: 'id', name: 'npc_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'roomId', name: 'npc_room_id_idx_btree', algorithm: 'btree', columns: [
-        'roomId',
-      ] },
-    ],
-    constraints: [
-      { name: 'npc_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, NpcRow),
-  player: __table({
-    name: 'player',
-    indexes: [
-      { accessor: 'identity', name: 'player_identity_idx_btree', algorithm: 'btree', columns: [
-        'identity',
-      ] },
-      { accessor: 'nameKey', name: 'player_name_key_idx_btree', algorithm: 'btree', columns: [
-        'nameKey',
-      ] },
-    ],
-    constraints: [
-      { name: 'player_identity_key', constraint: 'unique', columns: ['identity'] },
-      { name: 'player_name_key_key', constraint: 'unique', columns: ['nameKey'] },
-    ],
-  }, PlayerRow),
-  room: __table({
-    name: 'room',
-    indexes: [
-      { accessor: 'id', name: 'room_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'room_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, RoomRow),
-  world: __table({
-    name: 'world',
-    indexes: [
-      { accessor: 'id', name: 'world_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'world_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, WorldRow),
   zone: __table({
     name: 'zone',
     indexes: [
@@ -164,6 +113,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyInboxRow),
+  myInventory: __table({
+    name: 'my_inventory',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyInventoryRow),
   myJobs: __table({
     name: 'my_jobs',
     indexes: [
@@ -171,24 +127,90 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyJobsRow),
+  myMembers: __table({
+    name: 'my_members',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMembersRow),
+  myTraces: __table({
+    name: 'my_traces',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyTracesRow),
+  myVersions: __table({
+    name: 'my_versions',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyVersionsRow),
+  visibleChat: __table({
+    name: 'visible_chat',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisibleChatRow),
+  visibleGates: __table({
+    name: 'visible_gates',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisibleGatesRow),
+  visibleObjects: __table({
+    name: 'visible_objects',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisibleObjectsRow),
+  visiblePlayers: __table({
+    name: 'visible_players',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisiblePlayersRow),
+  visibleRooms: __table({
+    name: 'visible_rooms',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisibleRoomsRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
-  __reducerSchema("build_npc", BuildNpcReducer),
   __reducerSchema("build_room", BuildRoomReducer),
   __reducerSchema("cancel_job", CancelJobReducer),
   __reducerSchema("claim_job", ClaimJobReducer),
   __reducerSchema("complete_job", CompleteJobReducer),
+  __reducerSchema("configure_passage", ConfigurePassageReducer),
   __reducerSchema("consent", ConsentReducer),
   __reducerSchema("create_player", CreatePlayerReducer),
+  __reducerSchema("create_zone", CreateZoneReducer),
+  __reducerSchema("delete_object", DeleteObjectReducer),
   __reducerSchema("fail_job", FailJobReducer),
   __reducerSchema("go", GoReducer),
   __reducerSchema("home", HomeReducer),
+  __reducerSchema("interact", InteractReducer),
+  __reducerSchema("layout_room", LayoutRoomReducer),
+  __reducerSchema("link_rooms", LinkRoomsReducer),
+  __reducerSchema("publish_version", PublishVersionReducer),
   __reducerSchema("request_agent", RequestAgentReducer),
   __reducerSchema("revoke_consent", RevokeConsentReducer),
+  __reducerSchema("save_draft", SaveDraftReducer),
   __reducerSchema("say", SayReducer),
+  __reducerSchema("set_collaborator", SetCollaboratorReducer),
   __reducerSchema("tell", TellReducer),
+  __reducerSchema("test_draft", TestDraftReducer),
+  __reducerSchema("visit_zone", VisitZoneReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

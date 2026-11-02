@@ -10,6 +10,12 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const Action = __t.object("Action", {
+  id: __t.string(),
+  label: __t.string(),
+});
+export type Action = __Infer<typeof Action>;
+
 export const AgentJobs = __t.object("AgentJobs", {});
 export type AgentJobs = __Infer<typeof AgentJobs>;
 
@@ -29,11 +35,26 @@ export const Connection = __t.object("Connection", {
 });
 export type Connection = __Infer<typeof Connection>;
 
+export const Discovery = __t.object("Discovery", {
+  key: __t.string(),
+  owner: __t.identity(),
+  roomId: __t.u64(),
+});
+export type Discovery = __Infer<typeof Discovery>;
+
 export const Exit = __t.object("Exit", {
   direction: __t.string(),
   destination: __t.u64(),
+  gateId: __t.u64(),
+  secret: __t.bool(),
 });
 export type Exit = __Infer<typeof Exit>;
+
+export const GateStatus = __t.object("GateStatus", {
+  id: __t.u64(),
+  open: __t.bool(),
+});
+export type GateStatus = __Infer<typeof GateStatus>;
 
 export const Grant = __t.object("Grant", {
   owner: __t.identity(),
@@ -51,6 +72,15 @@ export const Inbox = __t.object("Inbox", {
 });
 export type Inbox = __Infer<typeof Inbox>;
 
+export const Inventory = __t.object("Inventory", {
+  key: __t.string(),
+  owner: __t.identity(),
+  objectId: __t.u64(),
+  name: __t.string(),
+  quantity: __t.u32(),
+});
+export type Inventory = __Infer<typeof Inventory>;
+
 export const Job = __t.object("Job", {
   id: __t.u64(),
   owner: __t.identity(),
@@ -64,24 +94,49 @@ export const Job = __t.object("Job", {
 });
 export type Job = __Infer<typeof Job>;
 
+export const Member = __t.object("Member", {
+  key: __t.string(),
+  zoneId: __t.u64(),
+  identity: __t.identity(),
+});
+export type Member = __Infer<typeof Member>;
+
 export const MyGrant = __t.object("MyGrant", {});
 export type MyGrant = __Infer<typeof MyGrant>;
 
 export const MyInbox = __t.object("MyInbox", {});
 export type MyInbox = __Infer<typeof MyInbox>;
 
+export const MyInventory = __t.object("MyInventory", {});
+export type MyInventory = __Infer<typeof MyInventory>;
+
 export const MyJobs = __t.object("MyJobs", {});
 export type MyJobs = __Infer<typeof MyJobs>;
 
-export const Npc = __t.object("Npc", {
+export const MyMembers = __t.object("MyMembers", {});
+export type MyMembers = __Infer<typeof MyMembers>;
+
+export const MyTraces = __t.object("MyTraces", {});
+export type MyTraces = __Infer<typeof MyTraces>;
+
+export const MyVersions = __t.object("MyVersions", {});
+export type MyVersions = __Infer<typeof MyVersions>;
+
+export const Object = __t.object("Object", {
   id: __t.u64(),
+  zoneId: __t.u64(),
   roomId: __t.u64(),
+  owner: __t.identity(),
+  kind: __t.string(),
   name: __t.string(),
   description: __t.string(),
-  biography: __t.string(),
-  creator: __t.identity(),
+  get actions() {
+    return __t.array(Action);
+  },
+  versionId: __t.u64(),
+  active: __t.bool(),
 });
-export type Npc = __Infer<typeof Npc>;
+export type Object = __Infer<typeof Object>;
 
 export const Player = __t.object("Player", {
   identity: __t.identity(),
@@ -92,30 +147,95 @@ export const Player = __t.object("Player", {
 });
 export type Player = __Infer<typeof Player>;
 
+export const Request = __t.object("Request", {
+  key: __t.string(),
+  owner: __t.identity(),
+  timestamp: __t.timestamp(),
+});
+export type Request = __Infer<typeof Request>;
+
 export const Room = __t.object("Room", {
   id: __t.u64(),
-  zoneId: __t.string(),
+  zoneId: __t.u64(),
   name: __t.string(),
   description: __t.string(),
   get exits() {
     return __t.array(Exit);
   },
   creator: __t.identity(),
+  x: __t.i32(),
+  y: __t.i32(),
+  floor: __t.i32(),
 });
 export type Room = __Infer<typeof Room>;
 
-export const World = __t.object("World", {
-  id: __t.string(),
+export const State = __t.object("State", {
+  key: __t.string(),
+  objectId: __t.u64(),
+  scope: __t.string(),
+  name: __t.string(),
+  value: __t.string(),
+});
+export type State = __Infer<typeof State>;
+
+export const Timer = __t.object("Timer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  objectId: __t.u64(),
+  versionId: __t.u64(),
+  name: __t.string(),
+  payload: __t.string(),
+  actor: __t.identity(),
+  repeatSeconds: __t.u32(),
+});
+export type Timer = __Infer<typeof Timer>;
+
+export const Trace = __t.object("Trace", {
+  id: __t.u64(),
+  zoneId: __t.u64(),
+  objectId: __t.u64(),
+  event: __t.string(),
+  result: __t.string(),
+  timestamp: __t.timestamp(),
+});
+export type Trace = __Infer<typeof Trace>;
+
+export const Version = __t.object("Version", {
+  id: __t.u64(),
+  objectId: __t.u64(),
+  author: __t.identity(),
   name: __t.string(),
   description: __t.string(),
+  get actions() {
+    return __t.array(Action);
+  },
+  source: __t.string(),
+  tested: __t.bool(),
+  report: __t.string(),
+  createdAt: __t.timestamp(),
 });
-export type World = __Infer<typeof World>;
+export type Version = __Infer<typeof Version>;
+
+export const VisibleChat = __t.object("VisibleChat", {});
+export type VisibleChat = __Infer<typeof VisibleChat>;
+
+export const VisibleGates = __t.object("VisibleGates", {});
+export type VisibleGates = __Infer<typeof VisibleGates>;
+
+export const VisibleObjects = __t.object("VisibleObjects", {});
+export type VisibleObjects = __Infer<typeof VisibleObjects>;
+
+export const VisiblePlayers = __t.object("VisiblePlayers", {});
+export type VisiblePlayers = __Infer<typeof VisiblePlayers>;
+
+export const VisibleRooms = __t.object("VisibleRooms", {});
+export type VisibleRooms = __Infer<typeof VisibleRooms>;
 
 export const Zone = __t.object("Zone", {
-  id: __t.string(),
-  worldId: __t.string(),
+  id: __t.u64(),
   name: __t.string(),
-  description: __t.string(),
+  owner: __t.identity(),
+  entrance: __t.u64(),
 });
 export type Zone = __Infer<typeof Zone>;
 

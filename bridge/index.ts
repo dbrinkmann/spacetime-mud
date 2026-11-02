@@ -57,10 +57,11 @@ const conn = DbConnection.builder()
       })
       .onError((ctx) => console.error("Subscription:", ctx.event))
       .subscribe([
-        "SELECT * FROM room",
-        "SELECT * FROM npc",
-        "SELECT * FROM player",
-        "SELECT * FROM chat",
+        "SELECT * FROM visible_rooms",
+        "SELECT * FROM visible_objects",
+        "SELECT * FROM my_versions",
+        "SELECT * FROM visible_players",
+        "SELECT * FROM visible_chat",
         "SELECT * FROM agent_jobs",
       ]);
   })
@@ -103,10 +104,10 @@ async function pump() {
   running = { id: j.id, abort };
   try {
     await conn.reducers.claimJob({ id: j.id });
-    const room = conn.db.room.id.find(j.roomId);
-    const npc = j.npcId === 0n ? undefined : conn.db.npc.id.find(j.npcId);
-    const player = conn.db.player.identity.find(j.owner);
-    const recentChat = [...conn.db.chat.iter()]
+    const room = conn.db.visibleRooms.id.find(j.roomId);
+    const npc = undefined;
+    const player = conn.db.visiblePlayers.identity.find(j.owner);
+    const recentChat = [...conn.db.visibleChat.iter()]
       .filter((c) => c.roomId === j.roomId)
       .slice(-12)
       .map((c) => ({ author: c.author, text: c.text }));
@@ -114,7 +115,7 @@ async function pump() {
       .filter((other) => other.npcId === j.npcId && other.status === "done")
       .slice(-6)
       .map((other) => ({ player: other.prompt, reply: other.result }));
-    console.log(`Working on request ${j.id}${npc ? ` for ${npc.name}` : ""}…`);
+    console.log(`Working on request ${j.id}…`);
     const proposal = await runClaude(
       {
         player: player?.name,
@@ -126,13 +127,21 @@ async function pump() {
               occupiedDirections: room.exits.map((e) => e.direction),
             }
           : null,
-        npc: npc
-          ? {
-              name: npc.name,
-              description: npc.description,
-              biography: npc.biography,
-            }
-          : null,
+        objects: [...conn.db.visibleObjects.iter()].map((o) => ({
+          id: String(o.id),
+          roomId: String(o.roomId),
+          name: o.name,
+          kind: o.kind,
+          actions: o.actions,
+        })),
+        editableVersions: [...conn.db.myVersions.iter()]
+          .slice(-20)
+          .map((v) => ({
+            objectId: String(v.objectId),
+            name: v.name,
+            source: v.source,
+            actions: v.actions,
+          })),
         recentChat,
         recentDialogue,
       },

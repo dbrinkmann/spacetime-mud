@@ -1,46 +1,47 @@
-import { test, expect, vi } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+﻿import { test, expect, vi } from "vitest";
+import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../client/main";
-
-test("real UI joins the database, builds, navigates, chats, and preserves identity", async () => {
+test("real UI explores, builds, previews, publishes, uses an object, chats and reconnects", async () => {
   HTMLElement.prototype.scrollTo = vi.fn();
   const user = userEvent.setup();
-  const name = `UITest ${Date.now().toString(36)}`;
+  const suffix = Date.now().toString(36);
   const view = render(<App />);
   try {
     await screen.findByText("Live", {}, { timeout: 15000 });
-    await user.type(screen.getByLabelText("What should we call you?"), name);
+    await user.type(
+      screen.getByLabelText("What should we call you?"),
+      `UI ${suffix}`,
+    );
     await user.click(screen.getByRole("button", { name: "Enter world →" }));
     await screen.findByRole("heading", { name: "The Nexus" });
     await user.click(screen.getByRole("button", { name: "Build" }));
-    const select = screen.getByLabelText(
-      "Direction from here",
-    ) as HTMLSelectElement;
-    const option = [...select.options].find((o) => !o.disabled)!;
-    expect(option).toBeTruthy();
-    await user.selectOptions(select, option.value);
+    await user.click(screen.getByRole("button", { name: "Create a zone" }));
+    await user.type(screen.getByLabelText("Zone name"), `UI Garden ${suffix}`);
     await user.type(
-      screen.getByLabelText("Name", { exact: true }),
-      `UI Garden ${name}`,
-    );
-    await user.type(
-      screen.getByLabelText("What do travelers see?"),
+      screen.getByLabelText("Entrance description"),
       "Silver leaves catch the moonlight.",
     );
-    await user.click(screen.getByRole("button", { name: "Create room →" }));
-    const passage = await screen.findByRole("button", {
-      name: new RegExp(`UI Garden ${name}`),
-    });
-    await user.click(passage);
-    await screen.findByRole("heading", { name: `UI Garden ${name}` });
-    await user.type(
-      screen.getByLabelText("Game command"),
-      `say Greetings from ${name}`,
+    await user.click(screen.getByRole("button", { name: "Create zone" }));
+    await screen.findByLabelText("Behavior script");
+    await user.click(screen.getByRole("button", { name: "Save new draft" }));
+    await screen.findByRole("button", { name: "Test saved draft" });
+    await user.click(screen.getByRole("button", { name: "Test saved draft" }));
+    await screen.findByText(/PASS on_touch/);
+    await user.click(
+      screen.getByRole("button", { name: "Publish tested version" }),
     );
-    await user.click(screen.getByRole("button", { name: "Send command" }));
-    await screen.findByText(`Greetings from ${name}`);
-    await user.click(screen.getByRole("button", { name: "AIAgent" }));
+    await user.click(screen.getByRole("button", { name: "Explore" }));
+    await screen.findByRole("heading", { name: `UI Garden ${suffix}` });
+    await user.click(screen.getByRole("button", { name: "Touch the stone" }));
+    await screen.findByText("A clear note rises from the stone.");
+    await user.type(
+      screen.getByLabelText("Chat message"),
+      "Hello from the garden",
+    );
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    await screen.findByText("Hello from the garden");
+    await user.click(screen.getByRole("button", { name: /YOUR BUILDER/ }));
     expect(
       (
         screen.getByRole("button", {
@@ -48,13 +49,11 @@ test("real UI joins the database, builds, navigates, chats, and preserves identi
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
-    await user.click(screen.getByRole("button", { name: "Command guide" }));
-    await screen.findByRole("heading", { name: "Traveler’s guide" });
     view.unmount();
     render(<App />);
     await screen.findByRole(
       "heading",
-      { name: `UI Garden ${name}` },
+      { name: `UI Garden ${suffix}` },
       { timeout: 15000 },
     );
     expect(screen.queryByText("What should we call you?")).toBeNull();

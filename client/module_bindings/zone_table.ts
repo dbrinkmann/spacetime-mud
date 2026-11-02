@@ -11,8 +11,8 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  id: __t.string().primaryKey(),
-  worldId: __t.string().name("world_id"),
+  id: __t.u64().primaryKey(),
   name: __t.string(),
-  description: __t.string(),
+  owner: __t.identity(),
+  entrance: __t.u64(),
 });

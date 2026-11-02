@@ -1,22 +1,34 @@
-# SpacetimeMUD
+﻿# SpacetimeMUD
 
-A shared text adventure built by its players. Begin in the empty Nexus, imagine a passage, explore what others create, and bring characters to life with your own local Claude Code.
+A persistent fantasy MUD built by its players. Explore a room map, interact with scripted objects, and use your own local Claude Code to build a realm that keeps working after you log off.
 
-**Play:** https://dbrinkmann.github.io/spacetime-mud/
-
-**World:** https://spacetimedb.com/dbrinkmann-spacetime-mud
-
-This fork migrates the original Clockwork Labs game to **SpacetimeDB 2.13.0 and TypeScript**, including the database module, React client, and local Claude Code bridge. The original source is retained in `legacy/`.
+**[Play the live demo](https://dbrinkmann.github.io/spacetime-mud/)** · [Database](https://spacetimedb.com/dbrinkmann-spacetime-mud)
 
 ## Play
 
-Enter a name. Your character is remembered in this browser. Use clickable passages or `n`, `s`, `e`, `w`, `u`, `d`. `say Hello` speaks to the room. `help` opens the guide. `home` returns to the Nexus.
+Enter a traveler name, then take the Nexus portal to **Bellkeeper’s Crossing**. Stand on the pressure plate to open the garden gate for twelve seconds. Find your moonleaf keepsake in the chest, or visit the tower and ring the bell to summon its raven keeper.
 
-Everyone can build. The **Build** tab creates a room with a two-way passage, or an NPC with a biography. The Nexus intentionally starts with no exits: the world is authored by its players.
+Use passage buttons, the map, WASD/arrow keys, or touch controls. The map reveals rooms as you explore and supports multiple floors. Ordinary text in the chronicle is chat, not a command language. Return to Nexus always works, including in a realm with a broken script.
+
+Your character token stays in this browser. Clearing browser storage creates a different identity. Everyone can create zones; existing zones require owner/collaborator permission to edit.
+
+## Build
+
+Open **Build → Zones**, create a realm, and its portal appears in the Nexus. Use Rooms to extend or arrange it. Objects supports scenery, items, containers, characters, exits and room behaviors. Start with a template, or write a behavior yourself.
+
+1. Save a new object draft.
+2. Inspect the saved source and actions.
+3. Preview a declared handler (for example `on_touch`). Preview uses an isolated state/effect overlay and never changes the world.
+4. Publish the tested version.
+5. Explore and use the object. Inspect its event log back in the workshop.
+
+Version history can reactivate a previously tested definition. Publishing/rollback cancels that object's outstanding timers and preserves earned inventory and persistent state. Test important actions and timers separately: preview is an event simulation, not a proof that every possible world state succeeds.
+
+Scripts use **ES5 JavaScript in the existing JS-Interpreter**, embedded directly in SpacetimeDB reducers. No custom language and no external inference is needed to execute published behavior. See [scripting and architecture](docs/architecture.md).
 
 ## Connect your Claude Code
 
-Requires Node.js 22.12+ and a current Claude Code installation, signed in on **your own computer** (`claude auth login`). Tested with Claude Code 2.1.201. This uses your Claude account and usage allowance, not a game-hosted OpenAI key.
+Install Node.js 22+ and sign in to Claude Code on **your own machine**:
 
 ```sh
 git clone https://github.com/dbrinkmann/spacetime-mud.git
@@ -25,96 +37,45 @@ npm ci
 npm run bridge
 ```
 
-Approve the terminal consent prompt. Open the pairing link it prints, create or load your character, and explicitly consent in the AIAgent panel. Keep the bridge terminal running.
+Approve the terminal consent prompt. Open its pairing link, then explicitly consent in the game's builder panel. Game context and your requests are sent to Claude and count toward your usage. The bridge runs Claude with computer tools, customizations, session persistence and external MCP servers disabled. You can revoke consent anytime.
 
-Try:
+Ask for rooms or scripted objects. Object changes arrive as private drafts for inspection, preview and publication. Existing objects can be revised by ID; the bridge receives your editable definitions. A bridge disconnect never stops published gameplay or timers.
 
-```text
-tell AIAgent create a moonlit garden to the north
-north
-tell AIAgent create an NPC named Mira, a keeper who remembers every flower
-tell Mira What grows here?
-```
+For an existing checkout, run `git pull` and `npm ci` before restarting the bridge after this release.
 
-For names with spaces: `tell "Orchard Keeper" Hello`.
+## Local development
 
-Use **Disconnect & revoke consent** to stop the game using your bridge. This cancels pending actions and aborts active inference. Ctrl+C stops the bridge locally. No inbound localhost server is needed, and Claude credentials never leave your machine for the game server. Claude runs with customizations and computer tools disabled; the database validates each proposed action.
-
-If the bridge reports missing CLI flags, update Claude Code. If Claude isn't on PATH, set `CLAUDE_EXECUTABLE` to the executable's absolute path. Bridge authentication is saved separately in `~/.spacetime-mud-bridge/`; do not share those files.
-
-## Develop locally
-
-Install the SpacetimeDB 2.13.0 CLI, then:
+SpacetimeDB CLI, server SDK and client SDK are pinned to **2.13.0**. The original implementation remains archived in `legacy/`.
 
 ```sh
 npm ci
 npm ci --prefix spacetimedb
-spacetime start --listen-addr 127.0.0.1:3030
-```
-
-In another terminal:
-
-```sh
+spacetime start --listen-addr 127.0.0.1:3030 --data-dir .local-db
 spacetime publish mud-local --server http://127.0.0.1:3030 --module-path spacetimedb --yes
 spacetime generate --lang typescript --out-dir client/module_bindings --module-path spacetimedb
 ```
 
-Create `.env.local`:
+Set `VITE_SPACETIME_HOST=http://127.0.0.1:3030` and `VITE_SPACETIME_DATABASE=mud-local`, then `npm run dev`. For a local bridge or integration tests, use `SPACETIME_HOST` and `SPACETIME_DATABASE` instead (without the VITE prefix). The bridge also accepts `GAME_URL` for its pairing link.
 
-```dotenv
-VITE_SPACETIME_HOST=http://127.0.0.1:3030
-VITE_SPACETIME_DATABASE=mud-local
-```
-
-Run `npm run dev`. For the bridge, set `SPACETIME_HOST`, `SPACETIME_DATABASE`, and `GAME_URL` in its shell to the local server, database, and Vite URL before running `npm run bridge`. Without overrides, both the web client and bridge connect to the live demo.
-
-PowerShell example:
-
-```powershell
-$env:SPACETIME_HOST='http://127.0.0.1:3030'
-$env:SPACETIME_DATABASE='mud-local'
-$env:GAME_URL='http://localhost:5173/'
-npm run bridge
-```
-
-## Test
+## Verification and deployment
 
 ```sh
 npm test
 npm run check:server
 npm run build
-```
-
-Publish a fresh disposable database and set `SPACETIME_HOST` / `SPACETIME_DATABASE` to it. These integration tests create game content:
-
-```sh
+# Against a disposable database, with SPACETIME_HOST / SPACETIME_DATABASE set:
 npm run test:integration
+npx tsx tests/timers.ts
 npx vitest run
-```
-
-The multiplayer suite checks room creation and return passages, rollback, private messages, identity ownership, agent consent and revocation, NPC action restrictions, and reconnect/multiple-tab presence. The rendered React UI test uses a real SpacetimeDB connection.
-
-Optional, **uses your signed-in Claude Code and quota**:
-
-```sh
+# With the local UI running on port 5174:
+npx playwright install chromium
+npx tsx tests/browser.ts
+# Opt-in: uses real Claude Code quota:
 npx tsx tests/bridge-live.ts
 ```
 
-This starts the actual bridge, pairs a test character, creates a room and NPC through Claude, and checks a private roleplaying response. It does not run in CI.
+`tests/restart-timer.ts --prepare`, followed by a server restart and `tests/restart-timer.ts`, verifies durable scheduling. `tests/deployed-smoke.ts` checks HTTPS assets against the local build and connects to the production database. See [verification evidence](docs/verification.md).
 
-## Deploy
+GitHub Actions tests a disposable database, runs desktop/mobile Chromium checks, verifies generated bindings, and deploys Pages. Database publication is an explicit CLI operation; **do not use `--delete-data=always` on a populated world without authorization**. This release's reset was explicitly requested by the project owner.
 
-The GitHub Actions workflow tests against a disposable SpacetimeDB instance and deploys the client to GitHub Pages on pushes to `main`. Backend updates are separate:
-
-```sh
-spacetime login
-spacetime publish dbrinkmann-spacetime-mud --server maincloud --module-path spacetimedb --yes
-```
-
-Do not use `--delete-data` on the live world. Schema-breaking changes need a migration plan. The SDK and CLI are pinned to 2.13.0; regenerate bindings when changing the schema.
-
-See [architecture and boundaries](docs/architecture.md). This release implements world-building, exploration, chat, and NPC roleplay. It does not add combat, inventory, quests, or the upstream experimental zone generator. Anonymous identity recovery and moderation tooling remain future work.
-
-## License
-
-Apache-2.0; see [LICENSE.txt](LICENSE.txt). Based on [clockworklabs/spacetime-mud](https://github.com/clockworklabs/spacetime-mud).
+The restricted interpreter bundle is committed for deterministic module builds. Regenerate it with `node scripts/bundle-interpreter.mjs` after installing server dependencies. See [third-party notice](docs/third-party.md).

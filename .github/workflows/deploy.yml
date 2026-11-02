@@ -2,6 +2,7 @@ name: Test and deploy game
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', 'README.md']
   workflow_dispatch:
 permissions:
   contents: read
@@ -39,7 +40,22 @@ jobs:
           SPACETIME_DATABASE: mud-ci
         run: |
           npm run test:integration
+          npx tsx tests/timers.ts
           npx vitest run
+      - name: Real desktop and mobile browser verification
+        env:
+          VITE_SPACETIME_HOST: http://127.0.0.1:3030
+          VITE_SPACETIME_DATABASE: mud-ci
+        run: |
+          npx playwright install --with-deps chromium
+          npm run dev -- --port 5174 > /tmp/mud-vite.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:5174/ && break || sleep 1; done
+          npx tsx tests/browser.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-verification
+          path: test-results/
       - name: Verify generated bindings
         run: |
           spacetimedb-cli generate --lang typescript --out-dir client/module_bindings --module-path spacetimedb

@@ -1,13 +1,19 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { DbConnection } from "./module_bindings";
 import type {
   Player,
   Room,
-  Npc,
+  Object as WorldObject,
   Chat,
   Inbox,
   Job,
   Grant,
+  Zone,
+  Version,
+  Inventory,
+  Trace,
+  GateStatus,
+  Member,
 } from "./module_bindings/types";
 export const HOST =
   import.meta.env.VITE_SPACETIME_HOST ?? "https://maincloud.spacetimedb.com";
@@ -17,27 +23,54 @@ const tokenKey = `spacetime-mud:${HOST}:${DATABASE}`;
 export type Snapshot = {
   players: Player[];
   rooms: Room[];
-  npcs: Npc[];
+  objects: WorldObject[];
   chat: Chat[];
   inbox: Inbox[];
   jobs: Job[];
   grants: Grant[];
+  zones: Zone[];
+  versions: Version[];
+  inventory: Inventory[];
+  traces: Trace[];
+  gates: GateStatus[];
+  members: Member[];
 };
 const empty: Snapshot = {
   players: [],
   rooms: [],
-  npcs: [],
+  objects: [],
   chat: [],
   inbox: [],
   jobs: [],
   grants: [],
+  zones: [],
+  versions: [],
+  inventory: [],
+  traces: [],
+  gates: [],
+  members: [],
 };
+export const subscriptions = [
+  "zone",
+  "visible_players",
+  "visible_rooms",
+  "visible_objects",
+  "visible_chat",
+  "my_inbox",
+  "my_jobs",
+  "my_grant",
+  "my_versions",
+  "my_inventory",
+  "my_traces",
+  "visible_gates",
+  "my_members",
+].map((n) => `SELECT * FROM ${n}`);
 export function useGame() {
-  const [conn, setConn] = useState<DbConnection>();
-  const [identity, setIdentity] = useState("");
-  const [status, setStatus] = useState("Connecting");
-  const [data, setData] = useState<Snapshot>(empty);
-  const [connectionError, setConnectionError] = useState("");
+  const [conn, setConn] = useState<DbConnection>(),
+    [identity, setIdentity] = useState(""),
+    [status, setStatus] = useState("Connecting"),
+    [data, setData] = useState<Snapshot>(empty),
+    [connectionError, setConnectionError] = useState("");
   useEffect(() => {
     let disposed = false;
     let token: string | undefined;
@@ -49,7 +82,7 @@ export function useGame() {
         localStorage.setItem(tokenKey, t);
       } catch {
         setConnectionError(
-          "Browser storage is disabled. Your character will not persist after closing this tab.",
+          "Browser storage is disabled; your character will not persist after closing this tab.",
         );
       }
     };
@@ -73,21 +106,14 @@ export function useGame() {
             setStatus("Subscription error");
             setConnectionError(String(ctx.event));
           })
-          .subscribe([
-            "SELECT * FROM player",
-            "SELECT * FROM room",
-            "SELECT * FROM npc",
-            "SELECT * FROM chat",
-            "SELECT * FROM my_inbox",
-            "SELECT * FROM my_jobs",
-            "SELECT * FROM my_grant",
-          ]);
+          .subscribe(subscriptions);
       })
       .onAutomaticReconnect((_c, _id, t) => {
         save(t);
+        setStatus("Live");
         setConnectionError("");
       })
-      .onConnectError((_ctx, e) => {
+      .onConnectError((_c, e) => {
         if (!disposed) {
           setStatus("Connection failed");
           setConnectionError(e.message);
@@ -98,25 +124,37 @@ export function useGame() {
       })
       .build();
     const refresh = () => {
-      if (disposed) return;
-      setData({
-        players: [...c.db.player.iter()],
-        rooms: [...c.db.room.iter()],
-        npcs: [...c.db.npc.iter()],
-        chat: [...c.db.chat.iter()],
-        inbox: [...c.db.myInbox.iter()],
-        jobs: [...c.db.myJobs.iter()],
-        grants: [...c.db.myGrant.iter()],
-      });
+      if (!disposed)
+        setData({
+          players: [...c.db.visiblePlayers.iter()],
+          rooms: [...c.db.visibleRooms.iter()],
+          objects: [...c.db.visibleObjects.iter()],
+          chat: [...c.db.visibleChat.iter()],
+          inbox: [...c.db.myInbox.iter()],
+          jobs: [...c.db.myJobs.iter()],
+          grants: [...c.db.myGrant.iter()],
+          zones: [...c.db.zone.iter()],
+          versions: [...c.db.myVersions.iter()],
+          inventory: [...c.db.myInventory.iter()],
+          traces: [...c.db.myTraces.iter()],
+          gates: [...c.db.visibleGates.iter()],
+          members: [...c.db.myMembers.iter()],
+        });
     };
     for (const table of [
-      c.db.player,
-      c.db.room,
-      c.db.npc,
-      c.db.chat,
+      c.db.visiblePlayers,
+      c.db.visibleRooms,
+      c.db.visibleObjects,
+      c.db.visibleChat,
       c.db.myInbox,
       c.db.myJobs,
       c.db.myGrant,
+      c.db.zone,
+      c.db.myVersions,
+      c.db.myInventory,
+      c.db.myTraces,
+      c.db.visibleGates,
+      c.db.myMembers,
     ]) {
       table.onInsert(refresh);
       table.onUpdate(refresh);

@@ -1,201 +1,300 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { connect, until, host, database } from "./connect.ts";
-
-const clients: Awaited<ReturnType<typeof connect>>[] = [];
-const open = async (token?: string) => {
-  const x = await connect(token);
-  clients.push(x);
+const all: Awaited<ReturnType<typeof connect>>[] = [];
+async function client() {
+  const x = await connect();
+  all.push(x);
   return x;
-};
+}
+const pause = (ms = 280) => new Promise((r) => setTimeout(r, ms));
 const suffix = Date.now().toString(36);
 try {
-  const a = await open(),
-    b = await open(),
-    spy = await open(),
-    bridge = await open();
-  const ai = a.c.identity!,
-    bi = b.c.identity!;
-  await assert.rejects(() => a.c.reducers.go({ direction: "north" }));
-  await a.c.reducers.createPlayer({ name: `Alice ${suffix}` });
-  await b.c.reducers.createPlayer({ name: `Bob ${suffix}` });
-  await spy.c.reducers.createPlayer({ name: `Spy ${suffix}` });
-  await assert.rejects(() =>
-    bridge.c.reducers.createPlayer({ name: `alice ${suffix}` }),
-  );
-  await until(() => b.c.db.player.identity.find(ai), "replicated player");
-  const root = a.c.db.room.id.find(1n)!;
-  assert.ok(root);
-  const free = ["north", "south", "east", "west", "up", "down"].find(
-    (d) => !root.exits.some((e) => e.direction === d),
-  );
-  assert.ok(
-    free,
-    "Run tests on a fresh database (all Nexus exits are occupied).",
-  );
-  await a.c.reducers.buildRoom({
-    direction: free,
-    name: `Garden ${suffix}`,
-    description: "A moonlit garden built during integration testing.",
-  });
-  await until(
-    () => [...b.c.db.room.iter()].find((r) => r.name === `Garden ${suffix}`),
-    "room sync",
-  );
-  const garden = [...a.c.db.room.iter()].find(
-    (r) => r.name === `Garden ${suffix}`,
-  )!;
-  assert.equal(garden.exits[0].destination, 1n);
-  const count = a.c.db.room.count();
-  await assert.rejects(() =>
-    b.c.reducers.buildRoom({
-      direction: free,
-      name: "Collision",
-      description: "Must not exist.",
-    }),
-  );
-  assert.equal(a.c.db.room.count(), count);
-  const badDirection = ["north", "south", "east", "west", "up", "down"].find(
-    (d) => d !== free && !root.exits.some((e) => e.direction === d),
-  );
-  if (badDirection) {
-    await assert.rejects(() =>
-      a.c.reducers.buildRoom({
-        direction: badDirection,
-        name: "",
-        description: "Invalid",
-      }),
-    );
-    assert.equal(a.c.db.room.count(), count);
-    assert.ok(
-      !a.c.db.room.id.find(1n)!.exits.some((e) => e.direction === badDirection),
-    );
-  }
-  await a.c.reducers.go({ direction: free });
-  await until(
-    () => b.c.db.player.identity.find(ai)?.roomId === garden.id,
-    "movement",
+  const { c: a, token } = await client(),
+    { c: b } = await client(),
+    { c: bridge } = await client();
+  await a.reducers.createPlayer({ name: `Builder ${suffix}` });
+  await b.reducers.createPlayer({ name: `Guest ${suffix}` });
+  assert.equal(
+    [...a.db.visibleRooms.iter()].length,
+    1,
+    "Unvisited rooms withheld",
   );
   assert.equal(
-    b.c.db.player.identity.find(bi)!.roomId,
-    1n,
-    "cannot move another player",
+    [...a.db.myVersions.iter()].length,
+    0,
+    "Showcase scripts are private",
   );
-  await a.c.reducers.go({ direction: garden.exits[0].direction });
-  assert.equal(a.c.db.player.identity.find(ai)!.roomId, 1n);
-  await a.c.reducers.say({ message: `Hello ${suffix}` });
-  await until(
-    () => [...b.c.db.chat.iter()].some((c) => c.text === `Hello ${suffix}`),
-    "chat sync",
-  );
-  await a.c.reducers.tell({
-    target: `Bob ${suffix}`,
-    message: "Private secret",
-  });
-  await until(
-    () => [...b.c.db.myInbox.iter()].some((m) => m.text === "Private secret"),
-    "private message",
-  );
-  assert.equal(spy.c.db.myInbox.count(), 0n);
-  assert.equal(bridge.c.db.myInbox.count(), 0n);
-  await assert.rejects(() =>
-    a.c.reducers.requestAgent({ prompt: "Create a room north" }),
-  );
-  await a.c.reducers.consent({ bridge: bridge.c.identity! });
-  await a.c.reducers.requestAgent({
-    prompt: "Create a character named Keeper",
-  });
-  await until(
-    () => bridge.c.db.agentJobs.count() === 1n,
-    "authorized bridge job visibility",
-  );
-  assert.equal(spy.c.db.agentJobs.count(), 0n);
-  assert.equal(spy.c.db.myJobs.count(), 0n);
-  const j = [...bridge.c.db.agentJobs.iter()][0];
-  await assert.rejects(() => spy.c.reducers.claimJob({ id: j.id }));
-  await bridge.c.reducers.claimJob({ id: j.id });
-  const proposal = {
-    id: j.id,
-    kind: "npc",
-    direction: "",
-    name: `Keeper ${suffix}`,
-    description: "A patient traveler.",
-    biography: "Remembers every traveler who passes.",
-    message: "The keeper arrives.",
-  };
-  await bridge.c.reducers.completeJob(proposal);
-  await until(
-    () => [...b.c.db.npc.iter()].some((n) => n.name === proposal.name),
-    "NPC sync",
-  );
-  await assert.rejects(() => bridge.c.reducers.completeJob(proposal));
-  await new Promise((r) => setTimeout(r, 2100));
-  await a.c.reducers.tell({
-    target: proposal.name,
-    message: "What do you remember?",
-  });
-  await until(
-    () => [...bridge.c.db.agentJobs.iter()].some((j) => j.status === "pending"),
-    "NPC job",
-  );
-  const npcJob = [...bridge.c.db.agentJobs.iter()].find(
-    (j) => j.status === "pending",
+  const showcase = [...a.db.zone.iter()].find(
+    (z) => z.name === "Bellkeeper’s Crossing",
   )!;
-  await bridge.c.reducers.claimJob({ id: npcJob.id });
-  await assert.rejects(() =>
-    bridge.c.reducers.completeJob({
-      ...proposal,
-      id: npcJob.id,
-      kind: "room",
-      direction: "up",
-    }),
-  );
-  await bridge.c.reducers.completeJob({
-    ...proposal,
-    id: npcJob.id,
-    kind: "reply",
-    message: "I remember the first light of the Nexus.",
-  });
-  await until(
-    () => [...a.c.db.myInbox.iter()].some((m) => m.author === proposal.name),
-    "NPC reply",
-  );
-  await new Promise((r) => setTimeout(r, 2100));
-  await a.c.reducers.requestAgent({ prompt: "A request to cancel" });
+  await Promise.all([
+    a.reducers.visitZone({ zoneId: showcase.id }),
+    b.reducers.visitZone({ zoneId: showcase.id }),
+  ]);
   await until(() =>
-    [...bridge.c.db.agentJobs.iter()].some((j) => j.status === "pending"),
+    [...a.db.visibleObjects.iter()].some(
+      (o) => o.name === "Worn Pressure Plate",
+    ),
   );
-  const cancelled = [...bridge.c.db.agentJobs.iter()].find(
+  const plate = [...a.db.visibleObjects.iter()].find(
+      (o) => o.name === "Worn Pressure Plate",
+    )!,
+    gate = [...a.db.visibleObjects.iter()].find(
+      (o) => o.name === "The Iron Gate",
+    )!;
+  await assert.rejects(a.reducers.go({ direction: "north" }), /closed/i);
+  await assert.rejects(
+    a.reducers.buildRoom({
+      direction: "south",
+      name: "Forbidden",
+      description: "No.",
+    }),
+    /owner|collaborator/i,
+  );
+  await a.reducers.interact({
+    objectId: plate.id,
+    action: "press",
+    requestId: randomUUID(),
+  });
+  await until(
+    () => [...b.db.visibleGates.iter()].some((g) => g.id === gate.id && g.open),
+    "shared gate",
+  );
+  await Promise.all([
+    a.reducers.go({ direction: "north" }),
+    b.reducers.go({ direction: "north" }),
+  ]);
+  const chest = [...a.db.visibleObjects.iter()].find(
+    (o) => o.name === "Traveler’s Chest",
+  )!;
+  assert(chest);
+  await pause();
+  const requestId = randomUUID();
+  await Promise.all([
+    a.reducers.interact({ objectId: chest.id, action: "open", requestId }),
+    b.reducers.interact({
+      objectId: chest.id,
+      action: "open",
+      requestId: randomUUID(),
+    }),
+  ]);
+  await a.reducers.interact({ objectId: chest.id, action: "open", requestId });
+  assert.equal([...a.db.myInventory.iter()][0]?.quantity, 1);
+  assert.equal([...b.db.myInventory.iter()][0]?.quantity, 1);
+  await pause();
+  await a.reducers.interact({
+    objectId: chest.id,
+    action: "open",
+    requestId: randomUUID(),
+  });
+  assert.equal(
+    [...a.db.myInventory.iter()][0].quantity,
+    1,
+    "Personal reward cannot repeat",
+  );
+  await a.reducers.home({});
+  await a.reducers.visitZone({ zoneId: showcase.id });
+  await a.reducers.go({ direction: "east" });
+  const bell = [...a.db.visibleObjects.iter()].find(
+    (o) => o.name === "Bronze Bell",
+  )!;
+  await pause();
+  await a.reducers.interact({
+    objectId: bell.id,
+    action: "ring",
+    requestId: randomUUID(),
+  });
+  await until(
+    () =>
+      [...a.db.visibleObjects.iter()].some((o) => o.name === "The Bellkeeper"),
+    "creature arrival",
+  );
+  await until(
+    () =>
+      ![...a.db.visibleObjects.iter()].some((o) => o.name === "The Bellkeeper"),
+    "timer returns creature",
+    15000,
+  );
+  await until(
+    () => ![...b.db.visibleGates.iter()].find((g) => g.id === gate.id)?.open,
+    "persistent gate timer",
+    15000,
+  );
+  console.log(
+    "PASS showcase: multiplayer gate, per-player chest, duplicate request, creature and durable timers",
+  );
+  await a.reducers.createZone({
+    name: `Test Realm ${suffix}`,
+    description: "A realm for integration checks.",
+  });
+  const p = a.db.visiblePlayers.identity.find(a.identity!)!,
+    room = a.db.visibleRooms.id.find(p.roomId)!,
+    zoneId = room.zoneId;
+  await a.reducers.buildRoom({
+    direction: "north",
+    name: "Hidden study",
+    description: "A secret notebook.",
+  });
+  await b.reducers.home({});
+  await b.reducers.visitZone({ zoneId });
+  assert(
+    ![...b.db.visibleRooms.iter()].some((r) => r.name === "Hidden study"),
+    "Unvisited description private",
+  );
+  const base = {
+    roomId: room.id,
+    objectId: 0n,
+    kind: "container",
+    name: "Test chest",
+    description: "A private test.",
+    actions: [{ id: "use", label: "Use" }],
+    source:
+      'function on_use(ctx){ if(!ctx.personal("reward")){ctx.give("Test gem",1);ctx.remember("reward",true);}ctx.schedule("quiet",2);ctx.say("started");} function on_quiet(ctx){ctx.say("timer complete");}',
+  };
+  await a.reducers.saveDraft(base);
+  let v = [...a.db.myVersions.iter()].sort((x, y) => Number(y.id - x.id))[0];
+  const objectId = v.objectId;
+  assert(
+    ![...b.db.visibleObjects.iter()].some((o) => o.id === objectId),
+    "Draft invisible to visitor",
+  );
+  await assert.rejects(a.reducers.publishVersion({ versionId: v.id }), /Test/);
+  await a.reducers.testDraft({ versionId: v.id, event: "on_use" });
+  v = a.db.myVersions.id.find(v.id)!;
+  assert(v.tested, v.report);
+  assert(
+    ![...a.db.myInventory.iter()].some((i) => i.name === "Test gem"),
+    "Preview cannot award inventory",
+  );
+  await a.reducers.publishVersion({ versionId: v.id });
+  await until(() => b.db.visibleObjects.id.find(objectId));
+  await b.reducers.interact({
+    objectId,
+    action: "use",
+    requestId: randomUUID(),
+  });
+  assert([...b.db.myInventory.iter()].some((i) => i.name === "Test gem"));
+  const original = v;
+  await a.reducers.saveDraft({
+    ...base,
+    objectId,
+    source:
+      'function on_use(ctx){ ctx.give("Bad reward",1);ctx.say("should rollback");while(true){} }',
+  });
+  v = [...a.db.myVersions.iter()].sort((x, y) => Number(y.id - x.id))[0];
+  await a.reducers.testDraft({ versionId: v.id, event: "on_use" });
+  assert.equal(a.db.myVersions.id.find(v.id)?.tested, false);
+  await assert.rejects(a.reducers.publishVersion({ versionId: v.id }));
+  await a.reducers.testDraft({ versionId: v.id, event: "on_missing" });
+  assert.equal(a.db.myVersions.id.find(v.id)?.tested, false);
+  await a.reducers.saveDraft({
+    ...base,
+    objectId,
+    source:
+      'function on_use(ctx){if(ctx.personal("armed")){ctx.give("Bad reward",1);ctx.say("should rollback");while(true){}}ctx.remember("armed",true);}',
+  });
+  v = [...a.db.myVersions.iter()].sort((x, y) => Number(y.id - x.id))[0];
+  await a.reducers.testDraft({ versionId: v.id, event: "on_use" });
+  await a.reducers.publishVersion({ versionId: v.id });
+  await pause();
+  await b.reducers.interact({
+    objectId,
+    action: "use",
+    requestId: randomUUID(),
+  });
+  await pause();
+  await assert.rejects(
+    b.reducers.interact({ objectId, action: "use", requestId: randomUUID() }),
+    /budget/,
+  );
+  assert(![...b.db.myInventory.iter()].some((i) => i.name === "Bad reward"));
+  assert(
+    ![...b.db.visibleChat.iter()].some((c) => c.text === "should rollback"),
+  );
+  await a.reducers.publishVersion({ versionId: original.id });
+  assert(
+    [...b.db.myInventory.iter()].some((i) => i.name === "Test gem"),
+    "Rollback preserves inventory",
+  );
+  await a.reducers.setCollaborator({
+    zoneId,
+    name: `Guest ${suffix}`,
+    allowed: true,
+  });
+  await until(() => b.db.myVersions.id.find(original.id));
+  await a.reducers.setCollaborator({
+    zoneId,
+    name: `Guest ${suffix}`,
+    allowed: false,
+  });
+  await until(() => !b.db.myVersions.id.find(original.id));
+  await assert.rejects(
+    b.reducers.publishVersion({ versionId: original.id }),
+    /owner|collaborator/,
+  );
+  await pause();
+  await b.reducers.interact({
+    objectId,
+    action: "use",
+    requestId: randomUUID(),
+  });
+  a.disconnect();
+  await until(
+    () => [...b.db.visibleChat.iter()].some((c) => c.text === "timer complete"),
+    "timer works with builder offline",
+    6000,
+  );
+  const resumed = await connect(token);
+  all.push(resumed);
+  const c = resumed.c;
+  assert.equal(
+    c.db.visiblePlayers.identity.find(c.identity!)?.roomId,
+    room.id,
+    "Identity and room persist",
+  );
+  await c.reducers.consent({ bridge: bridge.identity! });
+  await c.reducers.requestAgent({ prompt: "Create a singing stone" });
+  await until(() =>
+    [...bridge.db.agentJobs.iter()].some((j) => j.status === "pending"),
+  );
+  const j = [...bridge.db.agentJobs.iter()].find(
     (j) => j.status === "pending",
   )!;
-  await bridge.c.reducers.claimJob({ id: cancelled.id });
-  await a.c.reducers.revokeConsent({});
+  await assert.rejects(b.reducers.claimJob({ id: j.id }));
+  await bridge.reducers.claimJob({ id: j.id });
+  await bridge.reducers.completeJob({
+    id: j.id,
+    kind: "object",
+    direction: "",
+    name: "Agent stone",
+    description: "A stone.",
+    biography: "",
+    message: "Drafted.",
+    objectId: "",
+    objectKind: "scenery",
+    source: 'function on_touch(ctx){ctx.say("hello");}',
+    actions: [{ id: "touch", label: "Touch" }],
+  });
   await until(
-    () => bridge.c.db.agentJobs.count() === 0n,
-    "revocation removes bridge data",
+    () => [...c.db.myVersions.iter()].some((v) => v.name === "Agent stone"),
+    "Bridge can author draft",
   );
-  await assert.rejects(() =>
-    bridge.c.reducers.completeJob({ ...proposal, id: cancelled.id }),
+  assert(
+    ![...b.db.visibleObjects.iter()].some((o) => o.name === "Agent stone"),
+    "Agent draft not auto-published",
   );
-  const secondTab = await open(a.token);
-  a.c.disconnect();
+  await c.reducers.revokeConsent({});
   await until(
-    () => secondTab.c.db.player.identity.find(ai)?.online === true,
-    "multi-tab online",
+    () => ![...bridge.db.myVersions.iter()].length,
+    "revoked bridge loses source",
   );
-  assert.equal(
-    secondTab.c.db.player.identity.find(ai)!.name,
-    `Alice ${suffix}`,
-  );
-  secondTab.c.disconnect();
-  await until(
-    () => b.c.db.player.identity.find(ai)?.online === false,
-    "last-tab disconnect",
-  );
-  const again = await open(a.token);
-  assert.equal(again.c.db.player.identity.find(ai)!.roomId, 1n);
+  await c.reducers.deleteObject({ objectId });
+  await until(() => !b.db.visibleObjects.id.find(objectId));
   console.log(
-    `PASS: ${host}/${database}: multiplayer, identity, two-way movement, atomic build, duplicate/invalid input, private messages, consent, job ownership, NPC restrictions, revocation, multi-tab presence, reconnect persistence.`,
+    "PASS drafts, preview isolation, rollback, budgets, inventory, permissions, privacy, bridge draft and consent, disconnect/reconnect",
   );
+  console.log(`VERIFIED ${host}/${database}`);
 } finally {
-  for (const x of clients) x.c.disconnect();
+  for (const x of all) x.c.disconnect();
 }

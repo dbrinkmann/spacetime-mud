@@ -9,9 +9,21 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
+import {
+  Exit,
+} from "./types";
 
-export default {
+
+export default __t.row({
+  id: __t.u64().primaryKey(),
+  zoneId: __t.u64().name("zone_id"),
   name: __t.string(),
   description: __t.string(),
-  biography: __t.string(),
-};
+  get exits() {
+    return __t.array(Exit);
+  },
+  creator: __t.identity(),
+  x: __t.i32(),
+  y: __t.i32(),
+  floor: __t.i32(),
+});

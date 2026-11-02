@@ -1,36 +1,42 @@
-# Launch verification — October 29, 2026
+﻿# Release verification — November 2, 2026
 
-Live game: https://dbrinkmann.github.io/spacetime-mud/
+Game: https://dbrinkmann.github.io/spacetime-mud/
+Database: `dbrinkmann-spacetime-mud` on Maincloud.
 
-Live database: `dbrinkmann-spacetime-mud` on SpacetimeDB Maincloud, with CLI/module/client SDK pinned to 2.13.0.
+## Passed before production publication
 
-The initial deployment passed [GitHub Actions](https://github.com/dbrinkmann/spacetime-mud/actions/runs/40910051041). The workflow checks builds and runs disposable-database integration tests before publishing Pages.
+- TypeScript server/client/bridge checks and production Vite build.
+- Interpreter tests: ordinary JavaScript functions/loops, runaway loops/recursion/string growth, oversized arrays, native aliases, dynamic code, regex, constructors and prototype access.
+- Real multiplayer integration on both local SpacetimeDB and Maincloud (`dbrinkmann-spacetime-mud-check`): shared gate state, independent chest rewards, duplicate-request protection, script-driven creature movement, timer reset, private discovery and script views, edit permissions and revoked collaborators.
+- Draft/preview/publication isolation, version rollback preserving earned inventory, runtime failure discarding rewards/messages, builder disconnect and identity reconnect.
+- Timer suite on both local and Maincloud: repeat/cancel, named replacement, object deletion, version replacement, failed-handler rollback and traces, inventory reads after writes in the preview overlay, secret passage discovery/configuration/travel.
+- A real local server-process restart with a pending timer: it fired after restart with the original actor and state intact.
+- Real local Claude Code through the bridge on both local and Maincloud: generated a room and scripted lantern draft, previewed/published the source, invoked the action, and observed its timer. No inference was involved in running that published behavior.
+- React UI tests connected to local and Maincloud: create character and zone, save/test/publish a template, invoke an action, chat, consent initially disabled, reconnect with identity intact.
+- Real Chromium desktop (1440px) and mobile (390px): explore the map, open the gate, collect inventory, chat, create a zone, preview/publish/use an object, observe its timer, and reload. No browser exceptions; no mobile horizontal overflow. Desktop, mobile and workshop screenshots were visually reviewed.
+- Dependency audits: zero reported vulnerabilities in production dependencies and the server dependency tree.
 
-## Passed
+## Deployment
 
-- TypeScript checks for the server, client, bridge, and test code; production Vite build.
-- Command parser and structured-action validation tests.
-- Multiple real clients: creation, room synchronization, movement and return passages, atomic rejection of occupied directions and invalid room content, chat, private messages, and duplicate-name rejection.
-- Agent grants: no job without consent, private job visibility, bridge ownership, rejected unauthorized job claims, one-time completion, NPC dialogue prohibited from changing the world, and rejected completion after revocation.
-- Identity persistence after reconnect, and correct presence while multiple tabs share an identity.
-- Rendered React UI connected to real SpacetimeDB: character creation, manual building, passage navigation, chat, consent button disabled without approval, command help, and identity persistence on remount.
-- The complete local bridge subprocess with **real signed-in Claude Code 2.1.201**: pairing, generated room, generated NPC, private NPC roleplay, and consent revocation. Repeated successfully against both local SpacetimeDB and the Maincloud validation database `dbrinkmann-spacetime-mud-check`.
-- Public HTTPS page and its JavaScript/CSS return HTTP 200. Downloaded assets match the SHA-256 hashes of the locally validated production build.
-- A fresh client connects to the production database and synchronizes the Nexus; private inbox and job views are empty for that unrelated identity.
-- `npm audit` reports zero vulnerabilities in the new application's dependency tree.
+Production confirmation is recorded below after publication. The original world reset was explicitly authorized. GitHub Actions repeats the integration, timer, React UI and Chromium checks and uploads screenshots before deploying Pages.
 
-The production world was checked with one room and no exits, preserving the intended empty Nexus. Test rooms and NPCs were created in separate validation databases, not seeded into production.
+## Reproduce
 
-## Verification limit
-
-Browser/computer control was unavailable in this environment. UI behavior was tested through a rendered DOM with real database connections; no visual screenshot review or manual browser walkthrough is claimed.
-
-## Repeat the deployed check
-
-Run `npm run build`, set `SPACETIME_HOST=https://maincloud.spacetimedb.com` and `SPACETIME_DATABASE=dbrinkmann-spacetime-mud`, then run:
+Set `SPACETIME_HOST` and `SPACETIME_DATABASE` to a disposable database, then run:
 
 ```sh
-npx tsx tests/deployed-smoke.ts
+npm test
+npm run check:server
+npm run build
+npm run test:integration
+npm run test:timers
+npx vitest run
 ```
 
-The check reads public assets and subscribes to the live world; it does not mutate world content. See the root README for disposable-database integration and opt-in Claude tests.
+For browser verification, run Vite on port 5174 against that database and `npm run test:browser`. For the real agent flow use `npm run test:bridge` (consumes Claude Code usage). The server restart test is `npx tsx tests/restart-timer.ts --prepare`, restart the local server, then `npx tsx tests/restart-timer.ts`.
+
+After deploying, `tests/deployed-smoke.ts` compares public JS/CSS hashes against the local build and checks a fresh database connection. `GAME_URL` plus `BROWSER_SMOKE_ONLY=1` runs the browser exploration check against the live site without creating a test zone.
+
+## Scope
+
+The shipped interpreter is ES5 JavaScript, not Lua or TypeScript syntax. Preview simulates a selected event rather than every possible world state. Script limits bound work and allocations; this is not a claim of a separate process heap or an exhaustive security audit. The builder uses one structured agent proposal per request. Those boundaries are documented in `docs/architecture.md`.

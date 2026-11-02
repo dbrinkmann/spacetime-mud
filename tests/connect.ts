@@ -1,4 +1,4 @@
-import { DbConnection } from "../client/module_bindings/index.ts";
+﻿import { DbConnection } from "../client/module_bindings/index.ts";
 export const host = process.env.SPACETIME_HOST ?? "http://127.0.0.1:3030";
 export const database = process.env.SPACETIME_DATABASE ?? "mud-test";
 export async function connect(token?: string) {
@@ -21,16 +21,24 @@ export async function connect(token?: string) {
             clearTimeout(timeout);
             reject(ctx.event);
           })
-          .subscribe([
-            "SELECT * FROM player",
-            "SELECT * FROM room",
-            "SELECT * FROM npc",
-            "SELECT * FROM chat",
-            "SELECT * FROM my_inbox",
-            "SELECT * FROM my_jobs",
-            "SELECT * FROM my_grant",
-            "SELECT * FROM agent_jobs",
-          ]);
+          .subscribe(
+            [
+              "zone",
+              "visible_players",
+              "visible_rooms",
+              "visible_objects",
+              "visible_chat",
+              "my_inbox",
+              "my_jobs",
+              "my_grant",
+              "my_versions",
+              "my_inventory",
+              "my_traces",
+              "visible_gates",
+              "my_members",
+              "agent_jobs",
+            ].map((n) => `SELECT * FROM ${n}`),
+          );
       })
       .onConnectError((_ctx, e) => {
         clearTimeout(timeout);

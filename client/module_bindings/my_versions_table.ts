@@ -9,9 +9,22 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
+import {
+  Action,
+} from "./types";
+
 
 export default __t.row({
-  id: __t.string().primaryKey(),
+  id: __t.u64().primaryKey(),
+  objectId: __t.u64().name("object_id"),
+  author: __t.identity(),
   name: __t.string(),
   description: __t.string(),
+  get actions() {
+    return __t.array(Action);
+  },
+  source: __t.string(),
+  tested: __t.bool(),
+  report: __t.string(),
+  createdAt: __t.timestamp().name("created_at"),
 });

@@ -8,7 +8,11 @@
     "check:server": "tsc --noEmit -p spacetimedb/tsconfig.json",
     "bridge": "tsx bridge/index.ts",
     "test": "tsx --test tests/*.test.ts",
-    "test:integration": "tsx tests/integration.ts"
+    "test:integration": "tsx tests/integration.ts",
+    "test:timers": "tsx tests/timers.ts",
+    "test:browser": "tsx tests/browser.ts",
+    "test:bridge": "tsx tests/bridge-live.ts",
+    "build:interpreter": "node scripts/bundle-interpreter.mjs"
   },
   "dependencies": {
     "react": "19.2.0",
@@ -16,11 +20,13 @@
     "spacetimedb": "2.13.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "esbuild": "0.28.2",
     "jsdom": "^26.1.0",
     "prettier": "^3.9.10",
     "tsx": "^4.20.0",

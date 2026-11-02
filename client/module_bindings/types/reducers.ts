@@ -6,33 +6,53 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
-import BuildNpcReducer from "../build_npc_reducer";
 import BuildRoomReducer from "../build_room_reducer";
 import CancelJobReducer from "../cancel_job_reducer";
 import ClaimJobReducer from "../claim_job_reducer";
 import CompleteJobReducer from "../complete_job_reducer";
+import ConfigurePassageReducer from "../configure_passage_reducer";
 import ConsentReducer from "../consent_reducer";
 import CreatePlayerReducer from "../create_player_reducer";
+import CreateZoneReducer from "../create_zone_reducer";
+import DeleteObjectReducer from "../delete_object_reducer";
 import FailJobReducer from "../fail_job_reducer";
 import GoReducer from "../go_reducer";
 import HomeReducer from "../home_reducer";
+import InteractReducer from "../interact_reducer";
+import LayoutRoomReducer from "../layout_room_reducer";
+import LinkRoomsReducer from "../link_rooms_reducer";
+import PublishVersionReducer from "../publish_version_reducer";
 import RequestAgentReducer from "../request_agent_reducer";
 import RevokeConsentReducer from "../revoke_consent_reducer";
+import SaveDraftReducer from "../save_draft_reducer";
 import SayReducer from "../say_reducer";
+import SetCollaboratorReducer from "../set_collaborator_reducer";
 import TellReducer from "../tell_reducer";
+import TestDraftReducer from "../test_draft_reducer";
+import VisitZoneReducer from "../visit_zone_reducer";
 
-export type BuildNpcParams = __Infer<typeof BuildNpcReducer>;
 export type BuildRoomParams = __Infer<typeof BuildRoomReducer>;
 export type CancelJobParams = __Infer<typeof CancelJobReducer>;
 export type ClaimJobParams = __Infer<typeof ClaimJobReducer>;
 export type CompleteJobParams = __Infer<typeof CompleteJobReducer>;
+export type ConfigurePassageParams = __Infer<typeof ConfigurePassageReducer>;
 export type ConsentParams = __Infer<typeof ConsentReducer>;
 export type CreatePlayerParams = __Infer<typeof CreatePlayerReducer>;
+export type CreateZoneParams = __Infer<typeof CreateZoneReducer>;
+export type DeleteObjectParams = __Infer<typeof DeleteObjectReducer>;
 export type FailJobParams = __Infer<typeof FailJobReducer>;
 export type GoParams = __Infer<typeof GoReducer>;
 export type HomeParams = __Infer<typeof HomeReducer>;
+export type InteractParams = __Infer<typeof InteractReducer>;
+export type LayoutRoomParams = __Infer<typeof LayoutRoomReducer>;
+export type LinkRoomsParams = __Infer<typeof LinkRoomsReducer>;
+export type PublishVersionParams = __Infer<typeof PublishVersionReducer>;
 export type RequestAgentParams = __Infer<typeof RequestAgentReducer>;
 export type RevokeConsentParams = __Infer<typeof RevokeConsentReducer>;
+export type SaveDraftParams = __Infer<typeof SaveDraftReducer>;
 export type SayParams = __Infer<typeof SayReducer>;
+export type SetCollaboratorParams = __Infer<typeof SetCollaboratorReducer>;
 export type TellParams = __Infer<typeof TellReducer>;
+export type TestDraftParams = __Infer<typeof TestDraftReducer>;
+export type VisitZoneParams = __Infer<typeof VisitZoneReducer>;
 

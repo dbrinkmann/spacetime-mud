@@ -10,6 +10,7 @@
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
+    "js-interpreter": "6.0.2",
     "spacetimedb": "2.13.0"
   },
   "devDependencies": {
