@@ -58,6 +58,9 @@ const conn = DbConnection.builder()
       .onError((ctx) => console.error("Subscription:", ctx.event))
       .subscribe([
         "SELECT * FROM visible_rooms",
+        "SELECT * FROM visible_scenes",
+        "SELECT * FROM visible_avatars",
+        "SELECT * FROM my_visual_drafts",
         "SELECT * FROM visible_objects",
         "SELECT * FROM my_versions",
         "SELECT * FROM visible_players",
@@ -119,6 +122,12 @@ async function pump() {
     const proposal = await runClaude(
       {
         player: player?.name,
+        roomGeometry: conn.db.visibleScenes.roomId.find(j.roomId)?.source,
+        characterGeometry: conn.db.visibleAvatars.identity.find(j.owner)
+          ?.source,
+        visualDrafts: [...conn.db.myVisualDrafts.iter()]
+          .filter((d) => d.kind === "avatar" || d.roomId === j.roomId)
+          .map((d) => ({ kind: d.kind, source: d.source })),
         request: j.prompt,
         room: room
           ? {

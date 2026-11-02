@@ -62,6 +62,21 @@ try {
   await request(
     'Create a scripted scenery object named Singing Lantern. Give it a light action labeled Light the lantern. on_light should say "The lantern awakens." and schedule quiet in 2 seconds. on_quiet should say "The lantern sleeps." Return an object draft.',
   );
+  await request(
+    "Create an avatar visual draft for me, a simple moss-green character with all six required parts and a small gold crown attached rigidly to the head. Use kind avatar and complete JSON in source. Keep the geometry minimal.",
+  );
+  const visual = [...c.db.myVisualDrafts.iter()].find(
+    (d) => d.kind === "avatar",
+  );
+  assert(visual, "Agent authored character geometry");
+  await c.reducers.publishVisual({
+    key: visual.key,
+    revision: visual.revision,
+  });
+  assert(
+    c.db.visibleAvatars.identity.find(c.identity!),
+    "Agent geometry published",
+  );
   const v = [...c.db.myVersions.iter()].find(
     (v) => v.name === "Singing Lantern",
   );

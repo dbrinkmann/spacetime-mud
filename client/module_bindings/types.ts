@@ -19,6 +19,13 @@ export type Action = __Infer<typeof Action>;
 export const AgentJobs = __t.object("AgentJobs", {});
 export type AgentJobs = __Infer<typeof AgentJobs>;
 
+export const Avatar = __t.object("Avatar", {
+  identity: __t.identity(),
+  source: __t.string(),
+  revision: __t.u32(),
+});
+export type Avatar = __Infer<typeof Avatar>;
+
 export const Chat = __t.object("Chat", {
   id: __t.u64(),
   roomId: __t.u64(),
@@ -122,6 +129,9 @@ export type MyTraces = __Infer<typeof MyTraces>;
 export const MyVersions = __t.object("MyVersions", {});
 export type MyVersions = __Infer<typeof MyVersions>;
 
+export const MyVisualDrafts = __t.object("MyVisualDrafts", {});
+export type MyVisualDrafts = __Infer<typeof MyVisualDrafts>;
+
 export const Object = __t.object("Object", {
   id: __t.u64(),
   zoneId: __t.u64(),
@@ -147,6 +157,17 @@ export const Player = __t.object("Player", {
 });
 export type Player = __Infer<typeof Player>;
 
+export const Presence = __t.object("Presence", {
+  identity: __t.identity(),
+  roomId: __t.u64(),
+  path: __t.string(),
+  startedAt: __t.timestamp(),
+  pose: __t.string(),
+  seat: __t.string(),
+  yaw: __t.f64(),
+});
+export type Presence = __Infer<typeof Presence>;
+
 export const Request = __t.object("Request", {
   key: __t.string(),
   owner: __t.identity(),
@@ -168,6 +189,13 @@ export const Room = __t.object("Room", {
   floor: __t.i32(),
 });
 export type Room = __Infer<typeof Room>;
+
+export const RoomScene = __t.object("RoomScene", {
+  roomId: __t.u64(),
+  source: __t.string(),
+  revision: __t.u32(),
+});
+export type RoomScene = __Infer<typeof RoomScene>;
 
 export const State = __t.object("State", {
   key: __t.string(),
@@ -216,6 +244,9 @@ export const Version = __t.object("Version", {
 });
 export type Version = __Infer<typeof Version>;
 
+export const VisibleAvatars = __t.object("VisibleAvatars", {});
+export type VisibleAvatars = __Infer<typeof VisibleAvatars>;
+
 export const VisibleChat = __t.object("VisibleChat", {});
 export type VisibleChat = __Infer<typeof VisibleChat>;
 
@@ -228,8 +259,25 @@ export type VisibleObjects = __Infer<typeof VisibleObjects>;
 export const VisiblePlayers = __t.object("VisiblePlayers", {});
 export type VisiblePlayers = __Infer<typeof VisiblePlayers>;
 
+export const VisiblePresence = __t.object("VisiblePresence", {});
+export type VisiblePresence = __Infer<typeof VisiblePresence>;
+
 export const VisibleRooms = __t.object("VisibleRooms", {});
 export type VisibleRooms = __Infer<typeof VisibleRooms>;
+
+export const VisibleScenes = __t.object("VisibleScenes", {});
+export type VisibleScenes = __Infer<typeof VisibleScenes>;
+
+export const VisualDraft = __t.object("VisualDraft", {
+  key: __t.string(),
+  owner: __t.identity(),
+  roomId: __t.u64(),
+  kind: __t.string(),
+  source: __t.string(),
+  revision: __t.u32(),
+  baseRevision: __t.u32(),
+});
+export type VisualDraft = __Infer<typeof VisualDraft>;
 
 export const Zone = __t.object("Zone", {
   id: __t.u64(),

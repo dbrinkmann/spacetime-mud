@@ -4,6 +4,7 @@ import type { Room } from "./module_bindings/types";
 import type { Snapshot } from "./connection";
 import { directions, scriptingGuide } from "../shared/agent";
 import { templates } from "../shared/templates";
+import { VisualBuilder } from "./world/VisualBuilder";
 import { WorldMap } from "./WorldMap";
 type Props = {
   conn: DbConnection;
@@ -87,7 +88,7 @@ export function Builder({
           <span>{zone?.name}</span>
         </div>
         <nav className="tabs">
-          {["objects", "rooms", "zones", "guide"].map((t) => (
+          {["visuals", "objects", "rooms", "zones", "guide"].map((t) => (
             <button
               key={t}
               className={section === t ? "selected" : ""}
@@ -98,7 +99,10 @@ export function Builder({
           ))}
         </nav>
         <div className="tool-content">
-          {!canEdit && section !== "zones" && section !== "guide" ? (
+          {!canEdit &&
+          section !== "zones" &&
+          section !== "guide" &&
+          section !== "visuals" ? (
             <div className="empty-state">
               <h2>A world of your own.</h2>
               <p>
@@ -109,6 +113,15 @@ export function Builder({
                 Create a zone
               </button>
             </div>
+          ) : section === "visuals" ? (
+            <VisualBuilder
+              conn={conn}
+              data={data}
+              room={room}
+              identity={identity}
+              enabled={enabled}
+              canEdit={!!canEdit}
+            />
           ) : section === "objects" ? (
             <>
               <div className="two-fields">

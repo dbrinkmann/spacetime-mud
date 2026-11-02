@@ -40,10 +40,14 @@ jobs:
           SPACETIME_DATABASE: mud-ci
         run: |
           npm run test:integration
+          npm run test:visual
           npx tsx tests/timers.ts
           npx vitest run
       - name: Real desktop and mobile browser verification
         env:
+          SPACETIME_HOST: http://127.0.0.1:3030
+          SPACETIME_DATABASE: mud-ci
+          GAME_URL: http://127.0.0.1:5174/
           VITE_SPACETIME_HOST: http://127.0.0.1:3030
           VITE_SPACETIME_DATABASE: mud-ci
         run: |
@@ -51,6 +55,8 @@ jobs:
           npm run dev -- --port 5174 > /tmp/mud-vite.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:5174/ && break || sleep 1; done
           npx tsx tests/browser.ts
+          npm run test:visual:browser
+          npm run test:poc:browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:

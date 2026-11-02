@@ -23,6 +23,10 @@ export async function connect(token?: string) {
           })
           .subscribe(
             [
+              "visible_scenes",
+              "visible_avatars",
+              "visible_presence",
+              "my_visual_drafts",
               "zone",
               "visible_players",
               "visible_rooms",

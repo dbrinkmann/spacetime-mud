@@ -1,12 +1,18 @@
 ﻿# SpacetimeMUD
 
-A persistent fantasy MUD built by its players. Explore a room map, interact with scripted objects, and use your own local Claude Code to build a realm that keeps working after you log off.
+A shared, room-based 3D world built by its players. Hang out, chat, walk and sit together. Define original rooms, props, characters and rigid cosmetics from boxes, and use your own local Claude Code to create visual and scripted drafts.
 
 **[Play the live demo](https://dbrinkmann.github.io/spacetime-mud/)** · [Database](https://spacetimedb.com/dbrinkmann-spacetime-mud)
 
 ## Box-world proof of concept
 
 Run `npm ci` and `npm run dev -- --port 5174`, then open [the local 3D workshop](http://localhost:5174/?poc). Edit room and character JSON, preview six-part animations and rigid cosmetics, and test walking and seating. See the [authoring contract](public/poc/AUTHORING.md). This local prototype is separate from the deployed multiplayer game.
+
+## Shared 3D building
+
+Open **Build ? visuals** to edit room geometry or your character. Preview JSON, save a private draft, preview the saved revision, then publish. Room geometry requires owner/collaborator permission; every player can publish their own avatar. Claude can create `scene` and `avatar` drafts through the existing consented local bridge. Link a visible prop to a scripted object with its `objectId` to expose its published actions in 3D.
+
+Movement and seat occupancy are authoritative on SpacetimeDB. Publishing a room resets positions and reservations; conflicting publications are rejected. The [authoring guide](public/poc/AUTHORING.md) specifies pivots, geometry, budgets, navigation, and publication.
 
 ## Play
 

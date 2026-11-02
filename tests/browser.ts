@@ -2,7 +2,10 @@ import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 const site = process.env.GAME_URL ?? "http://127.0.0.1:5174/";
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: ["--enable-unsafe-swiftshader"],
+});
 const errors: string[] = [];
 mkdirSync("test-results", { recursive: true });
 try {

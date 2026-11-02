@@ -11,6 +11,16 @@ import { ScheduleAt, type Identity } from "spacetimedb";
 import { executeScript, type Scalar } from "./scripts";
 import { seedWorld } from "./showcase";
 
+import { roomScene, avatar, visualDraft, presence } from "./visual-tables";
+import {
+  parseDefinition,
+  worldPoint,
+  type Room as SceneRoom,
+  type Vec3,
+} from "../../shared/geometry";
+import { validateNavigation, route } from "../../shared/navigation";
+import { emptyRoom, sampleMotion, type Motion } from "../../shared/world";
+
 const Action = t.object("Action", { id: t.string(), label: t.string() });
 const Exit = t.object("Exit", {
   direction: t.string(),
@@ -197,6 +207,10 @@ const request = table(
   },
 );
 const db = schema({
+  roomScene,
+  avatar,
+  visualDraft,
+  presence,
   zone,
   member,
   room,
@@ -216,6 +230,225 @@ const db = schema({
   request,
 });
 export default db;
+export const serverTime = db.procedure(
+  {},
+  t.u64(),
+  (ctx) => ctx.timestamp.microsSinceUnixEpoch,
+);
+function sceneFor(ctx: ReadCtx, roomId: bigint): SceneRoom {
+  const row = ctx.db.roomScene.roomId.find(roomId);
+  return row ? parseDefinition(row.source, "room") : emptyRoom();
+}
+function validateVisual(
+  ctx: Ctx,
+  roomId: bigint,
+  kind: string,
+  source: string,
+) {
+  try {
+    if (kind === "avatar")
+      return JSON.stringify(parseDefinition(source, "character"));
+    if (kind !== "scene") fail("Unknown visual kind.");
+    const scene = parseDefinition(source, "room");
+    validateNavigation(scene);
+    for (const placement of scene.objects)
+      if (placement.objectId) {
+        const obj = ctx.db.object.id.find(BigInt(placement.objectId));
+        if (!obj || obj.roomId !== roomId)
+          fail(
+            `Placement ${placement.id}: linked object must belong to this room.`,
+          );
+      }
+    return JSON.stringify(scene);
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e));
+  }
+}
+function saveVisual(
+  ctx: Ctx,
+  actor: Identity,
+  roomId: bigint,
+  kind: string,
+  source: string,
+) {
+  const r = getRoom(ctx, roomId);
+  if (kind === "scene") requireEdit(ctx, r.zoneId, actor);
+  if (!ctx.db.player.identity.find(actor)) fail("Create your character first.");
+  const validated = validateVisual(ctx, roomId, kind, source);
+  const key = `${actor.toHexString()}:${kind}:${kind === "avatar" ? "self" : roomId}`;
+  const old = ctx.db.visualDraft.key.find(key);
+  const baseRevision =
+    kind === "scene"
+      ? (ctx.db.roomScene.roomId.find(roomId)?.revision ?? 0)
+      : (ctx.db.avatar.identity.find(actor)?.revision ?? 0);
+  const row = {
+    key,
+    owner: actor,
+    roomId,
+    kind,
+    source: validated,
+    revision: (old?.revision ?? 0) + 1,
+    baseRevision,
+  };
+  if (old) ctx.db.visualDraft.key.update(row);
+  else ctx.db.visualDraft.insert(row);
+}
+export const saveVisualDraft = db.reducer(
+  { roomId: t.u64(), kind: t.string(), source: t.string() },
+  (ctx, a) => saveVisual(ctx, ctx.sender, a.roomId, a.kind, a.source),
+);
+export const publishVisual = db.reducer(
+  { key: t.string(), revision: t.u32() },
+  (ctx, a) => {
+    const draft =
+      ctx.db.visualDraft.key.find(a.key) ?? fail("Draft not found.");
+    if (!draft.owner.equals(ctx.sender)) fail("This is not your draft.");
+    if (draft.revision !== a.revision)
+      fail("Draft changed. Preview the latest revision.");
+    const source = validateVisual(ctx, draft.roomId, draft.kind, draft.source);
+    if (draft.kind === "scene") {
+      requireEdit(ctx, getRoom(ctx, draft.roomId).zoneId);
+      const old = ctx.db.roomScene.roomId.find(draft.roomId);
+      if ((old?.revision ?? 0) !== draft.baseRevision)
+        fail(
+          "Room changed since this draft. Reload and merge before saving again.",
+        );
+      const row = {
+        roomId: draft.roomId,
+        source,
+        revision: (old?.revision ?? 0) + 1,
+      };
+      if (old) ctx.db.roomScene.roomId.update(row);
+      else ctx.db.roomScene.insert(row);
+      for (const p of ctx.db.presence.roomId.filter(draft.roomId))
+        ctx.db.presence.identity.delete(p.identity);
+    } else {
+      const old = ctx.db.avatar.identity.find(ctx.sender);
+      if ((old?.revision ?? 0) !== draft.baseRevision)
+        fail("Avatar changed. Reload and save again.");
+      const row = {
+        identity: ctx.sender,
+        source,
+        revision: (old?.revision ?? 0) + 1,
+      };
+      if (old) ctx.db.avatar.identity.update(row);
+      else ctx.db.avatar.insert(row);
+    }
+    ctx.db.visualDraft.key.delete(a.key);
+  },
+);
+export const moveWithinRoom = db.reducer(
+  { x: t.f64(), z: t.f64(), seat: t.string(), pose: t.string() },
+  (ctx, a) => {
+    const p = me(ctx),
+      scene = sceneFor(ctx, p.roomId),
+      now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
+    const old = ctx.db.presence.identity.find(ctx.sender);
+    if (
+      old &&
+      Number(
+        ctx.timestamp.microsSinceUnixEpoch - old.startedAt.microsSinceUnixEpoch,
+      ) < 100000
+    )
+      fail("Please wait a moment.");
+    if (
+      !Number.isFinite(a.x) ||
+      !Number.isFinite(a.z) ||
+      a.seat.length > 40 ||
+      !["idle", "wave", "talk", "stand"].includes(a.pose)
+    )
+      fail("Invalid movement.");
+    const motion: Motion =
+      old && old.roomId === p.roomId
+        ? {
+            path: JSON.parse(old.path),
+            started: Number(old.startedAt.microsSinceUnixEpoch / 1000n),
+            seat: old.seat,
+            pose: old.pose,
+            yaw: old.yaw,
+          }
+        : { path: [scene.spawn], started: now, seat: "", pose: "idle", yaw: 0 };
+    const sampled = sampleMotion(motion, scene, now);
+    let start = sampled.position;
+    const oldSeat = scene.objects.find((o) => o.id === motion.seat);
+    if (sampled.animation === "sit" && oldSeat?.seat)
+      start = worldPoint(oldSeat, oldSeat.seat.approach);
+    let destination: Vec3 = [a.x, 0, a.z];
+    if (a.pose !== "idle") destination = start;
+    if (a.seat) {
+      const seat = scene.objects.find((o) => o.id === a.seat);
+      if (!seat?.seat) fail("Seat not found.");
+      for (const other of ctx.db.presence.roomId.filter(p.roomId))
+        if (
+          other.seat === a.seat &&
+          !other.identity.equals(ctx.sender) &&
+          ctx.db.player.identity.find(other.identity)?.online
+        )
+          fail("That seat is occupied.");
+      destination = worldPoint(seat, seat.seat!.approach);
+    }
+    const path =
+      route(scene, start, destination) ??
+      fail("That position is blocked or unreachable.");
+    const row = {
+      identity: ctx.sender,
+      roomId: p.roomId,
+      path: JSON.stringify([start, ...path]),
+      startedAt: ctx.timestamp,
+      seat: a.seat,
+      pose: a.pose === "stand" ? "idle" : a.pose,
+      yaw: sampled.yaw,
+    };
+    if (old) ctx.db.presence.identity.update(row);
+    else ctx.db.presence.insert(row);
+  },
+);
+export const visibleScenes = db.view(
+  { name: "visible_scenes", public: true },
+  t.array(roomScene.rowType),
+  (ctx) => {
+    const actor = viewer(ctx),
+      p = ctx.db.player.identity.find(actor);
+    return [...ctx.db.roomScene.iter()].filter(
+      (s) =>
+        s.roomId === p?.roomId ||
+        editable(ctx, ctx.db.room.id.find(s.roomId)?.zoneId ?? 0n, actor),
+    );
+  },
+);
+export const visibleAvatars = db.view(
+  { name: "visible_avatars", public: true },
+  t.array(avatar.rowType),
+  (ctx) => {
+    const actor = viewer(ctx),
+      p = ctx.db.player.identity.find(actor);
+    return [...ctx.db.avatar.iter()].filter(
+      (a) =>
+        a.identity.equals(actor) ||
+        (p && ctx.db.player.identity.find(a.identity)?.roomId === p.roomId),
+    );
+  },
+);
+export const visiblePresence = db.view(
+  { name: "visible_presence", public: true },
+  t.array(presence.rowType),
+  (ctx) => {
+    const p = ctx.db.player.identity.find(viewer(ctx));
+    return p ? [...ctx.db.presence.roomId.filter(p.roomId)] : [];
+  },
+);
+export const myVisualDrafts = db.view(
+  { name: "my_visual_drafts", public: true },
+  t.array(visualDraft.rowType),
+  (ctx) => {
+    const actor = viewer(ctx);
+    return [...ctx.db.visualDraft.owner.filter(actor)].filter(
+      (d) =>
+        d.kind === "avatar" ||
+        editable(ctx, ctx.db.room.id.find(d.roomId)?.zoneId ?? 0n, actor),
+    );
+  },
+);
 export type Ctx = ReducerCtx<InferSchema<typeof db>>;
 type ReadCtx = Pick<ViewCtx<InferSchema<typeof db>>, "db">;
 type Obj = ReturnType<Ctx["db"]["object"]["insert"]>;
@@ -243,6 +476,12 @@ function text(value: string, label: string, max: number) {
   if (!s || s.length > max || /[\u0000-\u0008\u000b-\u001f]/.test(s))
     fail(`${label} must be 1–${max} characters.`);
   return s;
+}
+function updatePlayer(ctx: Ctx, p: ReturnType<Ctx["db"]["player"]["insert"]>) {
+  const old = ctx.db.player.identity.find(p.identity);
+  if (old?.roomId !== p.roomId || !p.online)
+    ctx.db.presence.identity.delete(p.identity);
+  ctx.db.player.identity.update(p);
 }
 function me(ctx: Ctx) {
   return (
@@ -583,7 +822,7 @@ function run(
       const next = { ...p, roomId: r.id };
       tx.players.set(actor.toHexString(), next);
       tx.commands.push(() => {
-        ctx.db.player.identity.update(next);
+        updatePlayer(ctx, next);
         discover(ctx, actor, r.id);
       });
       effects.push(`move player to ${r.name}`);
@@ -738,13 +977,13 @@ export const onConnect = db.clientConnected((ctx) => {
   if (ctx.connectionId)
     ctx.db.connection.insert({ id: ctx.connectionId, identity: ctx.sender });
   const p = ctx.db.player.identity.find(ctx.sender);
-  if (p) ctx.db.player.identity.update({ ...p, online: true });
+  if (p) updatePlayer(ctx, { ...p, online: true });
 });
 export const onDisconnect = db.clientDisconnected((ctx) => {
   if (ctx.connectionId) ctx.db.connection.id.delete(ctx.connectionId);
   if (![...ctx.db.connection.identity.filter(ctx.sender)].length) {
     const p = ctx.db.player.identity.find(ctx.sender);
-    if (p) ctx.db.player.identity.update({ ...p, online: false });
+    if (p) updatePlayer(ctx, { ...p, online: false });
   }
 });
 export const createPlayer = db.reducer(
@@ -786,7 +1025,7 @@ export const go = db.reducer(
     if (exit.gateId && stateValue(ctx, exit.gateId, "shared", "open") !== true)
       fail("The gate is closed.");
     roomEvent(ctx, r.id, "on_leave", p.identity);
-    ctx.db.player.identity.update({ ...p, roomId: exit.destination });
+    updatePlayer(ctx, { ...p, roomId: exit.destination });
     discover(ctx, p.identity, exit.destination);
     roomEvent(ctx, exit.destination, "on_enter", p.identity);
     post(ctx, exit.destination, p.name, "arrives.", "presence");
@@ -795,14 +1034,14 @@ export const go = db.reducer(
 export const home = db.reducer((ctx) => {
   const p = me(ctx);
   // Always provide an escape from a broken or hostile zone script.
-  ctx.db.player.identity.update({ ...p, roomId: 1n });
+  updatePlayer(ctx, { ...p, roomId: 1n });
   discover(ctx, p.identity, 1n);
 });
 export const visitZone = db.reducer({ zoneId: t.u64() }, (ctx, { zoneId }) => {
   const p = me(ctx);
   if (p.roomId !== 1n) fail("Return to the Nexus to use its portals.");
   const z = ctx.db.zone.id.find(zoneId) ?? fail("Zone not found.");
-  ctx.db.player.identity.update({ ...p, roomId: z.entrance });
+  updatePlayer(ctx, { ...p, roomId: z.entrance });
   discover(ctx, p.identity, z.entrance);
   roomEvent(ctx, z.entrance, "on_enter", p.identity);
 });
@@ -833,7 +1072,7 @@ export const createZone = db.reducer(
       floor: 0,
     });
     ctx.db.zone.id.update({ ...z, entrance: r.id });
-    ctx.db.player.identity.update({ ...p, roomId: r.id });
+    updatePlayer(ctx, { ...p, roomId: r.id });
     discover(ctx, p.identity, r.id);
   },
 );
@@ -1316,6 +1555,10 @@ export const completeJob = db.reducer(
         a.source,
       );
       result += `\nDraft ${v.id} ready. Inspect, test and publish in Build.`;
+    } else if (a.kind === "scene" || a.kind === "avatar") {
+      saveVisual(ctx, j.owner, j.roomId, a.kind, a.source);
+      result +=
+        "\nVisual draft ready in Build ? Visuals. Preview and publish it there.";
     } else if (a.kind !== "reply") fail("Unsupported action.");
     ctx.db.job.id.update({ ...j, status: "done", result });
   },

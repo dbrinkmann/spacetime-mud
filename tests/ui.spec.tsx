@@ -2,6 +2,8 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../client/main";
+// jsdom covers forms/subscriptions; real WebGL is exercised in visual-browser.ts.
+vi.mock("../client/world/Viewport", () => ({ Viewport: () => null }));
 test("real UI explores, builds, previews, publishes, uses an object, chats and reconnects", async () => {
   HTMLElement.prototype.scrollTo = vi.fn();
   const user = userEvent.setup();

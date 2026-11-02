@@ -49,10 +49,13 @@ import HomeReducer from "./home_reducer";
 import InteractReducer from "./interact_reducer";
 import LayoutRoomReducer from "./layout_room_reducer";
 import LinkRoomsReducer from "./link_rooms_reducer";
+import MoveWithinRoomReducer from "./move_within_room_reducer";
 import PublishVersionReducer from "./publish_version_reducer";
+import PublishVisualReducer from "./publish_visual_reducer";
 import RequestAgentReducer from "./request_agent_reducer";
 import RevokeConsentReducer from "./revoke_consent_reducer";
 import SaveDraftReducer from "./save_draft_reducer";
+import SaveVisualDraftReducer from "./save_visual_draft_reducer";
 import SayReducer from "./say_reducer";
 import SetCollaboratorReducer from "./set_collaborator_reducer";
 import TellReducer from "./tell_reducer";
@@ -60,6 +63,7 @@ import TestDraftReducer from "./test_draft_reducer";
 import VisitZoneReducer from "./visit_zone_reducer";
 
 // Import all procedure arg schemas
+import * as ServerTimeProcedure from "./server_time_procedure";
 
 // Import all table schema definitions
 import AgentJobsRow from "./agent_jobs_table";
@@ -70,11 +74,15 @@ import MyJobsRow from "./my_jobs_table";
 import MyMembersRow from "./my_members_table";
 import MyTracesRow from "./my_traces_table";
 import MyVersionsRow from "./my_versions_table";
+import MyVisualDraftsRow from "./my_visual_drafts_table";
+import VisibleAvatarsRow from "./visible_avatars_table";
 import VisibleChatRow from "./visible_chat_table";
 import VisibleGatesRow from "./visible_gates_table";
 import VisibleObjectsRow from "./visible_objects_table";
 import VisiblePlayersRow from "./visible_players_table";
+import VisiblePresenceRow from "./visible_presence_table";
 import VisibleRoomsRow from "./visible_rooms_table";
+import VisibleScenesRow from "./visible_scenes_table";
 import ZoneRow from "./zone_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -148,6 +156,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyVersionsRow),
+  myVisualDrafts: __table({
+    name: 'my_visual_drafts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyVisualDraftsRow),
+  visibleAvatars: __table({
+    name: 'visible_avatars',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisibleAvatarsRow),
   visibleChat: __table({
     name: 'visible_chat',
     indexes: [
@@ -176,6 +198,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, VisiblePlayersRow),
+  visiblePresence: __table({
+    name: 'visible_presence',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisiblePresenceRow),
   visibleRooms: __table({
     name: 'visible_rooms',
     indexes: [
@@ -183,6 +212,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, VisibleRoomsRow),
+  visibleScenes: __table({
+    name: 'visible_scenes',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, VisibleScenesRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -202,10 +238,13 @@ const reducersSchema = __reducers(
   __reducerSchema("interact", InteractReducer),
   __reducerSchema("layout_room", LayoutRoomReducer),
   __reducerSchema("link_rooms", LinkRoomsReducer),
+  __reducerSchema("move_within_room", MoveWithinRoomReducer),
   __reducerSchema("publish_version", PublishVersionReducer),
+  __reducerSchema("publish_visual", PublishVisualReducer),
   __reducerSchema("request_agent", RequestAgentReducer),
   __reducerSchema("revoke_consent", RevokeConsentReducer),
   __reducerSchema("save_draft", SaveDraftReducer),
+  __reducerSchema("save_visual_draft", SaveVisualDraftReducer),
   __reducerSchema("say", SayReducer),
   __reducerSchema("set_collaborator", SetCollaboratorReducer),
   __reducerSchema("tell", TellReducer),
@@ -215,6 +254,7 @@ const reducersSchema = __reducers(
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("server_time", ServerTimeProcedure.params, ServerTimeProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */

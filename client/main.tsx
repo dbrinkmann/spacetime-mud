@@ -4,6 +4,7 @@ import { useGame } from "./connection";
 import { WorldMap } from "./WorldMap";
 import { Builder } from "./Builder";
 import "./style.css";
+import { LiveRoom } from "./world/LiveRoom";
 export function App() {
   const { conn, identity, status, data, connectionError } = useGame();
   const me = data.players.find((p) => p.identity.toHexString() === identity),
@@ -259,9 +260,15 @@ export function App() {
                   <p className="eyebrow">
                     YOU ARE HERE <span>ROOM {String(room.id)}</span>
                   </p>
-                  <div className="room-symbol" aria-hidden="true">
-                    ◇
-                  </div>
+                  <LiveRoom
+                    key={String(room.id)}
+                    conn={conn}
+                    data={data}
+                    room={room}
+                    identity={identity}
+                    enabled={enabled}
+                    action={action}
+                  />
                   <h1>{room.name}</h1>
                   <p className="description">{room.description}</p>
                   {me.roomId === 1n && (

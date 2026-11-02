@@ -14,7 +14,9 @@
     "test:bridge": "tsx tests/bridge-live.ts",
     "build:interpreter": "node scripts/bundle-interpreter.mjs",
     "test:poc": "tsx --test tests/box-world.test.ts",
-    "test:poc:browser": "tsx tests/box-world-browser.ts"
+    "test:poc:browser": "tsx tests/box-world-browser.ts",
+    "test:visual": "tsx tests/visual-integration.ts",
+    "test:visual:browser": "tsx tests/visual-browser.ts"
   },
   "dependencies": {
     "react": "19.2.0",

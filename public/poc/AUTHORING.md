@@ -1,6 +1,6 @@
 # Box-world authoring contract v1
 
-This local prototype renders agent-authored rooms and characters from JSON. Examples are diagnostic fixtures, not a required model catalog. Supply your own geometry. Definitions cannot load code, URLs, textures, or executable expressions.
+The shared game and local workshop render agent-authored rooms and characters from JSON. Examples are diagnostic fixtures, not a required model catalog. Supply your own geometry. Definitions cannot load code, URLs, textures, or executable expressions.
 
 ## Run and iterate
 
@@ -67,6 +67,16 @@ Run `npm run test:poc` for contract, animation, and navigation tests. With the d
 
 Read-only `window.boxWorld.inspect()` reports position, pose, selected/occupied seat, joint rotations, and cosmetic state. `window.boxWorld.project([x,y,z])` returns screen coordinates for interaction tests. Inspect screenshots too: valid JSON does not prove good composition.
 
-## Scope
+## Publish in the shared game
 
-Local authoring and rendering only. The existing game is reachable without `?poc`. This preview does not connect to SpacetimeDB, the Claude bridge, shared movement, room exits, existing scripted objects, publication, or permissions. Those integrations follow evaluation of the geometry and animation contract.
+Open **Build ? visuals**. Choose Room geometry or My character. Load the published definition, import/paste JSON, and preview locally. Save a private visual draft, preview that saved revision, then publish. Room edits require zone ownership or collaborator permission; everyone can publish their own character. New zones start with an empty floor and new players have a neutral fallback silhouette.
+
+Claude requests can produce `scene` and `avatar` proposals containing complete JSON in `source`. These become private drafts. Ask your agent to preserve existing geometry when revising. Restart an existing bridge after updating the checkout. Room geometry and scripted-object behavior remain separate definitions. Set a placement's optional `objectId` to the decimal ID of an object in that room: selecting the prop exposes its published action buttons, which run through the existing transactional scripting system.
+
+Publication checks geometry, navigation, references, permissions, and the base revision. Conflicting publications are rejected. Publishing a room resets its occupants to spawn and releases seats so old paths cannot run through new geometry. Each builder has one current draft per room and one avatar draft; there is no visual revision history yet, so export your definitions to source control before replacing them.
+
+The server computes collision-aware paths at 1.8m/s and reserves seats atomically. Clients synchronize their clocks and animate these paths. Room changes and final disconnects release reservations. Chat, exits, maps, inventory, and script timers remain shared. Visual geometry is decorative except for explicit colliders, seat anchors, and object links. There is no physics, avatar-to-avatar collision, skeletal deformation, or terrain heightfield.
+
+`?poc` remains a local sandbox with a diagnostic companion. Its local saves do not publish to the shared world. In the shared game, all visible characters are connected players.
+
+Run `npm run test:visual` against a development database and `npm run test:visual:browser` with its matching dev server. Set `SPACETIME_HOST`, `SPACETIME_DATABASE`, and `GAME_URL` for another target. These tests create disposable test players and zones; use a staging database.
