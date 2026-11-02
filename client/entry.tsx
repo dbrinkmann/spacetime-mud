@@ -1,3 +1,7 @@
 import { createRoot } from "react-dom/client";
-import { App } from "./main";
-createRoot(document.getElementById("root")!).render(<App />);
+const root = createRoot(document.getElementById("root")!);
+if (new URLSearchParams(location.search).has("poc")) {
+  import("./poc/Workshop").then(({ Workshop }) => root.render(<Workshop />));
+} else {
+  import("./main").then(({ App }) => root.render(<App />));
+}

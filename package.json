@@ -12,12 +12,15 @@
     "test:timers": "tsx tests/timers.ts",
     "test:browser": "tsx tests/browser.ts",
     "test:bridge": "tsx tests/bridge-live.ts",
-    "build:interpreter": "node scripts/bundle-interpreter.mjs"
+    "build:interpreter": "node scripts/bundle-interpreter.mjs",
+    "test:poc": "tsx --test tests/box-world.test.ts",
+    "test:poc:browser": "tsx tests/box-world-browser.ts"
   },
   "dependencies": {
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "spacetimedb": "2.13.0"
+    "spacetimedb": "2.13.0",
+    "three": "0.187.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
@@ -26,6 +29,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "0.187.0",
     "esbuild": "0.28.2",
     "jsdom": "^26.1.0",
     "prettier": "^3.9.10",

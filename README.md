@@ -4,6 +4,10 @@ A persistent fantasy MUD built by its players. Explore a room map, interact with
 
 **[Play the live demo](https://dbrinkmann.github.io/spacetime-mud/)** · [Database](https://spacetimedb.com/dbrinkmann-spacetime-mud)
 
+## Box-world proof of concept
+
+Run `npm ci` and `npm run dev -- --port 5174`, then open [the local 3D workshop](http://localhost:5174/?poc). Edit room and character JSON, preview six-part animations and rigid cosmetics, and test walking and seating. See the [authoring contract](public/poc/AUTHORING.md). This local prototype is separate from the deployed multiplayer game.
+
 ## Play
 
 Enter a traveler name, then take the Nexus portal to **Bellkeeper’s Crossing**. Stand on the pressure plate to open the garden gate for twelve seconds. Find your moonleaf keepsake in the chest, or visit the tower and ring the bell to summon its raven keeper.

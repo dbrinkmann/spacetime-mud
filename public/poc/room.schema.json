@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Box-world room v1",
+  "description": "Structural validation. Runtime also checks aggregate budgets and navigation/reference constraints.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "\\S"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500,
+      "pattern": "\\S"
+    },
+    "width": {
+      "type": "number",
+      "minimum": 4,
+      "maximum": 20
+    },
+    "depth": {
+      "type": "number",
+      "minimum": 4,
+      "maximum": 20
+    },
+    "floorColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "spawn": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number",
+        "minimum": -10,
+        "maximum": 10
+      }
+    },
+    "models": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 64,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]{0,39}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "boxes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "position": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number",
+                    "minimum": -30,
+                    "maximum": 30
+                  }
+                },
+                "size": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 30
+                  }
+                },
+                "rotation": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number",
+                    "minimum": -360,
+                    "maximum": 360
+                  }
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "emissive": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["position", "size", "color"]
+            },
+            "minItems": 0,
+            "maxItems": 120
+          }
+        },
+        "required": ["boxes"]
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "\\S"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          },
+          "position": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number",
+              "minimum": -30,
+              "maximum": 30
+            }
+          },
+          "yaw": {
+            "type": "number",
+            "minimum": -360,
+            "maximum": 360
+          },
+          "collision": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 20
+            }
+          },
+          "seat": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "position": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number",
+                  "minimum": -3,
+                  "maximum": 3
+                }
+              },
+              "approach": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number",
+                  "minimum": -3,
+                  "maximum": 3
+                }
+              },
+              "yaw": {
+                "type": "number",
+                "minimum": -360,
+                "maximum": 360
+              }
+            },
+            "required": ["position", "approach", "yaw"]
+          },
+          "wall": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "name", "model", "position", "yaw"]
+      },
+      "minItems": 0,
+      "maxItems": 120
+    },
+    "lights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number",
+              "minimum": -30,
+              "maximum": 30
+            }
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 30
+          }
+        },
+        "required": ["position", "color", "intensity"]
+      },
+      "minItems": 0,
+      "maxItems": 6
+    }
+  },
+  "required": [
+    "version",
+    "name",
+    "description",
+    "width",
+    "depth",
+    "floorColor",
+    "spawn",
+    "models",
+    "objects",
+    "lights"
+  ]
+}
