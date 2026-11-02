@@ -1,5 +1,5 @@
 ﻿import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { join, basename } from "node:path";
@@ -37,7 +37,14 @@ assert.match(html, /<title>SpacetimeMUD/);
 const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(
   (m) => new URL(m[1], site),
 );
-assert(assets.length >= 2);
+assert(assets.length >= 1);
+// The entry now lazy-loads the game/workshop. Verify every built bundle as well.
+for (const file of readdirSync(join("dist", "assets"))) {
+  if (/\.(js|css)$/.test(file)) {
+    const url = new URL(`assets/${file}`, site);
+    if (!assets.some((asset) => asset.href === url.href)) assets.push(url);
+  }
+}
 for (const url of assets) {
   assert.equal(url.origin, new URL(site).origin);
   const remote = download(url.href),
@@ -58,6 +65,10 @@ try {
   assert.equal(c.db.myJobs.count(), 0n);
   assert.equal(c.db.agentJobs.count(), 0n);
   assert.equal(c.db.myVersions.count(), 0n);
+  assert.equal(c.db.myVisualDrafts.count(), 0n);
+  assert.equal(c.db.visibleScenes.count(), 0n);
+  assert.equal(c.db.visibleAvatars.count(), 0n);
+  assert.equal(c.db.visiblePresence.count(), 0n);
   assert.equal(c.db.visibleRooms.count(), 1n);
   console.log(
     `PASS fresh production subscription exposes only the Nexus and no private jobs, messages or scripts: ${host}/${database}`,
