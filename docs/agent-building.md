@@ -46,3 +46,11 @@ Script drafts appear as an interaction review with their intended actions and te
 `npm run test:agent` drives a generic MCP SDK client and actual Chromium. It checks pairing, denied unpaired writes, guidance, validation failures, draft privacy, screenshot output, denied agent publication, the Create UI, in-world keep/discard, script testing/review, mobile layout, and revoked writes. It needs a disposable database and matching frontend (`SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`). It does not consume model quota.
 
 The downloadable [skill](../public/agent/SKILL.md) can also be given directly to an agent. The legacy Claude bridge remains for old integrations but is unnecessary for this workflow.
+
+### Release verification — 2026-11-02
+
+Deployed `a0e6452` to GitHub Pages with the updated Maincloud module. [Release checks](https://github.com/dbrinkmann/spacetime-mud/actions/runs/41543344738) passed, including multiplayer, timers, UI, MCP, desktop/mobile browsers, generated bindings, and production build.
+
+The generic MCP client suite also passed against the public Pages site and production database: pairing, denied unpaired access, geometry validation, private drafts, local image rendering, denied agent publication, stale-review invalidation, player publication, avatar discard, script tests and publication, behavior discard, mobile layout, and revocation. This exercised the MCP protocol without invoking a model; individual agent products were not separately certified.
+
+The production smoke check verified HTTPS availability, SHA-256 equality of every built JS/CSS asset, and private-view isolation for a fresh connection. Windows browser verification used local Chromium network compatibility flags for this machine's TLS routing; the hosted app was not intercepted or replaced.
