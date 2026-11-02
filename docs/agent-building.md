@@ -53,6 +53,10 @@ Run `npx tsx tests/cleanup.ts` against a disposable database to verify cleanup a
 
 World operators can invoke `prune_unauthored_zone` with an explicit zone ID through the authenticated CLI (`call --no-config DATABASE prune_unauthored_zone ID --server SERVER`). This is not an agent tool. It requires the Nexus owner identity and atomically rejects the Nexus or any zone with published scenes or scene drafts, then uses the same cascading cleanup. `tests/prune.ts` verifies these guards; set `SPACETIME_CLI` when the CLI is not on PATH.
 
+Operator-only `stack_zones(lowerZoneId, upperZoneId, name)` combines two single-room zones under the upper zone's owner, uses the lower room as entrance, and creates Up/Down passages on floors 0/1. Room IDs, scenes, scripts, state and timers are preserved; object/trace zone references and collaborators migrate. `remove_test_zone(zoneId)` restricts operator removal to explicitly selected `Agent Atelier ` zones. Neither operation is exposed to paired agents.
+
+The production showcase is **The Lantern Above** (zone 6): **The Lantern & Thorn** (room 7, entrance) and **The Cloudglass Study** (room 9, upstairs). The three Agent Atelier test zones were removed on 2026-11-02. Scene snapshots matched before/after; public-browser verification covered entry, Up/Down travel and the study's star interaction.
+
 `npm run test:agent` drives a generic MCP SDK client and actual Chromium. It checks pairing, denied unpaired writes, guidance, validation failures, draft privacy, screenshot output, live room/avatar/behavior publication, stale revision and untested script rejection, the Create UI, in-world keep/discard, script testing/review, mobile layout, and revoked writes. It needs a disposable database and matching frontend (`SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`). It does not consume model quota.
 
 The downloadable [skill](../public/agent/SKILL.md) can also be given directly to an agent. The legacy Claude bridge remains for old integrations but is unnecessary for this workflow.

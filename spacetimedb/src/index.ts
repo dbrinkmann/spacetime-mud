@@ -1460,6 +1460,90 @@ export const pruneUnauthoredZone = db.reducer({ zoneId: t.u64() }, (ctx, a) => {
     fail("Zone contains published or draft 3D work; it cannot be pruned.");
   deleteZoneFor(ctx, z.owner, z.id);
 });
+// World-operator maintenance for arranging the shared showcase.
+export const stackZones = db.reducer(
+  { lowerZoneId: t.u64(), upperZoneId: t.u64(), name: t.string() },
+  (ctx, a) => {
+    if (!ctx.db.zone.id.find(1n)?.owner.equals(ctx.sender))
+      fail("World operator only.");
+    if (
+      a.lowerZoneId === 1n ||
+      a.upperZoneId === 1n ||
+      a.lowerZoneId === a.upperZoneId
+    )
+      fail("Choose two different non-Nexus zones.");
+    const lower =
+      ctx.db.zone.id.find(a.lowerZoneId) ?? fail("Lower zone not found.");
+    const upper =
+      ctx.db.zone.id.find(a.upperZoneId) ?? fail("Upper zone not found.");
+    const lowerRooms = [...ctx.db.room.zoneId.filter(lower.id)],
+      upperRooms = [...ctx.db.room.zoneId.filter(upper.id)];
+    if (lowerRooms.length !== 1 || upperRooms.length !== 1)
+      fail("Each zone must contain exactly one room.");
+    const bottom = lowerRooms[0],
+      top = upperRooms[0];
+    if (
+      bottom.exits.some((e) => e.direction === "up") ||
+      top.exits.some((e) => e.direction === "down")
+    )
+      fail("Vertical passage already occupied.");
+    ctx.db.room.id.update({
+      ...bottom,
+      zoneId: upper.id,
+      x: 0,
+      y: 0,
+      floor: 0,
+      exits: [
+        ...bottom.exits,
+        { direction: "up", destination: top.id, gateId: 0n, secret: false },
+      ],
+    });
+    ctx.db.room.id.update({
+      ...top,
+      x: 0,
+      y: 0,
+      floor: 1,
+      exits: [
+        ...top.exits,
+        {
+          direction: "down",
+          destination: bottom.id,
+          gateId: 0n,
+          secret: false,
+        },
+      ],
+    });
+    for (const o of [...ctx.db.object.zoneId.filter(lower.id)])
+      ctx.db.object.id.update({ ...o, zoneId: upper.id });
+    for (const t of [...ctx.db.trace.zoneId.filter(lower.id)])
+      ctx.db.trace.id.update({ ...t, zoneId: upper.id });
+    const collaborators = [
+      lower.owner,
+      ...[...ctx.db.member.zoneId.filter(lower.id)].map((m) => m.identity),
+    ];
+    for (const identity of collaborators) {
+      const key = `${upper.id}:${identity.toHexString()}`;
+      if (!identity.equals(upper.owner) && !ctx.db.member.key.find(key))
+        ctx.db.member.insert({ key, zoneId: upper.id, identity });
+    }
+    for (const m of [...ctx.db.member.zoneId.filter(lower.id)])
+      ctx.db.member.key.delete(m.key);
+    ctx.db.zone.id.update({
+      ...upper,
+      name: text(a.name, "Zone name", 80),
+      entrance: bottom.id,
+    });
+    ctx.db.zone.id.delete(lower.id);
+  },
+);
+export const removeTestZone = db.reducer({ zoneId: t.u64() }, (ctx, a) => {
+  if (!ctx.db.zone.id.find(1n)?.owner.equals(ctx.sender))
+    fail("World operator only.");
+  const z = ctx.db.zone.id.find(a.zoneId) ?? fail("Zone not found.");
+  if (!z.name.startsWith("Agent Atelier "))
+    fail("Not an Agent Atelier test zone.");
+  deleteZoneFor(ctx, z.owner, z.id);
+});
 export const interact = db.reducer(
   { objectId: t.u64(), action: t.string(), requestId: t.string() },
   (ctx, { objectId, action, requestId }) => {

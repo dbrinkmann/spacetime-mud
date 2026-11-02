@@ -58,12 +58,14 @@ import MoveWithinRoomReducer from "./move_within_room_reducer";
 import PruneUnauthoredZoneReducer from "./prune_unauthored_zone_reducer";
 import PublishVersionReducer from "./publish_version_reducer";
 import PublishVisualReducer from "./publish_visual_reducer";
+import RemoveTestZoneReducer from "./remove_test_zone_reducer";
 import RequestAgentReducer from "./request_agent_reducer";
 import RevokeConsentReducer from "./revoke_consent_reducer";
 import SaveDraftReducer from "./save_draft_reducer";
 import SaveVisualDraftReducer from "./save_visual_draft_reducer";
 import SayReducer from "./say_reducer";
 import SetCollaboratorReducer from "./set_collaborator_reducer";
+import StackZonesReducer from "./stack_zones_reducer";
 import TellReducer from "./tell_reducer";
 import TestDraftReducer from "./test_draft_reducer";
 import VisitZoneReducer from "./visit_zone_reducer";
@@ -253,12 +255,14 @@ const reducersSchema = __reducers(
   __reducerSchema("prune_unauthored_zone", PruneUnauthoredZoneReducer),
   __reducerSchema("publish_version", PublishVersionReducer),
   __reducerSchema("publish_visual", PublishVisualReducer),
+  __reducerSchema("remove_test_zone", RemoveTestZoneReducer),
   __reducerSchema("request_agent", RequestAgentReducer),
   __reducerSchema("revoke_consent", RevokeConsentReducer),
   __reducerSchema("save_draft", SaveDraftReducer),
   __reducerSchema("save_visual_draft", SaveVisualDraftReducer),
   __reducerSchema("say", SayReducer),
   __reducerSchema("set_collaborator", SetCollaboratorReducer),
+  __reducerSchema("stack_zones", StackZonesReducer),
   __reducerSchema("tell", TellReducer),
   __reducerSchema("test_draft", TestDraftReducer),
   __reducerSchema("visit_zone", VisitZoneReducer),
