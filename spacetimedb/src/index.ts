@@ -1443,6 +1443,23 @@ export const deleteRoom = db.reducer({ roomId: t.u64() }, (ctx, a) =>
 export const deleteZone = db.reducer({ zoneId: t.u64() }, (ctx, a) =>
   deleteZoneFor(ctx, ctx.sender, a.zoneId),
 );
+// Operator maintenance only: not exposed through the delegated building API.
+export const pruneUnauthoredZone = db.reducer({ zoneId: t.u64() }, (ctx, a) => {
+  const operator = ctx.db.zone.id.find(1n)?.owner;
+  if (!operator?.equals(ctx.sender))
+    fail("Only the world operator can prune legacy zones.");
+  const z = ctx.db.zone.id.find(a.zoneId) ?? fail("Zone not found.");
+  if (z.id === 1n) fail("The Nexus is protected.");
+  const ids = new Set([...ctx.db.room.zoneId.filter(z.id)].map((r) => r.id));
+  if (
+    [...ctx.db.roomScene.iter()].some((s) => ids.has(s.roomId)) ||
+    [...ctx.db.visualDraft.iter()].some(
+      (d) => d.kind === "scene" && ids.has(d.roomId),
+    )
+  )
+    fail("Zone contains published or draft 3D work; it cannot be pruned.");
+  deleteZoneFor(ctx, z.owner, z.id);
+});
 export const interact = db.reducer(
   { objectId: t.u64(), action: t.string(), requestId: t.string() },
   (ctx, { objectId, action, requestId }) => {

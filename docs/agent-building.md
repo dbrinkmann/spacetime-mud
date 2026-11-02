@@ -51,6 +51,8 @@ Cleanup is owner-only (collaborator access is insufficient). The Nexus cannot be
 
 Run `npx tsx tests/cleanup.ts` against a disposable database to verify cleanup and access control.
 
+World operators can invoke `prune_unauthored_zone` with an explicit zone ID through the authenticated CLI (`call --no-config DATABASE prune_unauthored_zone ID --server SERVER`). This is not an agent tool. It requires the Nexus owner identity and atomically rejects the Nexus or any zone with published scenes or scene drafts, then uses the same cascading cleanup. `tests/prune.ts` verifies these guards; set `SPACETIME_CLI` when the CLI is not on PATH.
+
 `npm run test:agent` drives a generic MCP SDK client and actual Chromium. It checks pairing, denied unpaired writes, guidance, validation failures, draft privacy, screenshot output, live room/avatar/behavior publication, stale revision and untested script rejection, the Create UI, in-world keep/discard, script testing/review, mobile layout, and revoked writes. It needs a disposable database and matching frontend (`SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`). It does not consume model quota.
 
 The downloadable [skill](../public/agent/SKILL.md) can also be given directly to an agent. The legacy Claude bridge remains for old integrations but is unnecessary for this workflow.

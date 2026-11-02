@@ -55,6 +55,7 @@ import InteractReducer from "./interact_reducer";
 import LayoutRoomReducer from "./layout_room_reducer";
 import LinkRoomsReducer from "./link_rooms_reducer";
 import MoveWithinRoomReducer from "./move_within_room_reducer";
+import PruneUnauthoredZoneReducer from "./prune_unauthored_zone_reducer";
 import PublishVersionReducer from "./publish_version_reducer";
 import PublishVisualReducer from "./publish_visual_reducer";
 import RequestAgentReducer from "./request_agent_reducer";
@@ -249,6 +250,7 @@ const reducersSchema = __reducers(
   __reducerSchema("layout_room", LayoutRoomReducer),
   __reducerSchema("link_rooms", LinkRoomsReducer),
   __reducerSchema("move_within_room", MoveWithinRoomReducer),
+  __reducerSchema("prune_unauthored_zone", PruneUnauthoredZoneReducer),
   __reducerSchema("publish_version", PublishVersionReducer),
   __reducerSchema("publish_visual", PublishVisualReducer),
   __reducerSchema("request_agent", RequestAgentReducer),
