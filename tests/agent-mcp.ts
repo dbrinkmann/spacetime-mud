@@ -235,7 +235,8 @@ try {
     room_id: String(roomId),
     source,
   });
-  const liveDraft = [...player.c.db.myVisualDrafts.iter()][0];
+  await until(() => [...player.c.db.myVisualDrafts.iter()].some(d => d.kind === "scene"));
+  const liveDraft = [...player.c.db.myVisualDrafts.iter()].find(d => d.kind === "scene")!;
   assert(
     (
       await mcp.callTool({
@@ -261,7 +262,8 @@ try {
     room_id: String(roomId),
     source: readFileSync("public/poc/examples/wizard.json", "utf8"),
   });
-  const avatarDraft = [...player.c.db.myVisualDrafts.iter()][0];
+  await until(() => [...player.c.db.myVisualDrafts.iter()].some(d => d.kind === "avatar"));
+  const avatarDraft = [...player.c.db.myVisualDrafts.iter()].find(d => d.kind === "avatar")!;
   await call("world_publish_visual", {
     key: avatarDraft.key,
     revision: avatarDraft.revision,
@@ -278,6 +280,7 @@ try {
     actions: [{ id: "ring", label: "Ring live bell" }],
     room_id: String(roomId),
   });
+  await until(() => [...player.c.db.myVersions.iter()].some(v => v.name === "Live bell"));
   const liveVersion = [...player.c.db.myVersions.iter()].find(
     (v) => v.name === "Live bell",
   )!;
