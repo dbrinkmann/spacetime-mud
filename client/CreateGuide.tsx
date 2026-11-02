@@ -86,6 +86,11 @@ export function CreateGuide({
           </p>
         </li>
       </ol>
+      <p>
+        To clean up, ask your agent to delete a specific old room or an entire
+        zone you own. Deletion removes its contents permanently. Players are
+        moved to the zone entrance, or to the Nexus when a whole zone is removed.
+      </p>
       <section className="agent-pairing">
         <h2>
           {data.grants.length ? "Your agent is connected" : "Pair your agent"}

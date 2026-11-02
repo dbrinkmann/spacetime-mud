@@ -41,6 +41,7 @@ jobs:
         run: |
           npm run test:integration
           npm run test:visual
+          npx tsx tests/cleanup.ts
           npx tsx tests/timers.ts
           npx vitest run
       - name: Real desktop and mobile browser verification

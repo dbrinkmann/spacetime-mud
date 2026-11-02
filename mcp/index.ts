@@ -151,7 +151,14 @@ async function build(operation: string, payload: unknown, roomId?: string) {
     roomId: id,
     payload: JSON.stringify(payload),
   });
-  return json(inspect(c, operation === "create_zone" ? undefined : String(id)));
+  return json(
+    inspect(
+      c,
+      ["create_zone", "delete_room", "delete_zone"].includes(operation)
+        ? undefined
+        : String(id),
+    ),
+  );
 }
 const id = z.string().regex(/^[1-9][0-9]{0,19}$/),
   source = z.string().max(500000);
@@ -317,6 +324,26 @@ server.registerTool(
     inputSchema: { versionId: id, room_id: id.optional() },
   },
   protect((a) => build("publish_object", a, a.room_id)),
+);
+server.registerTool(
+  "world_delete_room",
+  {
+    description:
+      "Permanently delete a room and its objects, scripts, timers, inventory records, chat and passages. Zone owner only. Occupants move to the zone entrance. Cannot delete the entrance; use world_delete_zone for a whole zone. Inspect IDs first and only delete content the player asked to remove.",
+    inputSchema: { room_id: id },
+    annotations: { destructiveHint: true },
+  },
+  protect((a) => build("delete_room", {}, a.room_id)),
+);
+server.registerTool(
+  "world_delete_zone",
+  {
+    description:
+      "Permanently delete an owned zone and ALL its rooms and content. Occupants move to the Nexus. Owner only; the Nexus is protected. Inspect the zone ID and only delete zones the player asked to remove.",
+    inputSchema: { zone_id: id },
+    annotations: { destructiveHint: true },
+  },
+  protect((a) => build("delete_zone", { zoneId: a.zone_id })),
 );
 server.registerTool(
   "world_render_preview",

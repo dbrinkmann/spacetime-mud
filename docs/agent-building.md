@@ -28,12 +28,14 @@ Environment overrides: `SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`, and `
 | `world_render_preview` | PNG of staged or published geometry in the isolated renderer |
 | `world_publish_visual` | Publish the exact staged room/avatar revision live |
 | `world_publish_object` | Publish a tested behavior version live |
+| `world_delete_room` | Delete an owned non-entrance room and its content; occupants return to the entrance |
+| `world_delete_zone` | Delete an owned zone and all its rooms/content; occupants return to the Nexus |
 
 The renderer's screenshot shows the authored geometry and character; it is not a live multiplayer snapshot. Script tests are separate from geometry previews. A missing browser or renderer failure produces a tool error, never a false claim of visual verification.
 
 ## Authoritative API
 
-MCP mutations call the generated SDK reducer `agentBuild({operation, roomId, payload})`. `payload` is JSON. Supported operations are `create_zone`, `create_room`, `save_visual`, `save_object`, `test_object`, `publish_visual`, and `publish_object`; their typed MCP input schemas document the payloads. Other integrations can call the same reducer through the SpacetimeDB client SDK using a separately paired agent identity.
+MCP mutations call the generated SDK reducer `agentBuild({operation, roomId, payload})`. `payload` is JSON. Supported operations are `create_zone`, `create_room`, `save_visual`, `save_object`, `test_object`, `publish_visual`, `publish_object`, `delete_room`, and `delete_zone`; their typed MCP input schemas document the payloads. Other integrations can call the same reducer through the SpacetimeDB client SDK using a separately paired agent identity.
 
 The server derives the player from the authenticated sender's grant. It never trusts an owner ID in the payload. Existing ownership/collaborator checks, geometry budgets, script validation, and isolated preview machinery still apply. Pairing permits creating places, staging content, and publishing live within the player's editing permissions. Publication derives the actor from the authenticated grant, preserves revision checks and requires tested scripts. The agent does not need the player's identity token. Revocation blocks publication as well as staging.
 
@@ -44,6 +46,10 @@ Agents stage geometry with `world_save_visual`, validate/render it, and finish w
 The older manual review controls remain available for deliberately staged work, but are not the default creator workflow. Ask for revisions in the external agent conversation and watch updates in Explore. The agent's building skill directs it to complete publication itself.
 
 ## Validation
+
+Cleanup is owner-only (collaborator access is insufficient). The Nexus cannot be deleted; a zone entrance cannot be deleted independently. Room/zone deletion removes passages to deleted destinations and passages gated by deleted objects, geometry, scene drafts, scripted objects, versions, timers, state, issued inventory, traces, chat, discoveries and scoped agent jobs. Zone deletion also removes memberships and the public zone listing. Online and offline players are relocated without executing user scripts. Avatar definitions and avatar drafts are preserved. Arbitrary room IDs embedded in other user scripts cannot be rewritten automatically; those scripts may need revision. Nothing is deleted merely because it is old.
+
+Run `npx tsx tests/cleanup.ts` against a disposable database to verify cleanup and access control.
 
 `npm run test:agent` drives a generic MCP SDK client and actual Chromium. It checks pairing, denied unpaired writes, guidance, validation failures, draft privacy, screenshot output, live room/avatar/behavior publication, stale revision and untested script rejection, the Create UI, in-world keep/discard, script testing/review, mobile layout, and revoked writes. It needs a disposable database and matching frontend (`SPACETIME_HOST`, `SPACETIME_DATABASE`, `GAME_URL`). It does not consume model quota.
 

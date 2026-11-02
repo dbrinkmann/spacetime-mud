@@ -1322,6 +1322,127 @@ export const deleteObject = db.reducer(
     ctx.db.object.id.delete(obj.id);
   },
 );
+// Destructive cleanup is restricted to zone owners, including delegated agents.
+function ownedZone(ctx: Ctx, actor: Identity, zoneId: bigint) {
+  const z = ctx.db.zone.id.find(zoneId) ?? fail("Zone not found.");
+  if (z.id === 1n) fail("The Nexus is protected.");
+  if (!z.owner.equals(actor))
+    fail("Only the zone owner can delete rooms or zones.");
+  return z;
+}
+function removeRooms(
+  ctx: Ctx,
+  ids: Set<bigint>,
+  fallback: bigint,
+  zoneId?: bigint,
+) {
+  getRoom(ctx, fallback);
+  const objects = [...ctx.db.object.iter()].filter(
+    (o) => ids.has(o.roomId) || o.zoneId === zoneId,
+  );
+  const objectIds = new Set(objects.map((o) => o.id));
+  for (const p of [...ctx.db.player.iter()])
+    if (ids.has(p.roomId)) {
+      updatePlayer(ctx, { ...p, roomId: fallback });
+      discover(ctx, p.identity, fallback);
+    }
+  for (const r of [...ctx.db.room.iter()]) {
+    if (ids.has(r.id)) continue;
+    const exits = r.exits.filter(
+      (e) => !ids.has(e.destination) && !objectIds.has(e.gateId),
+    );
+    if (exits.length !== r.exits.length) ctx.db.room.id.update({ ...r, exits });
+  }
+  for (const o of objects) {
+    cancelTimers(ctx, o.id);
+    for (const v of [...ctx.db.version.objectId.filter(o.id)])
+      ctx.db.version.id.delete(v.id);
+    for (const s of [...ctx.db.state.objectId.filter(o.id)])
+      ctx.db.state.key.delete(s.key);
+    ctx.db.object.id.delete(o.id);
+  }
+  for (const i of [...ctx.db.inventory.iter()])
+    if (objectIds.has(i.objectId)) ctx.db.inventory.key.delete(i.key);
+  for (const t of [...ctx.db.trace.iter()])
+    if (objectIds.has(t.objectId) || t.zoneId === zoneId)
+      ctx.db.trace.id.delete(t.id);
+  for (const d of [...ctx.db.discovery.iter()])
+    if (ids.has(d.roomId)) ctx.db.discovery.key.delete(d.key);
+  for (const j of [...ctx.db.job.iter()])
+    if (ids.has(j.roomId) || objectIds.has(j.npcId)) ctx.db.job.id.delete(j.id);
+  // Objects can have moved since geometry was authored. Remove dangling visual links.
+  const unlink = (source: string) => {
+    const scene = JSON.parse(source) as SceneRoom;
+    let changed = false;
+    for (const o of scene.objects)
+      if (o.objectId && objectIds.has(BigInt(o.objectId))) {
+        delete o.objectId;
+        changed = true;
+      }
+    return changed ? JSON.stringify(scene) : source;
+  };
+  for (const s of [...ctx.db.roomScene.iter()]) {
+    if (ids.has(s.roomId)) ctx.db.roomScene.roomId.delete(s.roomId);
+    else {
+      const source = unlink(s.source);
+      if (source !== s.source)
+        ctx.db.roomScene.roomId.update({
+          ...s,
+          source,
+          revision: s.revision + 1,
+        });
+    }
+  }
+  for (const d of [...ctx.db.visualDraft.iter()]) {
+    if (d.kind === "avatar") {
+      if (ids.has(d.roomId))
+        ctx.db.visualDraft.key.update({ ...d, roomId: fallback });
+    } else if (ids.has(d.roomId)) ctx.db.visualDraft.key.delete(d.key);
+    else {
+      const source = unlink(d.source);
+      if (source !== d.source)
+        ctx.db.visualDraft.key.update({
+          ...d,
+          source,
+          revision: d.revision + 1,
+        });
+    }
+  }
+  for (const id of ids) {
+    for (const p of [...ctx.db.presence.roomId.filter(id)])
+      ctx.db.presence.identity.delete(p.identity);
+    for (const c of [...ctx.db.chat.roomId.filter(id)])
+      ctx.db.chat.id.delete(c.id);
+    ctx.db.room.id.delete(id);
+  }
+}
+function deleteRoomFor(ctx: Ctx, actor: Identity, roomId: bigint) {
+  const r = getRoom(ctx, roomId),
+    z = ownedZone(ctx, actor, r.zoneId);
+  if (z.entrance === roomId)
+    fail(
+      "This is the zone entrance. Delete the zone to remove it and all its rooms.",
+    );
+  removeRooms(ctx, new Set([roomId]), z.entrance);
+}
+function deleteZoneFor(ctx: Ctx, actor: Identity, zoneId: bigint) {
+  const z = ownedZone(ctx, actor, zoneId);
+  removeRooms(
+    ctx,
+    new Set([...ctx.db.room.zoneId.filter(z.id)].map((r) => r.id)),
+    1n,
+    z.id,
+  );
+  for (const m of [...ctx.db.member.zoneId.filter(z.id)])
+    ctx.db.member.key.delete(m.key);
+  ctx.db.zone.id.delete(z.id);
+}
+export const deleteRoom = db.reducer({ roomId: t.u64() }, (ctx, a) =>
+  deleteRoomFor(ctx, ctx.sender, a.roomId),
+);
+export const deleteZone = db.reducer({ zoneId: t.u64() }, (ctx, a) =>
+  deleteZoneFor(ctx, ctx.sender, a.zoneId),
+);
 export const interact = db.reducer(
   { objectId: t.u64(), action: t.string(), requestId: t.string() },
   (ctx, { objectId, action, requestId }) => {
@@ -1538,6 +1659,10 @@ export const agentBuild = db.reducer(
       });
     } else if (a.operation === "publish_object") {
       publishVersionFor(ctx, actor, asId(field("versionId", 20)));
+    } else if (a.operation === "delete_room") {
+      deleteRoomFor(ctx, actor, a.roomId);
+    } else if (a.operation === "delete_zone") {
+      deleteZoneFor(ctx, actor, asId(field("zoneId", 20)));
     } else fail("Unsupported building operation.");
   },
 );

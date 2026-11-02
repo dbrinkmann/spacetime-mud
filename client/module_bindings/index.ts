@@ -44,6 +44,8 @@ import ConsentReducer from "./consent_reducer";
 import CreatePlayerReducer from "./create_player_reducer";
 import CreateZoneReducer from "./create_zone_reducer";
 import DeleteObjectReducer from "./delete_object_reducer";
+import DeleteRoomReducer from "./delete_room_reducer";
+import DeleteZoneReducer from "./delete_zone_reducer";
 import DiscardBehaviorReducer from "./discard_behavior_reducer";
 import DiscardVisualReducer from "./discard_visual_reducer";
 import FailJobReducer from "./fail_job_reducer";
@@ -236,6 +238,8 @@ const reducersSchema = __reducers(
   __reducerSchema("create_player", CreatePlayerReducer),
   __reducerSchema("create_zone", CreateZoneReducer),
   __reducerSchema("delete_object", DeleteObjectReducer),
+  __reducerSchema("delete_room", DeleteRoomReducer),
+  __reducerSchema("delete_zone", DeleteZoneReducer),
   __reducerSchema("discard_behavior", DiscardBehaviorReducer),
   __reducerSchema("discard_visual", DiscardVisualReducer),
   __reducerSchema("fail_job", FailJobReducer),

@@ -235,8 +235,12 @@ try {
     room_id: String(roomId),
     source,
   });
-  await until(() => [...player.c.db.myVisualDrafts.iter()].some(d => d.kind === "scene"));
-  const liveDraft = [...player.c.db.myVisualDrafts.iter()].find(d => d.kind === "scene")!;
+  await until(() =>
+    [...player.c.db.myVisualDrafts.iter()].some((d) => d.kind === "scene"),
+  );
+  const liveDraft = [...player.c.db.myVisualDrafts.iter()].find(
+    (d) => d.kind === "scene",
+  )!;
   assert(
     (
       await mcp.callTool({
@@ -262,8 +266,12 @@ try {
     room_id: String(roomId),
     source: readFileSync("public/poc/examples/wizard.json", "utf8"),
   });
-  await until(() => [...player.c.db.myVisualDrafts.iter()].some(d => d.kind === "avatar"));
-  const avatarDraft = [...player.c.db.myVisualDrafts.iter()].find(d => d.kind === "avatar")!;
+  await until(() =>
+    [...player.c.db.myVisualDrafts.iter()].some((d) => d.kind === "avatar"),
+  );
+  const avatarDraft = [...player.c.db.myVisualDrafts.iter()].find(
+    (d) => d.kind === "avatar",
+  )!;
   await call("world_publish_visual", {
     key: avatarDraft.key,
     revision: avatarDraft.revision,
@@ -280,7 +288,9 @@ try {
     actions: [{ id: "ring", label: "Ring live bell" }],
     room_id: String(roomId),
   });
-  await until(() => [...player.c.db.myVersions.iter()].some(v => v.name === "Live bell"));
+  await until(() =>
+    [...player.c.db.myVersions.iter()].some((v) => v.name === "Live bell"),
+  );
   const liveVersion = [...player.c.db.myVersions.iter()].find(
     (v) => v.name === "Live bell",
   )!;
@@ -332,6 +342,35 @@ try {
     ).isError,
   );
   assert.deepEqual(errors, []);
+  await player.c.reducers.consent({ bridge: agent!.c.identity! });
+  const extension = value(
+    await call("world_create_room", {
+      room_id: String(roomId),
+      direction: "north",
+      name: "Temporary annex",
+      description: "Cleanup through MCP.",
+    }),
+  );
+  const annexId = extension.room.exits.find(
+    (e: any) => e.direction === "north",
+  ).destination;
+  await call("world_delete_room", { room_id: String(annexId) });
+  await until(() => !player.c.db.visibleRooms.id.find(BigInt(annexId)));
+  assert(
+    (
+      await mcp.callTool({
+        name: "world_delete_zone",
+        arguments: { zone_id: "1" },
+      })
+    ).isError,
+  );
+  await call("world_delete_zone", { zone_id: String(zone.id) });
+  await until(() => !other.c.db.zone.id.find(zone.id));
+  await until(
+    () =>
+      other.c.db.visiblePlayers.identity.find(other.c.identity!)?.roomId === 1n,
+  );
+  await player.c.reducers.revokeConsent({});
   console.log(
     "PASS generic MCP client: pairing, private staging, optional review, live room/avatar/behavior publication, stale revision and untested behavior rejection, mobile, revocation.",
   );

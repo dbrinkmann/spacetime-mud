@@ -22,7 +22,11 @@ Call `world_connect`. Give the player its pairing link and wait for them to auth
 5. For behavior, save a scripted object with `world_save_object`, test each intended handler with `world_test_object`, inspect the reports, and fix failures. Link its object ID to the visible prop in room geometry. Scripts and geometry are separate drafts.
 6. Publish tested behavior with `world_publish_object`. Publish geometry with `world_publish_visual`, using the exact draft key and revision from `world_save_visual` and the explicit room ID. No player review is required: complete the requested work live, then inspect the published state and tell the player what changed. If a conflict occurs, inspect and merge instead of blindly overwriting. Never request the player token.
 
-## Build conventions
+## Clean up requested content
+
+Use `world_inspect` to identify the exact rooms and zones the player wants removed. `world_delete_room` permanently removes an individual non-entrance room and its content; occupants return to that zone's entrance. `world_delete_zone` permanently removes the whole zone, all rooms and their content; occupants return to the Nexus. These operations require zone ownership, not just collaborator access. The Nexus is protected. Deleting an entrance requires deleting its entire zone. Do not infer permission to delete existing content from a request to build something new. Avatar definitions are preserved, but inventory issued by deleted objects is removed.
+
+## Geometry conventions
 
 Meters, Y up, Z forward. Geometry is arbitrary boxes, not a voxel grid. Characters use six fixed pivots; cosmetics attach rigidly to one part. Do not introduce a full humanoid skeleton or import external model assets. Learn exact limits from `world_guide` rather than guessing.
 
