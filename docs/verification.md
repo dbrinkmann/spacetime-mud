@@ -18,7 +18,18 @@ Database: `dbrinkmann-spacetime-mud` on Maincloud.
 
 ## Deployment
 
-Production confirmation is recorded below after publication. The original world reset was explicitly authorized. GitHub Actions repeats the integration, timer, React UI and Chromium checks and uploads screenshots before deploying Pages.
+Release commit **2818bad** was published to Maincloud and GitHub Pages. [Release workflow 41507220910](https://github.com/dbrinkmann/spacetime-mud/actions/runs/41507220910) passed all checks and deployment; its `browser-verification` artifact contains desktop, mobile and workshop screenshots.
+
+After deployment:
+
+- The public page and JS/CSS returned HTTP 200; SHA-256 hashes matched the locally validated production build.
+- A fresh production client received only the Nexus and no private messages, jobs or scripts.
+- A real Chromium walkthrough on the **public production URL** passed map movement, pressure-plate/gate interaction, chest reward/inventory, chat, mobile overflow checks, return to Nexus and reload. No browser exceptions were reported.
+- Production logs showed successful initialization and no runtime errors from that walkthrough.
+
+The original world reset was explicitly authorized. Production was seeded with only The Nexus and Bellkeeper’s Crossing; test-builder realms were kept in disposable/local and Maincloud validation databases. Production browser verification created an ordinary traveler and exercised the showcase.
+
+The standalone asset checker initially encountered local TLS connection resets. It now uses platform curl with IPv4, HTTP/1.1 and bounded retries; the complete hash/subscription check then passed. The independent browser walkthrough also passed.
 
 ## Reproduce
 
@@ -40,3 +51,4 @@ After deploying, `tests/deployed-smoke.ts` compares public JS/CSS hashes against
 ## Scope
 
 The shipped interpreter is ES5 JavaScript, not Lua or TypeScript syntax. Preview simulates a selected event rather than every possible world state. Script limits bound work and allocations; this is not a claim of a separate process heap or an exhaustive security audit. The builder uses one structured agent proposal per request. Those boundaries are documented in `docs/architecture.md`.
+
