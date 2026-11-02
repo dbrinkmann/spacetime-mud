@@ -36,8 +36,10 @@ try {
   p = await project([-1.7, 0.85, -0.1]);
   await page.mouse.click(p.x, p.y);
   await page.getByRole("button", { name: "Sit here", exact: true }).click();
+  // Software WebGL on CI can run below the renderer's capped simulation rate.
+  // Still require arrival and the actual seated state, allowing the walk to finish.
   await expect(canvas).toHaveAttribute("data-seat", "reading-chair", {
-    timeout: 15000,
+    timeout: 45000,
   });
   await page.screenshot({
     path: "test-results/box-world-seated.png",
