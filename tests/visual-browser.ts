@@ -70,9 +70,9 @@ try {
   page.on("console", (m) => {
     if (m.type() === "error") console.log("browser:", m.text());
   });
-  await page.goto(site);
+  await page.goto(site + (site.includes("?") ? "&" : "?") + "workshop=1");
   await other.goto(site);
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   await page.getByRole("button", { name: "visuals", exact: true }).click();
   await page
     .getByLabel("Geometry JSON", { exact: true })

@@ -14,7 +14,7 @@ try {
     }),
     page = await context.newPage();
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(site);
+  await page.goto(site + (site.includes("?") ? "&" : "?") + "workshop=1");
   await page.getByText("Live", { exact: true }).waitFor();
   await page
     .getByLabel("What should we call you?")
@@ -63,7 +63,7 @@ try {
   );
   await page.setViewportSize({ width: 1440, height: 1100 });
   if (!process.env.BROWSER_SMOKE_ONLY) {
-    await page.getByRole("button", { name: "Build", exact: true }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await page
       .getByRole("button", { name: "Create a zone", exact: true })
       .click();

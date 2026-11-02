@@ -1,9 +1,10 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
-import { Identity } from "spacetimedb";
+import { CreateGuide } from "./CreateGuide";
 import { useGame } from "./connection";
 import { WorldMap } from "./WorldMap";
 import { Builder } from "./Builder";
 import "./style.css";
+import { BehaviorReview } from "./world/BehaviorReview";
 import { LiveRoom } from "./world/LiveRoom";
 export function App() {
   const { conn, identity, status, data, connectionError } = useGame();
@@ -13,21 +14,17 @@ export function App() {
   const [name, setName] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [tab, setTab] = useState<"play" | "build">("play"),
-    [message, setMessage] = useState(""),
-    [recipient, setRecipient] = useState(""),
-    [prompt, setPrompt] = useState("");
-  const [bridge, setBridge] = useState(
-      () => new URLSearchParams(location.hash.slice(1)).get("bridge") ?? "",
+    [tab, setTab] = useState<"play" | "build">(
+      location.hash.includes("agent=") || location.hash.includes("bridge=")
+        ? "build"
+        : "play",
     ),
-    [consented, setConsented] = useState(false),
-    [agentOpen, setAgentOpen] = useState(!!bridge);
+    [message, setMessage] = useState(""),
+    [recipient, setRecipient] = useState("");
   const journal = useRef<HTMLDivElement>(null),
     inflight = useRef(false);
   const enabled = !!conn && status === "Live" && !busy,
     grant = data.grants[0];
-  const jobs = data.jobs.slice().sort((a, b) => Number(b.id - a.id)),
-    active = jobs.find((j) => ["pending", "working"].includes(j.status));
   const objects = data.objects.filter((o) => o.roomId === room?.id && o.active),
     players = data.players.filter((p) => p.online && p.roomId === room?.id);
   const entries = [
@@ -92,11 +89,8 @@ export function App() {
   }, [entries.length, room?.id]);
   useEffect(() => {
     const update = () => {
-      setBridge(
-        new URLSearchParams(location.hash.slice(1)).get("bridge") ?? "",
-      );
-      setConsented(false);
-      setAgentOpen(true);
+      if (location.hash.includes("agent=") || location.hash.includes("bridge="))
+        setTab("build");
     };
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
@@ -123,7 +117,7 @@ export function App() {
               className={tab === "build" ? "selected" : ""}
               onClick={() => setTab("build")}
             >
-              Build
+              Create
             </button>
           </nav>
         )}
@@ -192,7 +186,7 @@ export function App() {
           <p className="fine">
             Your character is remembered in this browser. Everyone can build.
             <br />
-            Connecting your own Claude Code is optional and requires consent.
+            Connect your preferred agent when you want to create.
           </p>
         </main>
       ) : (
@@ -201,7 +195,7 @@ export function App() {
             <span>
               {zone?.name ?? "The Nexus"}{" "}
               <span className="muted">
-                / {tab === "play" ? "Exploration" : "Workshop"}
+                / {tab === "play" ? "Exploration" : "Create"}
               </span>
             </span>
             <span>
@@ -218,15 +212,24 @@ export function App() {
           {room &&
             conn &&
             (tab === "build" ? (
-              <Builder
-                key={String(room.id)}
-                conn={conn}
-                room={room}
-                data={data}
-                identity={identity}
-                enabled={enabled}
-                action={action}
-              />
+              new URLSearchParams(location.search).has("workshop") ? (
+                <Builder
+                  key={String(room.id)}
+                  conn={conn}
+                  room={room}
+                  data={data}
+                  identity={identity}
+                  enabled={enabled}
+                  action={action}
+                />
+              ) : (
+                <CreateGuide
+                  conn={conn}
+                  data={data}
+                  enabled={enabled}
+                  action={action}
+                />
+              )
             ) : (
               <main className="play-grid">
                 <aside className="atlas-column">
@@ -265,6 +268,14 @@ export function App() {
                     conn={conn}
                     data={data}
                     room={room}
+                    identity={identity}
+                    enabled={enabled}
+                    action={action}
+                  />
+                  <BehaviorReview
+                    data={data}
+                    conn={conn}
+                    roomId={room.id}
                     identity={identity}
                     enabled={enabled}
                     action={action}
@@ -468,160 +479,10 @@ export function App() {
                 </section>
               </main>
             ))}
-          <section className={`agent-dock panel ${agentOpen ? "open" : ""}`}>
-            <button
-              className="agent-toggle"
-              onClick={() => setAgentOpen(!agentOpen)}
-            >
-              <span>✦ YOUR BUILDER · CLAUDE CODE</span>
-              <span>
-                {active ? "Working…" : grant ? "Paired" : "Connect your agent"}{" "}
-                {agentOpen ? "−" : "+"}
-              </span>
-            </button>
-            {agentOpen && (
-              <div className="agent-grid">
-                <div>
-                  <h2>Tell your agent what you imagine.</h2>
-                  <p className="muted">
-                    Your own Claude Code drafts scripts and builds rooms.
-                    Inspect and publish object drafts in Build.
-                  </p>
-                  {grant ? (
-                    <div className="bridge-card connected">
-                      <strong>Claude Code paired</strong>
-                      <p>
-                        Keep the local bridge running while making requests.
-                      </p>
-                      <button
-                        disabled={!enabled}
-                        onClick={() =>
-                          void action(() => conn!.reducers.revokeConsent({}))
-                        }
-                      >
-                        Disconnect & revoke consent
-                      </button>
-                    </div>
-                  ) : (
-                    <details className="bridge-card" open>
-                      <summary>Connect your Claude Code</summary>
-                      <p>
-                        Install Node.js 22+, sign in to Claude Code, then run:
-                      </p>
-                      <pre>
-                        {
-                          "git clone https://github.com/dbrinkmann/spacetime-mud.git\ncd spacetime-mud\nnpm ci\nnpm run bridge"
-                        }
-                      </pre>
-                      <p>
-                        Approve the terminal prompt and open its pairing link.
-                      </p>
-                      <label>
-                        Bridge identity
-                        <input
-                          aria-label="Bridge identity"
-                          value={bridge}
-                          onChange={(e) => {
-                            setBridge(e.target.value);
-                            setConsented(false);
-                          }}
-                        />
-                      </label>
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={consented}
-                          onChange={(e) => setConsented(e.target.checked)}
-                        />
-                        I consent to using my Claude Code for my game requests.
-                        Game context is sent to Claude and counts toward my
-                        usage. I can revoke anytime.
-                      </label>
-                      <button
-                        className="primary"
-                        disabled={
-                          !enabled ||
-                          !consented ||
-                          !/^[a-fA-F0-9]{64}$/.test(bridge)
-                        }
-                        onClick={() =>
-                          void action(() =>
-                            conn!.reducers.consent({
-                              bridge: Identity.fromString(bridge),
-                            }),
-                          )
-                        }
-                      >
-                        Pair & enable Claude Code
-                      </button>
-                    </details>
-                  )}
-                </div>
-                <div>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void action(async () => {
-                        await conn!.reducers.requestAgent({ prompt });
-                        setPrompt("");
-                      });
-                    }}
-                  >
-                    <label>
-                      Describe your idea
-                      <textarea
-                        aria-label="Agent request"
-                        rows={5}
-                        value={prompt}
-                        maxLength={3000}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Make a fountain that grants each traveler a silver coin once, then whispers a different story on later visits."
-                      />
-                    </label>
-                    <button
-                      className="primary"
-                      disabled={
-                        !enabled || !grant || !!active || !prompt.trim()
-                      }
-                    >
-                      Ask Claude Code
-                    </button>
-                    {active && (
-                      <button
-                        disabled={!enabled}
-                        onClick={() =>
-                          void action(() =>
-                            conn!.reducers.cancelJob({ id: active.id }),
-                          )
-                        }
-                        type="button"
-                      >
-                        Cancel request
-                      </button>
-                    )}
-                  </form>
-                  <div className="job-list">
-                    {jobs.slice(0, 8).map((j) => (
-                      <article key={String(j.id)}>
-                        <span className="eyebrow">{j.status}</span>
-                        <p>{j.prompt}</p>
-                        <pre>{j.result}</pre>
-                        {j.status === "done" && (
-                          <button onClick={() => setTab("build")}>
-                            Open workshop
-                          </button>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
           <footer>
             <span>Built by travelers. Kept by the world.</span>
             <span>
-              Persistent worlds · Scripted wonders · Local Claude Code
+              Persistent worlds · Scripted wonders · Build with your agent
             </span>
           </footer>
         </>

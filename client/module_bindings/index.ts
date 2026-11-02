@@ -34,6 +34,7 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AgentBuildReducer from "./agent_build_reducer";
 import BuildRoomReducer from "./build_room_reducer";
 import CancelJobReducer from "./cancel_job_reducer";
 import ClaimJobReducer from "./claim_job_reducer";
@@ -43,6 +44,8 @@ import ConsentReducer from "./consent_reducer";
 import CreatePlayerReducer from "./create_player_reducer";
 import CreateZoneReducer from "./create_zone_reducer";
 import DeleteObjectReducer from "./delete_object_reducer";
+import DiscardBehaviorReducer from "./discard_behavior_reducer";
+import DiscardVisualReducer from "./discard_visual_reducer";
 import FailJobReducer from "./fail_job_reducer";
 import GoReducer from "./go_reducer";
 import HomeReducer from "./home_reducer";
@@ -223,6 +226,7 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("agent_build", AgentBuildReducer),
   __reducerSchema("build_room", BuildRoomReducer),
   __reducerSchema("cancel_job", CancelJobReducer),
   __reducerSchema("claim_job", ClaimJobReducer),
@@ -232,6 +236,8 @@ const reducersSchema = __reducers(
   __reducerSchema("create_player", CreatePlayerReducer),
   __reducerSchema("create_zone", CreateZoneReducer),
   __reducerSchema("delete_object", DeleteObjectReducer),
+  __reducerSchema("discard_behavior", DiscardBehaviorReducer),
+  __reducerSchema("discard_visual", DiscardVisualReducer),
   __reducerSchema("fail_job", FailJobReducer),
   __reducerSchema("go", GoReducer),
   __reducerSchema("home", HomeReducer),

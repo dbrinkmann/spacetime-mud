@@ -69,9 +69,11 @@ Read-only `window.boxWorld.inspect()` reports position, pose, selected/occupied 
 
 ## Publish in the shared game
 
-Open **Build ? visuals**. Choose Room geometry or My character. Load the published definition, import/paste JSON, and preview locally. Save a private visual draft, preview that saved revision, then publish. Room edits require zone ownership or collaborator permission; everyone can publish their own character. New zones start with an empty floor and new players have a neutral fallback silhouette.
+Connect your agent using the instructions under **Create**. Its MCP tools inspect existing definitions, validate geometry, save private drafts and render previews. In Explore, choose **Review creation** or **Review character**, then **Keep it** to publish. **Ask for changes** directs you back to your agent conversation. **Discard** removes an unwanted visual draft. New zones start with an empty floor and new players have a neutral fallback silhouette.
 
-Claude requests can produce `scene` and `avatar` proposals containing complete JSON in `source`. These become private drafts. Ask your agent to preserve existing geometry when revising. Restart an existing bridge after updating the checkout. Room geometry and scripted-object behavior remain separate definitions. Set a placement's optional `objectId` to the decimal ID of an object in that room: selecting the prop exposes its published action buttons, which run through the existing transactional scripting system.
+Room geometry and scripted-object behavior remain separate definitions. Set a placement's optional `objectId` to the decimal ID of an object in that room: selecting the published prop exposes its published action buttons. Agents save and test behavior with `world_save_object` and `world_test_object`; players review and keep behaviors in Explore. Private geometry preview does not execute linked scripts.
+
+The MCP server is model-neutral and uses stdio. The authoritative `agentBuild` reducer checks pairing and permissions for every mutation. It does not expose publication to the paired agent. No inference runs in the game or MCP server.
 
 Publication checks geometry, navigation, references, permissions, and the base revision. Conflicting publications are rejected. Publishing a room resets its occupants to spawn and releases seats so old paths cannot run through new geometry. Each builder has one current draft per room and one avatar draft; there is no visual revision history yet, so export your definitions to source control before replacing them.
 

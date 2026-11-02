@@ -5,6 +5,7 @@ import { App } from "../client/main";
 // jsdom covers forms/subscriptions; real WebGL is exercised in visual-browser.ts.
 vi.mock("../client/world/Viewport", () => ({ Viewport: () => null }));
 test("real UI explores, builds, previews, publishes, uses an object, chats and reconnects", async () => {
+  window.history.replaceState({}, "", "?workshop=1");
   HTMLElement.prototype.scrollTo = vi.fn();
   const user = userEvent.setup();
   const suffix = Date.now().toString(36);
@@ -17,7 +18,7 @@ test("real UI explores, builds, previews, publishes, uses an object, chats and r
     );
     await user.click(screen.getByRole("button", { name: "Enter world →" }));
     await screen.findByRole("heading", { name: "The Nexus" });
-    await user.click(screen.getByRole("button", { name: "Build" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
     await user.click(screen.getByRole("button", { name: "Create a zone" }));
     await user.type(screen.getByLabelText("Zone name"), `UI Garden ${suffix}`);
     await user.type(
@@ -35,7 +36,9 @@ test("real UI explores, builds, previews, publishes, uses an object, chats and r
     );
     await user.click(screen.getByRole("button", { name: "Explore" }));
     await screen.findByRole("heading", { name: `UI Garden ${suffix}` });
-    await user.click(screen.getByRole("button", { name: "Touch the stone" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Touch the stone" }),
+    );
     await screen.findByText("A clear note rises from the stone.");
     await user.type(
       screen.getByLabelText("Chat message"),
@@ -43,11 +46,13 @@ test("real UI explores, builds, previews, publishes, uses an object, chats and r
     );
     await user.click(screen.getByRole("button", { name: "Send message" }));
     await screen.findByText("Hello from the garden");
-    await user.click(screen.getByRole("button", { name: /YOUR BUILDER/ }));
+    window.history.replaceState({}, "", "/");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("heading", { name: "Teach your agent to build." });
     expect(
       (
         screen.getByRole("button", {
-          name: "Pair & enable Claude Code",
+          name: "Connect agent",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
@@ -61,5 +66,6 @@ test("real UI explores, builds, previews, publishes, uses an object, chats and r
     expect(screen.queryByText("What should we call you?")).toBeNull();
   } finally {
     cleanup();
+    window.history.replaceState({}, "", "/");
   }
 });

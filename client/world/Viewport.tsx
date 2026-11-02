@@ -44,6 +44,7 @@ export type LiveTraveler = {
   motion: Motion;
 };
 type Props = {
+  showGuest?: boolean;
   live?: {
     identity: string;
     travelers: LiveTraveler[];
@@ -227,7 +228,10 @@ export function Viewport(props: Props) {
     const player = rig(character),
       companion = rig(guest);
     player.root.position.fromArray(room.spawn);
-    const guestSeat = room.objects.filter((o) => o.seat)[1];
+    const guestSeat =
+      props.showGuest === false
+        ? undefined
+        : room.objects.filter((o) => o.seat)[1];
     if (guestSeat?.seat) {
       const p = worldPoint(guestSeat, guestSeat.seat.position);
       companion.root.position.set(p[0], p[1] - 0.76, p[2]);
@@ -294,7 +298,7 @@ export function Viewport(props: Props) {
     guestLabel.className = "poc-nameplate guest";
     guestLabel.textContent = `${guest.name} · preview`;
     container.appendChild(guestLabel);
-    if (props.live) {
+    if (props.live || props.showGuest === false) {
       companion.root.visible = false;
       guestLabel.style.display = "none";
     }
@@ -689,7 +693,7 @@ export function Viewport(props: Props) {
       visitors.forEach((v) => v.label.remove());
       materials.forEach((m) => m.dispose());
     };
-  }, [props.room, props.character, props.guest]);
+  }, [props.room, props.character, props.guest, !!props.live, props.showGuest]);
   useEffect(() => {
     if (!props.live || props.command.id > 0)
       controller.current?.(props.command);

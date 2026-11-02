@@ -1045,35 +1045,41 @@ export const visitZone = db.reducer({ zoneId: t.u64() }, (ctx, { zoneId }) => {
   discover(ctx, p.identity, z.entrance);
   roomEvent(ctx, z.entrance, "on_enter", p.identity);
 });
+function createZoneFor(
+  ctx: Ctx,
+  actor: Identity,
+  name: string,
+  description: string,
+) {
+  const p = ctx.db.player.identity.find(actor) ?? fail("Player not found.");
+  if ([...ctx.db.zone.iter()].filter((z) => z.owner.equals(actor)).length >= 5)
+    fail("Five zones per builder maximum.");
+  const z = ctx.db.zone.insert({
+    id: 0n,
+    name: text(name, "Zone name", 80),
+    owner: actor,
+    entrance: 0n,
+  });
+  const r = ctx.db.room.insert({
+    id: 0n,
+    zoneId: z.id,
+    name: z.name,
+    description: text(description, "Description", 3000),
+    exits: [],
+    creator: actor,
+    x: 0,
+    y: 0,
+    floor: 0,
+  });
+  ctx.db.zone.id.update({ ...z, entrance: r.id });
+  updatePlayer(ctx, { ...p, roomId: r.id });
+  discover(ctx, p.identity, r.id);
+  return r;
+}
 export const createZone = db.reducer(
   { name: t.string(), description: t.string() },
-  (ctx, { name, description }) => {
-    const p = me(ctx);
-    if (
-      [...ctx.db.zone.iter()].filter((z) => z.owner.equals(ctx.sender))
-        .length >= 5
-    )
-      fail("Five zones per builder maximum.");
-    const z = ctx.db.zone.insert({
-      id: 0n,
-      name: text(name, "Zone name", 80),
-      owner: ctx.sender,
-      entrance: 0n,
-    });
-    const r = ctx.db.room.insert({
-      id: 0n,
-      zoneId: z.id,
-      name: z.name,
-      description: text(description, "Description", 3000),
-      exits: [],
-      creator: ctx.sender,
-      x: 0,
-      y: 0,
-      floor: 0,
-    });
-    ctx.db.zone.id.update({ ...z, entrance: r.id });
-    updatePlayer(ctx, { ...p, roomId: r.id });
-    discover(ctx, p.identity, r.id);
+  (ctx, a) => {
+    createZoneFor(ctx, ctx.sender, a.name, a.description);
   },
 );
 export const setCollaborator = db.reducer(
@@ -1229,39 +1235,45 @@ export const saveDraft = db.reducer(
     );
   },
 );
+function testVersionFor(
+  ctx: Ctx,
+  actor: Identity,
+  versionId: bigint,
+  event: string,
+) {
+  const v = ctx.db.version.id.find(versionId) ?? fail("Draft not found."),
+    obj = ctx.db.object.id.find(v.objectId) ?? fail("Object not found.");
+  requireEdit(ctx, obj.zoneId, actor);
+  try {
+    if (
+      !/^on_[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(event) ||
+      !new RegExp(`function\\s+${event}\\s*\\(`).test(v.source)
+    )
+      fail("Choose a handler declared in the saved script.");
+    const result = run(
+      ctx,
+      { ...obj, versionId: v.id },
+      v.source,
+      event,
+      actor,
+      true,
+    );
+    ctx.db.version.id.update({
+      ...v,
+      tested: true,
+      report: `PASS ${event}: ${result.stats.steps} steps\n${result.effects.join("\n") || "No effects."}`,
+    });
+  } catch (e) {
+    ctx.db.version.id.update({
+      ...v,
+      tested: false,
+      report: `FAIL ${event}: ${e instanceof Error ? e.message : String(e)}`,
+    });
+  }
+}
 export const testDraft = db.reducer(
   { versionId: t.u64(), event: t.string() },
-  (ctx, { versionId, event }) => {
-    const v = ctx.db.version.id.find(versionId) ?? fail("Draft not found."),
-      obj = ctx.db.object.id.find(v.objectId) ?? fail("Object not found.");
-    requireEdit(ctx, obj.zoneId);
-    try {
-      if (
-        !/^on_[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(event) ||
-        !new RegExp(`function\\s+${event}\\s*\\(`).test(v.source)
-      )
-        fail("Choose a handler declared in the saved script.");
-      const result = run(
-        ctx,
-        { ...obj, versionId: v.id },
-        v.source,
-        event,
-        ctx.sender,
-        true,
-      );
-      ctx.db.version.id.update({
-        ...v,
-        tested: true,
-        report: `PASS ${event}: ${result.stats.steps} steps\n${result.effects.join("\n") || "No effects."}`,
-      });
-    } catch (e) {
-      ctx.db.version.id.update({
-        ...v,
-        tested: false,
-        report: `FAIL ${event}: ${e instanceof Error ? e.message : String(e)}`,
-      });
-    }
-  },
+  (ctx, a) => testVersionFor(ctx, ctx.sender, a.versionId, a.event),
 );
 export const publishVersion = db.reducer(
   { versionId: t.u64() },
@@ -1412,14 +1424,16 @@ export const consent = db.reducer(
   { bridge: t.identity() },
   (ctx, { bridge }) => {
     me(ctx);
+    if (ctx.db.player.identity.find(bridge))
+      fail("Pair a separate agent connection, not another player's identity.");
     if (
       bridge.equals(ctx.sender) ||
       ![...ctx.db.connection.identity.filter(bridge)].length
     )
-      fail("Start a separate local bridge before pairing.");
+      fail("Connect your agent?s MCP server before pairing.");
     const other = ctx.db.grant.bridge.find(bridge);
     if (other && !other.owner.equals(ctx.sender))
-      fail("Bridge already paired.");
+      fail("This agent connection is already paired.");
     cancelJobs(ctx);
     const row = { owner: ctx.sender, bridge, createdAt: ctx.timestamp };
     ctx.db.grant.owner.find(ctx.sender)
@@ -1439,6 +1453,95 @@ function cancelJobs(ctx: Ctx) {
 export const revokeConsent = db.reducer((ctx) => {
   ctx.db.grant.owner.delete(ctx.sender);
   cancelJobs(ctx);
+});
+// Provider-neutral building API. The authenticated agent acts only for its paired player.
+// Publication is intentionally absent: the player's browser owns that decision.
+export const agentBuild = db.reducer(
+  { operation: t.string(), roomId: t.u64(), payload: t.string() },
+  (ctx, a) => {
+    const grant =
+      ctx.db.grant.bridge.find(ctx.sender) ??
+      fail("Pair this agent in the game first.");
+    const actor = grant.owner;
+    if (a.payload.length > 510000) fail("Payload too large.");
+    let v: Record<string, any>;
+    try {
+      v = JSON.parse(a.payload);
+      if (!v || typeof v !== "object" || Array.isArray(v))
+        fail("Expected an object.");
+    } catch {
+      fail("Invalid payload.");
+    }
+    const field = (key: string, max = 3000) =>
+      text(typeof v[key] === "string" ? v[key] : "", key, max);
+    if (a.operation === "create_zone") {
+      createZoneFor(ctx, actor, field("name", 80), field("description"));
+    } else if (a.operation === "create_room") {
+      createRoom(
+        ctx,
+        actor,
+        a.roomId,
+        field("direction", 10),
+        field("name", 80),
+        field("description"),
+      );
+    } else if (a.operation === "save_visual") {
+      saveVisual(
+        ctx,
+        actor,
+        a.roomId,
+        field("kind", 10),
+        typeof v.source === "string" ? v.source : fail("Source required."),
+      );
+    } else if (a.operation === "save_object") {
+      const actions = v.actions;
+      if (
+        !Array.isArray(actions) ||
+        actions.length > 8 ||
+        actions.some(
+          (x) => !x || typeof x.id !== "string" || typeof x.label !== "string",
+        )
+      )
+        fail("Invalid actions.");
+      draft(
+        ctx,
+        actor,
+        a.roomId,
+        v.objectId ? asId(field("objectId", 20)) : 0n,
+        field("kind", 20),
+        field("name", 80),
+        field("description", 2000),
+        actions,
+        typeof v.source === "string" ? v.source : fail("Source required."),
+      );
+    } else if (a.operation === "test_object") {
+      testVersionFor(
+        ctx,
+        actor,
+        asId(field("versionId", 20)),
+        field("event", 43),
+      );
+    } else fail("Unsupported building operation. Agents cannot publish.");
+  },
+);
+export const discardVisual = db.reducer(
+  { key: t.string(), revision: t.u32() },
+  (ctx, a) => {
+    const d = ctx.db.visualDraft.key.find(a.key) ?? fail("Draft not found.");
+    if (!d.owner.equals(ctx.sender) || d.revision !== a.revision)
+      fail("Draft changed or belongs to another player.");
+    ctx.db.visualDraft.key.delete(d.key);
+  },
+);
+export const discardBehavior = db.reducer({ versionId: t.u64() }, (ctx, a) => {
+  const v = ctx.db.version.id.find(a.versionId) ?? fail("Draft not found.");
+  const obj = ctx.db.object.id.find(v.objectId) ?? fail("Object not found.");
+  requireEdit(ctx, obj.zoneId);
+  if (!v.author.equals(ctx.sender) || v.id <= obj.versionId)
+    fail("Only your unpublished draft can be discarded.");
+  ctx.db.version.id.delete(v.id);
+  if (!obj.active && ![...ctx.db.version.objectId.filter(obj.id)].length)
+    ctx.db.object.id.delete(obj.id);
 });
 export const requestAgent = db.reducer(
   { prompt: t.string() },
@@ -1678,7 +1781,9 @@ export const myGrant = db.view(
   { name: "my_grant", public: true },
   t.array(grant.rowType),
   (ctx) => {
-    const g = ctx.db.grant.owner.find(ctx.sender);
+    const g =
+      ctx.db.grant.owner.find(ctx.sender) ??
+      ctx.db.grant.bridge.find(ctx.sender);
     return g ? [g] : [];
   },
 );

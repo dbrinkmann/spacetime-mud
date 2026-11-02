@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AgentBuildReducer from "../agent_build_reducer";
 import BuildRoomReducer from "../build_room_reducer";
 import CancelJobReducer from "../cancel_job_reducer";
 import ClaimJobReducer from "../claim_job_reducer";
@@ -15,6 +16,8 @@ import ConsentReducer from "../consent_reducer";
 import CreatePlayerReducer from "../create_player_reducer";
 import CreateZoneReducer from "../create_zone_reducer";
 import DeleteObjectReducer from "../delete_object_reducer";
+import DiscardBehaviorReducer from "../discard_behavior_reducer";
+import DiscardVisualReducer from "../discard_visual_reducer";
 import FailJobReducer from "../fail_job_reducer";
 import GoReducer from "../go_reducer";
 import HomeReducer from "../home_reducer";
@@ -34,6 +37,7 @@ import TellReducer from "../tell_reducer";
 import TestDraftReducer from "../test_draft_reducer";
 import VisitZoneReducer from "../visit_zone_reducer";
 
+export type AgentBuildParams = __Infer<typeof AgentBuildReducer>;
 export type BuildRoomParams = __Infer<typeof BuildRoomReducer>;
 export type CancelJobParams = __Infer<typeof CancelJobReducer>;
 export type ClaimJobParams = __Infer<typeof ClaimJobReducer>;
@@ -43,6 +47,8 @@ export type ConsentParams = __Infer<typeof ConsentReducer>;
 export type CreatePlayerParams = __Infer<typeof CreatePlayerReducer>;
 export type CreateZoneParams = __Infer<typeof CreateZoneReducer>;
 export type DeleteObjectParams = __Infer<typeof DeleteObjectReducer>;
+export type DiscardBehaviorParams = __Infer<typeof DiscardBehaviorReducer>;
+export type DiscardVisualParams = __Infer<typeof DiscardVisualReducer>;
 export type FailJobParams = __Infer<typeof FailJobReducer>;
 export type GoParams = __Infer<typeof GoReducer>;
 export type HomeParams = __Infer<typeof HomeReducer>;

@@ -40,7 +40,21 @@ export function LiveRoom({
   enabled: boolean;
   action: (fn: () => Promise<void>) => Promise<void>;
 }) {
-  const source = data.scenes?.find((s) => s.roomId === room.id)?.source;
+  const pending = (data.visualDrafts ?? []).filter(
+    (d) => d.kind === "avatar" || d.roomId === room.id,
+  );
+  const [review, setReview] = useState<{
+      key: string;
+      revision: number;
+    } | null>(null),
+    [feedback, setFeedback] = useState(false);
+  const draft = pending.find(
+    (d) => d.key === review?.key && d.revision === review?.revision,
+  );
+  const source =
+    draft?.kind === "scene"
+      ? draft.source
+      : data.scenes?.find((s) => s.roomId === room.id)?.source;
   const scene = useMemo(
     () =>
       source
@@ -72,7 +86,9 @@ export function LiveRoom({
         name: p.name,
         character: characterFor(
           p.name,
-          data.avatars?.find((a) => a.identity.equals(p.identity))?.source,
+          draft?.kind === "avatar" && id === identity
+            ? draft.source
+            : data.avatars?.find((a) => a.identity.equals(p.identity))?.source,
         ),
         motion: motion
           ? {
@@ -95,9 +111,87 @@ export function LiveRoom({
     setCommand((c) => ({ id: c.id + 1, action: a }));
   return (
     <div className="live-room">
+      {!!pending.length && (
+        <div className="creation-review">
+          <strong>
+            {draft
+              ? "Private preview — only you can see this"
+              : "Your agent has a creation for you"}
+          </strong>
+          <div className="button-row">
+            {pending.map((d) => (
+              <button
+                key={d.key}
+                onClick={() => {
+                  setReview({ key: d.key, revision: d.revision });
+                  setFeedback(false);
+                }}
+              >
+                {d.kind === "scene" ? "Review creation" : "Review character"}
+              </button>
+            ))}
+          </div>
+          {review && !draft && (
+            <p>
+              The draft changed. Review the latest version before keeping it.
+            </p>
+          )}
+          {draft && (
+            <>
+              <p>
+                Try walking, sitting, and the poses. Everyone else still sees
+                the published world.
+              </p>
+              <div className="button-row">
+                <button
+                  disabled={!enabled}
+                  onClick={() =>
+                    void action(async () => {
+                      await conn.reducers.publishVisual({
+                        key: draft.key,
+                        revision: draft.revision,
+                      });
+                      setReview(null);
+                    })
+                  }
+                >
+                  Keep it
+                </button>
+                <button onClick={() => setFeedback(true)}>
+                  Ask for changes
+                </button>
+                <button
+                  disabled={!enabled}
+                  onClick={() =>
+                    void action(async () => {
+                      await conn.reducers.discardVisual({
+                        key: draft.key,
+                        revision: draft.revision,
+                      });
+                      setReview(null);
+                    })
+                  }
+                >
+                  Discard
+                </button>
+                <button onClick={() => setReview(null)}>
+                  Back to shared world
+                </button>
+              </div>
+              {feedback && (
+                <p role="status">
+                  Tell your agent what to change in your existing conversation.
+                  Your {draft.kind === "avatar" ? "character" : "room"} draft is
+                  still available for it to inspect and revise.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
       <div className="live-toolbar">
         <span>
-          {travelers.length} travelers ·{" "}
+          {draft ? "Private preview" : `${travelers.length} travelers`} ·{" "}
           {source ? "Player-built room" : "Unshaped space"}
         </span>
         <button onClick={() => send("reset")}>Reset view</button>
@@ -111,16 +205,21 @@ export function LiveRoom({
             command={command}
             onStatus={setStatus}
             onError={setError}
-            live={{
-              identity,
-              travelers,
-              onMove: (x, z, seat, pose) => {
-                if (enabled)
-                  void action(() =>
-                    conn.reducers.moveWithinRoom({ x, z, seat, pose }),
-                  );
-              },
-            }}
+            showGuest={false}
+            live={
+              draft
+                ? undefined
+                : {
+                    identity,
+                    travelers,
+                    onMove: (x, z, seat, pose) => {
+                      if (enabled)
+                        void action(() =>
+                          conn.reducers.moveWithinRoom({ x, z, seat, pose }),
+                        );
+                    },
+                  }
+            }
           />
         )}
       </div>
@@ -148,23 +247,24 @@ export function LiveRoom({
           <button disabled={!enabled} onClick={() => send("idle")}>
             Idle
           </button>
-          {linked?.actions.map((a) => (
-            <button
-              key={a.id}
-              disabled={!enabled}
-              onClick={() =>
-                void action(() =>
-                  conn.reducers.interact({
-                    objectId: linked.id,
-                    action: a.id,
-                    requestId: crypto.randomUUID(),
-                  }),
-                )
-              }
-            >
-              {a.label}
-            </button>
-          ))}
+          {!draft &&
+            linked?.actions.map((a) => (
+              <button
+                key={a.id}
+                disabled={!enabled}
+                onClick={() =>
+                  void action(() =>
+                    conn.reducers.interact({
+                      objectId: linked.id,
+                      action: a.id,
+                      requestId: crypto.randomUUID(),
+                    }),
+                  )
+                }
+              >
+                {a.label}
+              </button>
+            ))}
         </div>
       </div>
       {error && <p role="alert">{error}</p>}

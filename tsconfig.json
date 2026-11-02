@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["client", "bridge", "shared", "tests"]
+  "include": ["client", "bridge", "mcp", "shared", "tests", "scripts/*.ts"]
 }
