@@ -1,3 +1,4 @@
+import { entranceRoom } from "./entrance-fixture.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { connect, until, host, database } from "./connect.ts";
@@ -93,11 +94,58 @@ try {
     outsider.reducers.enterCommunity({ communityId: guild, name: "Intruder" }),
     /membership/,
   );
-  await Promise.all(
-    [alice, bob].map((c, i) =>
-      c.reducers.claimHome({ commonRoomId: welcome, name: `Home ${i}` }),
+  await assert.rejects(
+    alice.reducers.claimHome({
+      commonRoomId: welcome,
+      name: "No spot",
+      spotId: "door-0",
+    }),
+    /authored/,
+  );
+  const authored = entranceRoom();
+  await assert.rejects(
+    alice.reducers.publishCommunityRoom({
+      roomId: welcome,
+      source: JSON.stringify(authored),
+      baseRevision: 0,
+    }),
+    /cannot edit/,
+  );
+  await admin.reducers.publishCommunityRoom({
+    roomId: welcome,
+    source: JSON.stringify(authored),
+    baseRevision: 0,
+  });
+  const race = await Promise.allSettled(
+    [alice, bob].map((c) =>
+      c.reducers.claimHome({
+        commonRoomId: welcome,
+        name: "Race home",
+        spotId: "door-0",
+      }),
     ),
   );
+  assert.equal(race.filter((r) => r.status === "fulfilled").length, 1);
+  const loser = race[0].status === "rejected" ? alice : bob;
+  await loser.reducers.claimHome({
+    commonRoomId: welcome,
+    name: "Other home",
+    spotId: "door-1",
+  });
+  await assert.rejects(
+    admin.reducers.publishCommunityRoom({
+      roomId: welcome,
+      source: JSON.stringify(emptyRoom()),
+      baseRevision: 1,
+    }),
+    /Occupied entrance/,
+  );
+  authored.objects[0].position[0] = -3;
+  await admin.reducers.publishCommunityRoom({
+    roomId: welcome,
+    source: JSON.stringify(authored),
+    baseRevision: 1,
+  });
   await until(() => alice.db.communityProperties.count() === 3n);
   const a = [...alice.db.communityProperties.iter()].find(
     (p) => !p.common && p.owner.equals(alice.identity!),
@@ -112,7 +160,11 @@ try {
     2,
   );
   await assert.rejects(
-    alice.reducers.claimHome({ commonRoomId: welcome, name: "Second" }),
+    alice.reducers.claimHome({
+      commonRoomId: welcome,
+      name: "Second",
+      spotId: "door-0",
+    }),
     /already/,
   );
   await assert.rejects(
@@ -350,6 +402,31 @@ try {
     seat: "",
     pose: "idle",
   });
+  await assert.rejects(
+    admin.reducers.removeCommunityHome({ propertyId: b.id }),
+    /operator/,
+  );
+  await admin.reducers.setWelcomeRoom({ roomId: welcome });
+  await admin.reducers.returnToWelcome({ communityId: guild });
+  await admin.reducers.travelCommunity({ exitId: bDoor.id });
+  op("remove_community_home", Number(b.id));
+  await until(() => !admin.db.communityProperties.id.find(b.id));
+  assert.equal(admin.db.communityCharacters.key.find(bobKey)!.homeProperty, 0n);
+  assert.equal(admin.db.communityCharacters.key.find(bobKey)!.routine, "[]");
+  const fallback = admin.db.myCommunities.id.find(guild)!.welcomeRoom;
+  assert.equal(admin.db.communityCharacters.key.find(bobKey)!.roomId, fallback);
+  assert.equal(
+    [...admin.db.communityCharacters.iter()].find((c) =>
+      c.identity.equals(admin.identity!),
+    )!.roomId,
+    fallback,
+  );
+  assert(
+    ![...admin.db.communityExits.iter()].some((e) => e.homeProperty === b.id),
+  );
+  assert(
+    ![...admin.db.communityRooms.iter()].some((r) => r.propertyId === b.id),
+  );
   console.log(
     "Community integration passed: isolation, ownership, concurrent claims, named travel, welcome, restore, revocation, away routine, takeover, multiple tabs.",
   );

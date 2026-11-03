@@ -82,3 +82,9 @@ The server computes collision-aware paths at 1.8m/s and reserves seats atomicall
 `?poc` remains a local sandbox with a diagnostic companion. Its local saves do not publish to the shared world. In the shared game, all visible characters are connected players.
 
 Run `npm run test:visual` against a development database and `npm run test:visual:browser` with its matching dev server. Set `SPACETIME_HOST`, `SPACETIME_DATABASE`, and `GAME_URL` for another target. These tests create disposable test players and zones; use a staging database.
+
+## Discord community home entrances
+
+In common rooms, an admin can mark a visible door/gate/arch placement with `"homeEntrance": { "approach": [0, 0, 1] }`. Coordinates are local to the placement, transformed by its position and yaw. The approach must be on the floor and reachable from spawn. The model must contain boxes, and the placement cannot also be a seat, scripted object or cutaway wall.
+
+Its placement ID is the stable entrance spot ID. A member must claim an available spot to create a home; no spots means no new homes in that room. The game supplies the clickable home/vacancy label. Preserve every occupied spot ID when publishing or restoring room geometry. Moving an occupied door within the same room is allowed if it stays reachable. Only common-space admins can author these spots. Community MCP `world_inspect` reports `entrance_spots`, and `world_claim_home` requires `spot_id`.

@@ -140,6 +140,19 @@ function inspect(c: DbConnection, guild: string, roomId?: string) {
     properties,
     rooms: rooms.map(({ source: _source, ...r }) => r),
     room,
+    entrance_spots: room
+      ? parseDefinition(room.source, "room")
+          .objects.filter((o) => o.homeEntrance)
+          .map((o) => ({
+            spot_id: o.id,
+            name: o.name,
+            position: o.position,
+            approach: o.homeEntrance!.approach,
+            available: ![...c.db.communityExits.iter()].some(
+              (e) => e.fromRoom === room.id && e.entranceSpot === o.id,
+            ),
+          }))
+      : [],
     exits: [...c.db.communityExits.iter()].filter(
       (e) => e.communityId === guild,
     ),
@@ -313,10 +326,11 @@ server.registerTool(
   "world_claim_home",
   {
     description:
-      "Claim the paired member's first home, attaching its named entrance to a common room.",
+      "Claim an unoccupied authored homeEntrance placement by spot_id. No home can be created without an available entrance in a common room.",
     inputSchema: {
       ...scope,
       common_room_id: id,
+      spot_id: z.string().min(1).max(40),
       name: z.string().min(1).max(80),
     },
   },
@@ -325,6 +339,7 @@ server.registerTool(
     checkRoom(c, a.community_id, a.common_room_id);
     await c.reducers.claimHome({
       commonRoomId: BigInt(a.common_room_id),
+      spotId: a.spot_id,
       name: a.name,
     });
     return inspect(c, a.community_id);

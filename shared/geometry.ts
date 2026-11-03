@@ -49,6 +49,7 @@ export type Placement = {
   seat?: Seat;
   wall?: boolean;
   objectId?: string;
+  homeEntrance?: { approach: Vec3 };
 };
 export type Room = {
   version: 1;
@@ -220,6 +221,7 @@ export function validate(
           "seat",
           "wall",
           "objectId",
+          "homeEntrance",
         ]);
       str(o.id, `${path}.id`, 40);
       str(o.name, `${path}.name`);
@@ -246,6 +248,17 @@ export function validate(
         issue(`${path}.objectId`, "expected an object ID");
       if (o.wall !== undefined && typeof o.wall !== "boolean")
         issue(`${path}.wall`, "expected boolean");
+      if (o.homeEntrance !== undefined) {
+        const entrance = object(o.homeEntrance, `${path}.homeEntrance`, [
+          "approach",
+        ]);
+        vector(entrance.approach, `${path}.homeEntrance.approach`, -3, 3);
+        if (o.seat || o.objectId || o.wall)
+          issue(
+            path,
+            "home entrances cannot be seats, scripted objects, or cutaway walls",
+          );
+      }
       if (o.seat !== undefined) {
         const seat = object(o.seat, `${path}.seat`, [
           "position",

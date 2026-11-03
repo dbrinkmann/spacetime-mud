@@ -98,6 +98,7 @@ export const CommunityExit = __t.object("CommunityExit", {
   label: __t.string(),
   homeProperty: __t.u64(),
   reverseId: __t.u64(),
+  entranceSpot: __t.string(),
 });
 export type CommunityExit = __Infer<typeof CommunityExit>;
 

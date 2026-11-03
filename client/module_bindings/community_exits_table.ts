@@ -18,4 +18,5 @@ export default __t.row({
   label: __t.string(),
   homeProperty: __t.u64().name("home_property"),
   reverseId: __t.u64().name("reverse_id"),
+  entranceSpot: __t.string().name("entrance_spot"),
 });

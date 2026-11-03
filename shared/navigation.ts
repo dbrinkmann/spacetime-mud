@@ -94,6 +94,15 @@ export function validateNavigation(room: Room) {
   if (room.spawn[1] !== 0 || !walkable(room, room.spawn[0], room.spawn[2]))
     errors.push("spawn: must be on the floor in walkable space.");
   for (const o of room.objects) {
+    if (o.homeEntrance) {
+      const approach = worldPoint(o, o.homeEntrance.approach);
+      if (Math.abs(approach[1]) > 0.001 || !route(room, room.spawn, approach))
+        errors.push(
+          `${o.id}.homeEntrance.approach: must be on the floor and reachable from spawn.`,
+        );
+      if (!room.models[o.model]?.boxes.length)
+        errors.push(`${o.id}.homeEntrance: requires visible geometry.`);
+    }
     if (!o.seat) continue;
     const approach = worldPoint(o, o.seat.approach),
       seat = worldPoint(o, o.seat.position);

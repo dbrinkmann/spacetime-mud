@@ -39,6 +39,7 @@ import PublishCommunityAvatarReducer from "../publish_community_avatar_reducer";
 import PublishCommunityRoomReducer from "../publish_community_room_reducer";
 import PublishVersionReducer from "../publish_version_reducer";
 import PublishVisualReducer from "../publish_visual_reducer";
+import RemoveCommunityHomeReducer from "../remove_community_home_reducer";
 import RemoveTestZoneReducer from "../remove_test_zone_reducer";
 import RequestAgentReducer from "../request_agent_reducer";
 import RestoreCommunityRoomReducer from "../restore_community_room_reducer";
@@ -92,6 +93,7 @@ export type PublishCommunityAvatarParams = __Infer<typeof PublishCommunityAvatar
 export type PublishCommunityRoomParams = __Infer<typeof PublishCommunityRoomReducer>;
 export type PublishVersionParams = __Infer<typeof PublishVersionReducer>;
 export type PublishVisualParams = __Infer<typeof PublishVisualReducer>;
+export type RemoveCommunityHomeParams = __Infer<typeof RemoveCommunityHomeReducer>;
 export type RemoveTestZoneParams = __Infer<typeof RemoveTestZoneReducer>;
 export type RequestAgentParams = __Infer<typeof RequestAgentReducer>;
 export type RestoreCommunityRoomParams = __Infer<typeof RestoreCommunityRoomReducer>;

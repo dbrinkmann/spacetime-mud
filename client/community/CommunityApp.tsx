@@ -65,6 +65,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(activity?.session.name ?? "");
   const [homeName, setHomeName] = useState("");
+  const [spotId, setSpotId] = useState("");
   const [tab, setTab] = useState("world");
   const [viewStatus, setViewStatus] = useState<ViewStatus>();
   const [connectionEpoch, setConnectionEpoch] = useState(0);
@@ -198,6 +199,12 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
       },
     }));
   const exits = data.exits.filter((e) => e.fromRoom === room?.id);
+  const spots = scene?.objects.filter((o) => o.homeEntrance) ?? [];
+  const availableSpots = spots.filter(
+    (o) => !exits.some((e) => e.entranceSpot === o.id),
+  );
+  const chosenSpot =
+    availableSpots.find((o) => o.id === spotId) ?? availableSpots[0];
   const mapRooms = data.rooms.filter((r) => r.propertyId === property?.id);
   const act = async (fn: () => Promise<void>) => {
     if (busy) return;
@@ -341,6 +348,40 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                 <section className="community-scene">
                   <Viewport
                     room={scene}
+                    entrances={Object.fromEntries(
+                      spots.map((o) => {
+                        const exit = exits.find((e) => e.entranceSpot === o.id);
+                        return [
+                          o.id,
+                          {
+                            label: exit
+                              ? `Enter ${exit.label}`
+                              : `${o.name} · Available`,
+                            onClick: () => {
+                              if (exit)
+                                void act(() =>
+                                  conn!.reducers.travelCommunity({
+                                    exitId: exit.id,
+                                  }),
+                                );
+                              else if (!me.homeProperty) {
+                                setSpotId(o.id);
+                                document
+                                  .getElementById("home-claim")
+                                  ?.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                document.getElementById("home-name")?.focus();
+                              } else
+                                setError(
+                                  "You already have a home. Expand it from inside your property.",
+                                );
+                            },
+                          },
+                        ];
+                      }),
+                    )}
                     character={ownCharacter}
                     guest={silhouette}
                     command={command}
@@ -428,33 +469,63 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                       <p>No doorways yet.</p>
                     )}
                   </section>
-                  {!!property?.common && !me.homeProperty && (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void act(() =>
-                          conn!.reducers.claimHome({
-                            commonRoomId: room.id,
-                            name: homeName,
-                          }),
-                        );
-                      }}
-                    >
-                      <h3>Make your home here</h3>
-                      <p>Add a named entrance from {room.name}.</p>
-                      <label>
-                        Home name
-                        <input
-                          required
-                          maxLength={80}
-                          value={homeName}
-                          onChange={(e) => setHomeName(e.target.value)}
-                          placeholder="The Cloudglass Study"
-                        />
-                      </label>
-                      <button disabled={busy}>Create home</button>
-                    </form>
-                  )}
+                  {!!property?.common &&
+                    !me.homeProperty &&
+                    !availableSpots.length && (
+                      <section>
+                        <h3>No available home entrances</h3>
+                        <p>
+                          Look in another common room, or ask a server admin to
+                          add an entrance here.
+                        </p>
+                      </section>
+                    )}
+                  {!!property?.common &&
+                    !me.homeProperty &&
+                    !!availableSpots.length && (
+                      <form
+                        id="home-claim"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void act(() =>
+                            conn!.reducers.claimHome({
+                              commonRoomId: room.id,
+                              spotId: chosenSpot!.id,
+                              name: homeName,
+                            }),
+                          );
+                        }}
+                      >
+                        <h3>Make your home here</h3>
+                        <p>Choose an available entrance in {room.name}.</p>
+                        <label>
+                          Entrance
+                          <select
+                            aria-label="Home entrance"
+                            value={chosenSpot?.id ?? ""}
+                            onChange={(e) => setSpotId(e.target.value)}
+                          >
+                            {availableSpots.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Home name
+                          <input
+                            required
+                            maxLength={80}
+                            value={homeName}
+                            onChange={(e) => setHomeName(e.target.value)}
+                            id="home-name"
+                            placeholder="The Cloudglass Study"
+                          />
+                        </label>
+                        <button disabled={busy}>Create home</button>
+                      </form>
+                    )}
                 </aside>
               </div>
             </>

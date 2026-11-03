@@ -13,4 +13,5 @@ import {
 export default {
   commonRoomId: __t.u64(),
   name: __t.string(),
+  spotId: __t.string(),
 };

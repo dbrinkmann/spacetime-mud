@@ -47,6 +47,7 @@ export type LiveTraveler = {
 };
 type Props = {
   showGuest?: boolean;
+  entrances?: Record<string, { label: string; onClick: () => void }>;
   live?: {
     identity: string;
     travelers: LiveTraveler[];
@@ -292,6 +293,15 @@ export function Viewport(props: Props) {
       elapsed = 0,
       previous = 0,
       lastMessage = "Click the floor to walk. Drag to orbit. Scroll to zoom.";
+    const entranceLabels = room.objects
+      .filter((o) => o.homeEntrance && props.entrances?.[o.id])
+      .map((o) => {
+        const element = document.createElement("button");
+        element.className = "poc-nameplate community-entrance";
+        element.onclick = () => callbacks.current.entrances?.[o.id]?.onClick();
+        container.appendChild(element);
+        return { element, id: o.id, root: objects.get(o.id)! };
+      });
     const label = document.createElement("div");
     label.className = "poc-nameplate";
     label.textContent = `${character.name} · you`;
@@ -353,6 +363,11 @@ export function Viewport(props: Props) {
       emit(seat ? `Walking to ${seat.name}…` : "Walking.");
     };
     const choose = (o: Placement) => {
+      const entrance = callbacks.current.entrances?.[o.id];
+      if (entrance) {
+        entrance.onClick();
+        return;
+      }
       selected = o;
       selection.box.setFromObject(objects.get(o.id)!);
       selection.visible = true;
@@ -662,7 +677,11 @@ export function Viewport(props: Props) {
           }
         });
       }
+      for (const entry of entranceLabels)
+        entry.element.textContent =
+          callbacks.current.entrances?.[entry.id]?.label ?? "Entrance";
       for (const [element, root] of [
+        ...entranceLabels.map((e) => [e.element, e.root] as const),
         [label, player.root],
         [guestLabel, companion.root],
         ...[...visitors.values()].map((v) => [v.label, v.rig.root] as const),
@@ -701,6 +720,7 @@ export function Viewport(props: Props) {
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();
+      entranceLabels.forEach((e) => e.element.remove());
       label.remove();
       guestLabel.remove();
       visitors.forEach((v) => v.label.remove());

@@ -1,4 +1,5 @@
-﻿import { test } from "node:test";
+import { entranceRoom } from "./entrance-fixture.ts";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseDefinition, worldPoint } from "../client/poc/contract.ts";
@@ -61,4 +62,17 @@ test("walk alternates rigid limbs; seating and wave animate only standardized pa
   assert.equal(poseFor("sit", 1).rotation.leftLeg[0], -Math.PI / 2);
   assert(poseFor("wave", 1).rotation.leftArm[2] > 2);
   assert.equal(poseFor("idle", 1).rotation.leftArm[2], 0);
+});
+
+test("home entrances require visible, reachable ground-floor geometry", () => {
+  const room = entranceRoom();
+  validateNavigation(parseDefinition(JSON.stringify(room), "room"));
+  room.objects[0].homeEntrance!.approach[1] = 1;
+  assert.throws(() => validateNavigation(room), /homeEntrance.approach/);
+  room.objects[0].homeEntrance!.approach[1] = 0;
+  room.objects[0].position[0] = 20;
+  assert.throws(() => validateNavigation(room), /homeEntrance.approach/);
+  room.objects[0].position[0] = -2;
+  room.models.door.boxes = [];
+  assert.throws(() => validateNavigation(room), /visible geometry/);
 });

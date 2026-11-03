@@ -554,6 +554,7 @@ function connectCommunityRooms(
   label: string,
   backLabel: string,
   homeProperty = 0n,
+  entranceSpot = "",
 ) {
   const a = ctx.db.communityExit.insert({
     id: 0n,
@@ -563,6 +564,7 @@ function connectCommunityRooms(
     label: text(label, "Entrance label", 80),
     homeProperty,
     reverseId: 0n,
+    entranceSpot,
   });
   const b = ctx.db.communityExit.insert({
     id: 0n,
@@ -572,6 +574,7 @@ function connectCommunityRooms(
     label: text(backLabel, "Return label", 80),
     homeProperty,
     reverseId: a.id,
+    entranceSpot: "",
   });
   ctx.db.communityExit.id.update({ ...a, reverseId: b.id });
 }
@@ -712,11 +715,21 @@ export const enterCommunity = db.reducer(
   },
 );
 export const claimHome = db.reducer(
-  { commonRoomId: t.u64(), name: t.string() },
+  { commonRoomId: t.u64(), name: t.string(), spotId: t.string() },
   (ctx, a) => {
     const r = communityBuildRoom(ctx, a.commonRoomId);
     if (!ctx.db.property.id.find(r.propertyId)?.common)
       fail("Attach homes to common rooms.");
+    const spot = communityScene(ctx, r.id).objects.find(
+      (o) => o.id === a.spotId && o.homeEntrance,
+    );
+    if (!spot) fail("Choose an available authored home entrance.");
+    if (
+      [...ctx.db.communityExit.fromRoom.filter(r.id)].some(
+        (e) => e.entranceSpot === a.spotId,
+      )
+    )
+      fail("This entrance already belongs to a home.");
     const actor = requireCommunityBuilder(ctx, r.communityId).identity;
     const key = communityKey(r.communityId, actor);
     const character =
@@ -742,8 +755,51 @@ export const claimHome = db.reducer(
       p.name,
       `Outside: ${r.name}`,
       p.id,
+      a.spotId,
     );
     placeCommunityCharacter(ctx, { ...character, homeProperty: p.id }, home.id);
+  },
+);
+export const removeCommunityHome = db.reducer(
+  { propertyId: t.u64() },
+  (ctx, a) => {
+    if (
+      !ctx.db.communityAuthority.key
+        .find("operator")
+        ?.identity.equals(ctx.sender)
+    )
+      fail("World operator only.");
+    const p = ctx.db.property.id.find(a.propertyId) ?? fail("Home not found.");
+    if (p.common) fail("Cannot remove common property.");
+    const c = ctx.db.community.id.find(p.communityId)!;
+    const rooms = [...ctx.db.communityRoom.propertyId.filter(p.id)];
+    const ids = new Set(rooms.map((r) => r.id));
+    for (const character of ctx.db.communityCharacter.communityId.filter(
+      p.communityId,
+    )) {
+      if (character.homeProperty === p.id || ids.has(character.roomId)) {
+        const next =
+          character.homeProperty === p.id
+            ? {
+                ...character,
+                homeProperty: 0n,
+                routine: "[]",
+                away: false,
+                lifecycle: character.lifecycle + 1,
+              }
+            : character;
+        placeCommunityCharacter(ctx, next, c.welcomeRoom);
+      }
+    }
+    for (const e of ctx.db.communityExit.communityId.filter(p.communityId))
+      if (ids.has(e.fromRoom) || ids.has(e.toRoom))
+        ctx.db.communityExit.id.delete(e.id);
+    for (const r of rooms) {
+      for (const h of ctx.db.communityRevision.roomId.filter(r.id))
+        ctx.db.communityRevision.id.delete(h.id);
+      ctx.db.communityRoom.id.delete(r.id);
+    }
+    ctx.db.property.id.delete(p.id);
   },
 );
 export const addPropertyRoom = db.reducer(
@@ -914,6 +970,20 @@ function publishCommunityScene(
   // Legacy object IDs cannot cross into the community runtime.
   if (scene.objects.some((o) => o.objectId))
     fail("Community scripted objects are not connected yet.");
+  if (
+    scene.objects.some((o) => o.homeEntrance) &&
+    !ctx.db.property.id.find(r.propertyId)?.common
+  )
+    fail("Home entrance spots belong in common rooms only.");
+  for (const e of ctx.db.communityExit.fromRoom.filter(r.id)) {
+    if (
+      e.entranceSpot &&
+      !scene.objects.some((o) => o.id === e.entranceSpot && o.homeEntrance)
+    )
+      fail(
+        `Occupied entrance ${e.entranceSpot} must be preserved. Move it within the room instead.`,
+      );
+  }
   const canonical = JSON.stringify(scene);
   ctx.db.communityRevision.insert({
     id: 0n,

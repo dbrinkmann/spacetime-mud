@@ -172,3 +172,13 @@ body {
     height: 340px;
   }
 }
+
+.community-entrance {
+  pointer-events: auto;
+  cursor: pointer;
+  max-width: 220px;
+  white-space: normal;
+  border: 1px solid #ad8747;
+  color: #eed7a4;
+  background: #211b14e8;
+}

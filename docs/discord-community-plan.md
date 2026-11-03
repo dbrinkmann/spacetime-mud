@@ -17,7 +17,7 @@ The first useful experience is: join your community, claim a home, have your age
 - Each Discord server has one persistent world. Different Activity instances do not create separate copies of that world.
 - Server admins build and manage common spaces. Every member can build their own home and expand it with additional rooms and content.
 - Connections define the world. Rooms do not compete for globally occupied grid coordinates.
-- Members can attach a named home entrance to any common room. Admins do not need to predesignate residential rooms.
+- Members can claim a home only at an available, admin-authored entrance spot in a common room. Rooms without available spots cannot accept new homes.
 - Home entrances are not cardinal exits. Several named homes can attach to the same common room without consuming north/south/east/west/up/down connections.
 - A home has its own interior map. Entering its doorway changes the map view to that home's connected rooms; leaving returns to the common room where its entrance is attached.
 - These map views belong to the same shared world, not private instances. Visitors occupy the same rooms as their hosts and other visitors.
@@ -36,7 +36,7 @@ The common map displays common rooms, their connections, and named home entrance
 
 Members choose the common room to which their home attaches. Claiming a home atomically creates the property, initial room, home anchor, and entrance/return connection. Concurrent claims must not overwrite one another.
 
-Every entrance needs a visible, clickable representation in the 3D common room. Use a system-managed entrance layer separate from the admin's authored geometry. Members can identify and customize their own entrance within the allowed schema without editing the surrounding common room or other members' doors. The placement system must keep entrances reachable and handle growth without exhausting six directional slots; crowded rooms can use a grouped entrance interaction that lists named homes.
+Every home entrance is visible, clickable geometry authored by the common-space admin. A placement's stable ID and reachable approach define its entrance spot; claiming it atomically binds one home to that spot. There are no automatic overflow portals. The game adds a live vacancy/home nameplate. Occupied spot IDs must survive publication and restoration, though admins can relocate their geometry within the same room. Owner-customized thresholds remain future work and must not grant common-room editing rights.
 
 Removing or moving an entrance must update both sides of the connection. Common-room deletion must first relocate attached entrances and resolve occupants; it cannot silently orphan members' homes. A server-authoritative return-to-welcome action provides an escape from broken content and replaces Return to Nexus.
 

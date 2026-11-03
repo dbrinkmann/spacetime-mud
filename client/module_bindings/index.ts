@@ -67,6 +67,7 @@ import PublishCommunityAvatarReducer from "./publish_community_avatar_reducer";
 import PublishCommunityRoomReducer from "./publish_community_room_reducer";
 import PublishVersionReducer from "./publish_version_reducer";
 import PublishVisualReducer from "./publish_visual_reducer";
+import RemoveCommunityHomeReducer from "./remove_community_home_reducer";
 import RemoveTestZoneReducer from "./remove_test_zone_reducer";
 import RequestAgentReducer from "./request_agent_reducer";
 import RestoreCommunityRoomReducer from "./restore_community_room_reducer";
@@ -345,6 +346,7 @@ const reducersSchema = __reducers(
   __reducerSchema("publish_community_room", PublishCommunityRoomReducer),
   __reducerSchema("publish_version", PublishVersionReducer),
   __reducerSchema("publish_visual", PublishVisualReducer),
+  __reducerSchema("remove_community_home", RemoveCommunityHomeReducer),
   __reducerSchema("remove_test_zone", RemoveTestZoneReducer),
   __reducerSchema("request_agent", RequestAgentReducer),
   __reducerSchema("restore_community_room", RestoreCommunityRoomReducer),

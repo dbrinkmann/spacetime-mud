@@ -82,6 +82,7 @@ export const communityExit = table(
     // A home door is system-managed and always traversable.
     homeProperty: t.u64(),
     reverseId: t.u64(),
+    entranceSpot: t.string().default(""),
   },
 );
 export const communityCharacter = table(

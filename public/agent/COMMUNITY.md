@@ -30,7 +30,7 @@ Example MCP configuration:
 ## Tools
 
 - `world_inspect`: community, current character/home, properties and edit rights, room metadata, selected room's full source, links and revision history metadata. Specify `room_id` to inspect another room.
-- `world_claim_home`: attach the owner's first home to a common room.
+- `world_claim_home`: claim the owner's first home using `common_room_id`, `spot_id` and `name`. The spot must be an available, admin-authored `homeEntrance` placement; rooms without spots cannot accept homes.
 - `world_create_room`: add a room inside an editable property, with named forward/return connections. Admin agents can expand common space with this same tool.
 - `world_link_rooms`: connect existing rooms in the same editable property. Homes enter through their system-managed doorway; no arbitrary cross-property link permission is implied.
 - `world_publish_room`: publish cuboid room geometry and metadata live, with revision conflict checks.
@@ -42,3 +42,9 @@ Example MCP configuration:
 Room connections form a graph. There are no competing map coordinates and home doorways consume no compass direction. Rooms and avatars use the existing box geometry, shared six-part animation and navigation contracts. `world_guide` returns these in full, including JSON schemas. Room scenes currently cannot reference legacy scripted-object IDs; scripted community objects are a separate implementation step.
 
 Keep the Activity open while building. Discord membership is reverified there every minute and grants stop authorizing edits when membership expires or is revoked. Agent connections never keep the player online or control their avatar. Reconnect after a database upgrade if your MCP client reports a schema mismatch; download the current client after API changes.
+
+## Authored home entrances
+
+Admins create entrance spots by publishing visible door, gate or archway geometry in common rooms. Add `"homeEntrance": { "approach": [0, 0, 1] }` to the placement. The approach is local to the placement, rotates with its yaw, and must meet the floor and be reachable from spawn. Do not mark entrances as cutaway walls, seats or scripted objects. The referenced model must contain visible boxes.
+
+The placement `id` is the permanent spot ID. `world_inspect.entrance_spots` reports availability. Claiming a spot atomically connects a home to that door; the game supplies its clickable nameplate. An occupied spot must remain present when publishing or restoring a common room. Admins can move it within that room, retaining its ID and a reachable approach. Do not generate automatic overflow portals or create homes without spots. Home owners cannot create entrance spots in their interiors or edit the common geometry. Threshold customization is not implemented yet.

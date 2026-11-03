@@ -1,3 +1,4 @@
+import { entranceRoom } from "./entrance-fixture.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -30,7 +31,11 @@ const op = (name: string, ...args: unknown[]) =>
 const temp = mkdtempSync(join(tmpdir(), "lantern-mcp-"));
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: [resolve(process.env.COMMUNITY_AGENT_PATH ?? "public/agent/lantern-agent.mjs")],
+  args: [
+    resolve(
+      process.env.COMMUNITY_AGENT_PATH ?? "public/agent/lantern-agent.mjs",
+    ),
+  ],
   cwd: temp,
   env: {
     ...process.env,
@@ -153,9 +158,21 @@ try {
     back_label: "Back",
   });
   await denied("world_inspect", { community_id: foreignGuild });
+  await denied("world_claim_home", {
+    ...scope,
+    common_room_id: String(welcome),
+    spot_id: "door-0",
+    name: "No entrance",
+  });
+  await admin.reducers.publishCommunityRoom({
+    roomId: welcome,
+    source: JSON.stringify(entranceRoom()),
+    baseRevision: 0,
+  });
   await ok("world_claim_home", {
     ...scope,
     common_room_id: String(welcome),
+    spot_id: "door-0",
     name: "Agent cottage",
   });
   state = await ok("world_inspect", scope);
@@ -223,10 +240,7 @@ try {
     await new Promise((r) => setTimeout(r, 50));
   }
   assert.equal(state.common_space_editing, true);
-  const scene = emptyRoom(
-    "The Lantern Commons",
-    "An admin-authored gathering place.",
-  );
+  const scene = entranceRoom("The Lantern Commons");
   scene.models.lantern = {
     boxes: [{ position: [0, 0.5, 0], size: [0.5, 1, 0.5], color: "#e1b561" }],
   };
@@ -240,7 +254,7 @@ try {
   await ok("world_publish_room", {
     ...scope,
     room_id: String(welcome),
-    base_revision: 0,
+    base_revision: 1,
     source: JSON.stringify(scene),
   });
   await until(
@@ -277,12 +291,14 @@ try {
   assert(garden);
   await ok("world_set_welcome", { ...scope, room_id: garden.id });
   state = await ok("world_inspect", { ...scope, room_id: String(welcome) });
-  const history = state.history[0];
+  const history = state.history.find(
+    (h: { revision: number }) => h.revision === 1,
+  );
   assert(history);
   await ok("world_restore_room", {
     ...scope,
     revision_id: history.id,
-    base_revision: 1,
+    base_revision: 2,
   });
   op(
     "set_community_member",

@@ -1,3 +1,5 @@
+import { entranceRoom } from "./entrance-fixture.ts";
+import { until } from "./connect.ts";
 import { chromium, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { connect, host, database } from "./connect.ts";
@@ -42,6 +44,28 @@ try {
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No available home entrances" }),
+  ).toBeVisible();
+  await new Promise<void>((resolve, reject) =>
+    c
+      .subscriptionBuilder()
+      .onApplied(() => resolve())
+      .onError(reject)
+      .subscribe(["SELECT * FROM my_communities"]),
+  );
+  await until(() => c.db.myCommunities.id.find(guild));
+  const welcome = c.db.myCommunities.id.find(guild)!.welcomeRoom;
+  await c.reducers.publishCommunityRoom({
+    roomId: welcome,
+    source: JSON.stringify(entranceRoom()),
+    baseRevision: 0,
+  });
+  await page
+    .locator(".community-entrance")
+    .filter({ hasText: "Garden door 1" })
+    .click();
+  await expect(page.getByLabel("Home entrance")).toHaveValue("door-0");
   await page.getByLabel("Home name").fill("Alice's cottage");
   await page.getByRole("button", { name: "Create home", exact: true }).click();
   await expect(
@@ -74,7 +98,17 @@ try {
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Alice's cottage" }).click();
+  await expect(
+    page
+      .locator(".community-entrance")
+      .filter({ hasText: "Enter Alice's cottage" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "test-results/community-entrances.png",
+    fullPage: true,
+  });
+  const door = await page.evaluate(() => window.boxWorld!.project([-2, 1, -3]));
+  await page.mouse.click(door.x, door.y);
   await expect(
     page.getByRole("heading", { name: "Home map", exact: true }),
   ).toBeVisible();
