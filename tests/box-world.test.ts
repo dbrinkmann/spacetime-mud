@@ -76,3 +76,16 @@ test("home entrances require visible, reachable ground-floor geometry", () => {
   room.models.door.boxes = [];
   assert.throws(() => validateNavigation(room), /visible geometry/);
 });
+
+test("100 meter rooms support edge placements, spawn and navigation", () => {
+  const room = entranceRoom();
+  room.width = room.depth = 100;
+  room.spawn = [45, 0, 45];
+  room.objects[0].position = [-45, 0, -45];
+  room.lights = [{ position: [45, 4, -45], color: "#ffffff", intensity: 1 }];
+  const parsed = parseDefinition(JSON.stringify(room), "room");
+  validateNavigation(parsed);
+  assert(route(parsed, parsed.spawn, [-45, 0, 45]));
+  room.width = 101;
+  assert.throws(() => parseDefinition(JSON.stringify(room), "room"), /width/);
+});

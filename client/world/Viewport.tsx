@@ -87,10 +87,11 @@ export function Viewport(props: Props) {
     container.appendChild(renderer.domElement);
     renderer.domElement.setAttribute("aria-label", "Interactive 3D room");
     renderer.domElement.setAttribute("role", "img");
+    const roomScale = Math.max(1, props.room.width / 20, props.room.depth / 20);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#161b20");
-    scene.fog = new THREE.Fog("#161b20", 28, 55);
-    const camera = new THREE.OrthographicCamera(-10, 10, 7, -7, 0.1, 80);
+    scene.fog = new THREE.Fog("#161b20", 28 * roomScale, 55 * roomScale);
+    const camera = new THREE.OrthographicCamera(-10, 10, 7, -7, 0.1, 80 * roomScale);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.enablePan = false;
@@ -104,7 +105,7 @@ export function Viewport(props: Props) {
       RIGHT: THREE.MOUSE.ROTATE,
     };
     const reset = () => {
-      camera.position.set(11, 11, 15);
+      camera.position.set(11 * roomScale, 11 * roomScale, 15 * roomScale);
       camera.zoom = 1;
       controls.target.set(0, 0.65, 0);
       camera.updateProjectionMatrix();
@@ -113,13 +114,14 @@ export function Viewport(props: Props) {
     reset();
     scene.add(new THREE.HemisphereLight("#cfdef0", "#7d6048", 2));
     const sun = new THREE.DirectionalLight("#ffe4be", 3.2);
-    sun.position.set(2, 10, 6);
+    sun.position.set(2 * roomScale, 10 * roomScale, 6 * roomScale);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -10;
-    sun.shadow.camera.right = 10;
-    sun.shadow.camera.top = 10;
-    sun.shadow.camera.bottom = -10;
+    sun.shadow.camera.left = -10 * roomScale;
+    sun.shadow.camera.right = 10 * roomScale;
+    sun.shadow.camera.top = 10 * roomScale;
+    sun.shadow.camera.bottom = -10 * roomScale;
+    sun.shadow.camera.far = 100 * roomScale;
     sun.shadow.normalBias = 0.035;
     scene.add(sun);
     const { room, character, guest } = props;

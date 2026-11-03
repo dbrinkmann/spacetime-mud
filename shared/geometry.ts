@@ -101,7 +101,7 @@ export function validate(
     if (typeof v !== "string" || !/^#[0-9a-f]{6}$/i.test(v))
       issue(path, "expected #RRGGBB");
   };
-  const vector = (v: unknown, path: string, min = -30, max = 30, n = 3) => {
+  const vector = (v: unknown, path: string, min = -50, max = 50, n = 3) => {
     if (!Array.isArray(v) || v.length !== n) {
       issue(path, `expected ${n} coordinates`);
       return;
@@ -188,10 +188,10 @@ export function validate(
       issue("character", "maximum 400 boxes including cosmetics");
   } else {
     str(root.description, "description", 1500);
-    num(root.width, "width", 4, 20);
-    num(root.depth, "depth", 4, 20);
+    num(root.width, "width", 4, 100);
+    num(root.depth, "depth", 4, 100);
     color(root.floorColor, "floorColor");
-    vector(root.spawn, "spawn", -10, 10);
+    vector(root.spawn, "spawn", -50, 50);
     const models =
       root.models &&
       typeof root.models === "object" &&

@@ -23,12 +23,12 @@
     "width": {
       "type": "number",
       "minimum": 4,
-      "maximum": 20
+      "maximum": 100
     },
     "depth": {
       "type": "number",
       "minimum": 4,
-      "maximum": 20
+      "maximum": 100
     },
     "floorColor": {
       "type": "string",
@@ -40,8 +40,8 @@
       "maxItems": 3,
       "items": {
         "type": "number",
-        "minimum": -10,
-        "maximum": 10
+        "minimum": -50,
+        "maximum": 50
       }
     },
     "models": {
@@ -144,8 +144,8 @@
             "maxItems": 3,
             "items": {
               "type": "number",
-              "minimum": -30,
-              "maximum": 30
+              "minimum": -50,
+              "maximum": 50
             }
           },
           "yaw": {
@@ -249,8 +249,8 @@
             "maxItems": 3,
             "items": {
               "type": "number",
-              "minimum": -30,
-              "maximum": 30
+              "minimum": -50,
+              "maximum": 50
             }
           },
           "color": {

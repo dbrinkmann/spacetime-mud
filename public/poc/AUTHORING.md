@@ -49,7 +49,7 @@ Character box centers and attachment offsets: -2..2m per axis; sizes .01..2m; ro
 
 ## Rooms and props
 
-Root fields: `version`, `name`, `description`, `width`, `depth`, `floorColor`, `spawn`, `models`, `objects`, `lights`. Width/depth are 4..20m. The renderer supplies the floor; spawn is a walkable [x,0,z].
+Root fields: `version`, `name`, `description`, `width`, `depth`, `floorColor`, `spawn`, `models`, `objects`, `lights`. Width/depth are 4..100m. The renderer supplies the floor; spawn is a walkable [x,0,z].
 
 `models` maps lowercase identifiers to `{ "boxes": [...] }`. `objects` places them using `id`, `name`, `model`, `position`, and `yaw`. Optional `collision: [width,depth]` defines a full-height navigation blocker centered on the placement, rotated by its yaw. Keep geometry centered around that footprint. Decorative rugs need no collision. Optional `wall: true` makes camera-facing walls fade. Walls still need a collider if they block movement.
 
@@ -59,7 +59,7 @@ The second seat is occupied by the preview companion when available. This is a d
 
 `lights` contains `{ "position": [x,y,z], "color": "#RRGGBB", "intensity": 10 }`. Ambient and directional lighting are also supplied by the viewer.
 
-Budgets: 64 models, 120 boxes per model, 120 placements, 1200 model boxes / 2400 placed boxes, 6 lights (intensity 0..30). Room box sizes .01..30m; box/placement/light coordinates -30..30m. Spawn coordinates -10..10m and inside the floor. Names 1..80 characters, IDs 1..40, description 1..1500. Input max 500 KB. Unknown fields and unsupported versions are rejected.
+Budgets: 64 models, 120 boxes per model, 120 placements, 1200 model boxes / 2400 placed boxes, 6 lights (intensity 0..30). Room box sizes .01..30m; box-local coordinates -30..30m; placement/light coordinates -50..50m. Spawn coordinates -50..50m and inside the floor. Names 1..80 characters, IDs 1..40, description 1..1500. Input max 500 KB. Unknown fields and unsupported versions are rejected.
 
 ## Agent verification
 
