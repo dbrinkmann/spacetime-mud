@@ -12,13 +12,13 @@ assert.equal(health.status, 200);
 assert.equal((await health.json()).environment, "staging");
 const html = await fetch(base);
 assert.equal(html.status, 200);
-for (const file of readdirSync("dist/assets")) {
-  const expected = readFileSync(`dist/assets/${file}`);
+for (const file of [...readdirSync("dist/assets").map(f => `assets/${f}`), "agent/lantern-agent.mjs", "agent/COMMUNITY.md"]) {
+  const expected = readFileSync(`dist/${file}`);
   assert(
     !expected.includes(process.env.DISCORD_CLIENT_SECRET!),
     "Browser asset contains a secret",
   );
-  const result = await fetch(`${base}/assets/${file}`);
+  const result = await fetch(`${base}/${file}`);
   assert.equal(result.status, 200);
   assert.equal(
     createHash("sha256")
@@ -115,5 +115,5 @@ console.log(
   "PASS hosted assets match build; health, origin checks, unauthenticated denial, CORS, and authorized Maincloud HTTP reducers.",
 );
 console.log(
-  "Discord interactive sign-in still requires URL mappings and an in-Discord launch.",
+  "OAuth sign-in is checked separately inside Discord.",
 );

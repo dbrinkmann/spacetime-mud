@@ -1,3 +1,7 @@
+# Discord community worlds
+
+For the Discord Activity, use the [community building guide](../public/agent/COMMUNITY.md) and the downloadable `https://lantern-staging.dbrinkmann.workers.dev/agent/lantern-agent.mjs` MCP client. Pair it inside the Activity's Create tab. Server admins can grant editing of common spaces; members grant editing of their homes and characters. Publications are live and use the current room revision. The sections below describe the original, separate zone-based game client.
+
 # Agent-first creation
 
 The player-facing Create page teaches setup and pairing. Creative conversation belongs in the player's chosen agent. The game does not spawn a model or relay prompts. The old editor is a developer surface at `?workshop=1`, not a normal tab.

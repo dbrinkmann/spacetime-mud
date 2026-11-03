@@ -22,6 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm ci --prefix spacetimedb
+      - run: npm run build:agent
       - run: npm test
       - run: npm run check:server
       - name: Install pinned SpacetimeDB CLI
@@ -45,6 +46,7 @@ jobs:
           npx tsx tests/prune.ts
           npx tsx tests/nexus-portal.ts
           npm run test:community
+          npm run test:community:agent
           npx tsx tests/timers.ts
           npx vitest run
       - name: Real desktop and mobile browser verification
@@ -63,6 +65,7 @@ jobs:
           npm run test:agent
           npm run test:poc:browser
           npm run test:community:browser
+          npm run test:community:agent:browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:

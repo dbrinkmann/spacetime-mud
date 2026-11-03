@@ -6,6 +6,8 @@ import type {
   CommunityCharacter,
   CommunityExit,
   Property,
+  CommunityMember,
+  CommunityAgentGrant,
 } from "../module_bindings/types";
 import { HOST, DATABASE } from "../connection";
 import { parseDefinition } from "../../shared/geometry";
@@ -19,6 +21,7 @@ import { syncClock } from "../world/clock";
 import "../world/world.css";
 import "./community.css";
 import type { ActivityAccess } from "./discord";
+import { CommunityCreate } from "./CommunityCreate";
 
 const queries = [
   "my_communities",
@@ -28,6 +31,7 @@ const queries = [
   "community_exits",
   "community_characters",
   "community_history",
+  "my_community_agents",
 ].map((t) => `SELECT * FROM ${t}`);
 type Snapshot = {
   communities: Community[];
@@ -35,6 +39,8 @@ type Snapshot = {
   characters: CommunityCharacter[];
   exits: CommunityExit[];
   properties: Property[];
+  roles: CommunityMember[];
+  agents: CommunityAgentGrant[];
 };
 const empty: Snapshot = {
   communities: [],
@@ -42,6 +48,8 @@ const empty: Snapshot = {
   characters: [],
   exits: [],
   properties: [],
+  roles: [],
+  agents: [],
 };
 const silhouette = neutralCharacter("Traveler");
 const command = { id: 0, action: "idle" as const };
@@ -76,6 +84,8 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
           characters: [...c.db.communityCharacters.iter()],
           exits: [...c.db.communityExits.iter()],
           properties: [...c.db.communityProperties.iter()],
+          roles: [...c.db.myCommunityRoles.iter()],
+          agents: [...c.db.myCommunityAgents.iter()],
         });
     };
     const c = DbConnection.builder()
@@ -120,6 +130,8 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
       c.db.communityCharacters,
       c.db.communityExits,
       c.db.communityProperties,
+      c.db.myCommunityRoles,
+      c.db.myCommunityAgents,
     ]) {
       t.onInsert(refresh);
       t.onUpdate(refresh);
@@ -292,24 +304,26 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
             )}
           </nav>
           {tab === "create" ? (
-            <section>
-              <h2>Build with your coding agent</h2>
-              <p>
-                Describe the rooms, characters and interactive objects you want
-                in your own agent's conversation. Your home is yours to expand;
-                common spaces belong to the community's administrators.
-              </p>
-              <p>
-                The community MCP adapter is still being connected on this
-                branch. The existing game MCP tools edit the legacy world, not
-                these rooms.
-              </p>
-              <p>
-                {me.homeProperty
-                  ? "Your home is ready for authoring."
-                  : "First choose a common room and create your home's entrance there."}
-              </p>
-            </section>
+            <CommunityCreate
+              key={community.id}
+              conn={conn!}
+              communityId={community.id}
+              roomId={room.id}
+              isAdmin={
+                !!data.roles.find(
+                  (m) =>
+                    m.communityId === community.id &&
+                    m.identity.toHexString() === identity,
+                )?.admin
+              }
+              grants={data.agents.filter(
+                (g) =>
+                  g.communityId === community.id &&
+                  g.owner.toHexString() === identity,
+              )}
+              busy={busy}
+              action={act}
+            />
           ) : (
             <>
               <div className="community-heading">

@@ -138,6 +138,29 @@ body {
   display: block;
   overflow-wrap: anywhere;
 }
+.community-create textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  background: #111619;
+  color: #e7ddc9;
+  border: 1px solid #5c513c;
+  padding: 14px;
+  line-height: 1.5;
+  border-radius: 5px;
+}
+.community-create .agent-scope {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.connected-agent {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
 @media (max-width: 800px) {
   .community-app {
     padding: 16px;

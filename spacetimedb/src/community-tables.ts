@@ -37,6 +37,17 @@ export const communityLease = table(
     verifiedAt: t.timestamp(),
   },
 );
+export const communityAgentGrant = table(
+  {},
+  {
+    key: t.string().primaryKey(),
+    communityId: t.string().index("btree"),
+    agent: t.identity(),
+    owner: t.identity(),
+    commonSpace: t.bool(),
+    createdAt: t.timestamp(),
+  },
+);
 export const property = table(
   {},
   {

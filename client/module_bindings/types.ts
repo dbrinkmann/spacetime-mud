@@ -43,6 +43,16 @@ export const Community = __t.object("Community", {
 });
 export type Community = __Infer<typeof Community>;
 
+export const CommunityAgentGrant = __t.object("CommunityAgentGrant", {
+  key: __t.string(),
+  communityId: __t.string(),
+  agent: __t.identity(),
+  owner: __t.identity(),
+  commonSpace: __t.bool(),
+  createdAt: __t.timestamp(),
+});
+export type CommunityAgentGrant = __Infer<typeof CommunityAgentGrant>;
+
 export const CommunityAuthority = __t.object("CommunityAuthority", {
   key: __t.string(),
   identity: __t.identity(),
@@ -224,6 +234,9 @@ export type Member = __Infer<typeof Member>;
 
 export const MyCommunities = __t.object("MyCommunities", {});
 export type MyCommunities = __Infer<typeof MyCommunities>;
+
+export const MyCommunityAgents = __t.object("MyCommunityAgents", {});
+export type MyCommunityAgents = __Infer<typeof MyCommunityAgents>;
 
 export const MyCommunityRoles = __t.object("MyCommunityRoles", {});
 export type MyCommunityRoles = __Infer<typeof MyCommunityRoles>;

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { execFileSync } from "node:child_process";
+import "./build-community-agent.ts";
 if (existsSync(".env.local")) loadEnvFile(".env.local");
 const clientId =
   process.env.DISCORD_CLIENT_ID ?? process.env.VITE_DISCORD_CLIENT_ID;

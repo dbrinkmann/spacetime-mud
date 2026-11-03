@@ -24,6 +24,7 @@ import {
   communitySession,
   communityAway,
   communityLease,
+  communityAgentGrant,
 } from "./community-tables";
 import {
   parseDefinition,
@@ -232,6 +233,7 @@ const db = schema({
   communitySession,
   communityAway,
   communityLease,
+  communityAgentGrant,
   roomScene,
   avatar,
   visualDraft,
@@ -440,6 +442,77 @@ function communityAccess(ctx: ReadCtx, id: string, actor: Identity) {
   const m = ctx.db.communityMember.key.find(communityKey(id, actor));
   return m?.active ? m : undefined;
 }
+function communityBuildAccess(ctx: ReadCtx, id: string, actor: Identity) {
+  const own = communityAccess(ctx, id, actor);
+  if (own) return own;
+  const grant = ctx.db.communityAgentGrant.key.find(communityKey(id, actor));
+  if (!grant) return undefined;
+  const owner = communityAccess(ctx, id, grant.owner);
+  return owner
+    ? { ...owner, admin: owner.admin && grant.commonSpace }
+    : undefined;
+}
+function requireCommunityBuilder(ctx: Ctx, id: string) {
+  return (
+    communityBuildAccess(ctx, id, ctx.sender) ??
+    fail(
+      "Active membership and an approved community agent grant are required.",
+    )
+  );
+}
+function communityBuildRoom(ctx: Ctx, id: bigint) {
+  const r = ctx.db.communityRoom.id.find(id) ?? fail("Room not found.");
+  requireCommunityBuilder(ctx, r.communityId);
+  return r;
+}
+export const authorizeCommunityAgent = db.reducer(
+  { communityId: t.string(), agent: t.identity(), commonSpace: t.bool() },
+  (ctx, a) => {
+    const member = requireCommunity(ctx, a.communityId);
+    if (a.agent.equals(ctx.sender))
+      fail("Use your agent's pairing ID, not your player identity.");
+    if (!ctx.db.communityCharacter.key.find(member.key))
+      fail("Enter the community first.");
+    if (a.commonSpace && !member.admin)
+      fail("Only server admins can delegate common-space editing.");
+    const key = communityKey(a.communityId, a.agent);
+    const existing = ctx.db.communityAgentGrant.key.find(key);
+    if (existing && !existing.owner.equals(ctx.sender))
+      fail("This agent is already paired to another member in this community.");
+    const row = {
+      key,
+      communityId: a.communityId,
+      agent: a.agent,
+      owner: ctx.sender,
+      commonSpace: a.commonSpace,
+      createdAt: ctx.timestamp,
+    };
+    if (existing) ctx.db.communityAgentGrant.key.update(row);
+    else ctx.db.communityAgentGrant.insert(row);
+  },
+);
+export const revokeCommunityAgent = db.reducer(
+  { communityId: t.string(), agent: t.identity() },
+  (ctx, a) => {
+    const m = requireCommunity(ctx, a.communityId);
+    const key = communityKey(a.communityId, a.agent);
+    const grant = ctx.db.communityAgentGrant.key.find(key);
+    if (!grant) return;
+    if (!grant.owner.equals(ctx.sender) && !m.admin)
+      fail("Only the owner or a server admin can revoke this grant.");
+    ctx.db.communityAgentGrant.key.delete(key);
+  },
+);
+export const myCommunityAgents = db.view(
+  { name: "my_community_agents", public: true },
+  t.array(communityAgentGrant.rowType),
+  (ctx) =>
+    [...ctx.db.communityAgentGrant.iter()].filter(
+      (g) =>
+        !!communityAccess(ctx, g.communityId, g.owner) &&
+        (g.agent.equals(ctx.sender) || g.owner.equals(ctx.sender)),
+    ),
+);
 function requireCommunity(ctx: Ctx, id: string) {
   return (
     communityAccess(ctx, id, ctx.sender) ??
@@ -453,8 +526,8 @@ function communityRoomFor(ctx: Ctx, id: bigint) {
 }
 function requirePropertyEdit(ctx: Ctx, id: bigint) {
   const p = ctx.db.property.id.find(id) ?? fail("Property not found.");
-  const m = requireCommunity(ctx, p.communityId);
-  if (!(p.common ? m.admin : p.owner.equals(ctx.sender)))
+  const m = requireCommunityBuilder(ctx, p.communityId);
+  if (!(p.common ? m.admin : p.owner.equals(m.identity)))
     fail("You cannot edit this property.");
   return p;
 }
@@ -469,7 +542,7 @@ function addCommunityRoom(
     communityId: p.communityId,
     name: text(name, "Room name", 80),
     description: "",
-    source: JSON.stringify(emptyRoom()),
+    source: JSON.stringify(emptyRoom(name)),
     revision: 0,
   });
 }
@@ -641,10 +714,11 @@ export const enterCommunity = db.reducer(
 export const claimHome = db.reducer(
   { commonRoomId: t.u64(), name: t.string() },
   (ctx, a) => {
-    const r = communityRoomFor(ctx, a.commonRoomId);
+    const r = communityBuildRoom(ctx, a.commonRoomId);
     if (!ctx.db.property.id.find(r.propertyId)?.common)
       fail("Attach homes to common rooms.");
-    const key = communityKey(r.communityId, ctx.sender);
+    const actor = requireCommunityBuilder(ctx, r.communityId).identity;
+    const key = communityKey(r.communityId, actor);
     const character =
       ctx.db.communityCharacter.key.find(key) ??
       fail("Enter the community first.");
@@ -653,7 +727,7 @@ export const claimHome = db.reducer(
     const p = ctx.db.property.insert({
       id: 0n,
       communityId: r.communityId,
-      owner: ctx.sender,
+      owner: actor,
       name: text(a.name, "Home name", 80),
       common: false,
       entrance: 0n,
@@ -680,7 +754,7 @@ export const addPropertyRoom = db.reducer(
     backLabel: t.string(),
   },
   (ctx, a) => {
-    const r = communityRoomFor(ctx, a.fromRoomId);
+    const r = communityBuildRoom(ctx, a.fromRoomId);
     const p = requirePropertyEdit(ctx, r.propertyId);
     if ([...ctx.db.communityRoom.propertyId.filter(p.id)].length >= 100)
       fail("Property room budget reached.");
@@ -717,8 +791,8 @@ export const returnToWelcome = db.reducer(
   },
 );
 export const setWelcomeRoom = db.reducer({ roomId: t.u64() }, (ctx, a) => {
-  const r = communityRoomFor(ctx, a.roomId);
-  if (!requireCommunity(ctx, r.communityId).admin)
+  const r = communityBuildRoom(ctx, a.roomId);
+  if (!requireCommunityBuilder(ctx, r.communityId).admin)
     fail("Community administrator required.");
   if (!ctx.db.property.id.find(r.propertyId)?.common)
     fail("Welcome room must be common space.");
@@ -779,11 +853,10 @@ export const moveCommunityCharacter = db.reducer(
 export const setHomeRoutine = db.reducer(
   { communityId: t.string(), points: t.string() },
   (ctx, a) => {
-    requireCommunity(ctx, a.communityId);
+    const actor = requireCommunityBuilder(ctx, a.communityId).identity;
     const p =
-      ctx.db.communityCharacter.key.find(
-        communityKey(a.communityId, ctx.sender),
-      ) ?? fail("Enter first.");
+      ctx.db.communityCharacter.key.find(communityKey(a.communityId, actor)) ??
+      fail("Enter first.");
     const home =
       ctx.db.property.id.find(p.homeProperty) ?? fail("Claim a home first.");
     if (a.points.length > 4000) fail("Routine too large.");
@@ -815,11 +888,10 @@ export const setHomeRoutine = db.reducer(
 export const publishCommunityAvatar = db.reducer(
   { communityId: t.string(), source: t.string() },
   (ctx, a) => {
-    requireCommunity(ctx, a.communityId);
+    const actor = requireCommunityBuilder(ctx, a.communityId).identity;
     const p =
-      ctx.db.communityCharacter.key.find(
-        communityKey(a.communityId, ctx.sender),
-      ) ?? fail("Enter first.");
+      ctx.db.communityCharacter.key.find(communityKey(a.communityId, actor)) ??
+      fail("Enter first.");
     const avatar = parseDefinition(a.source, "character");
     ctx.db.communityCharacter.key.update({
       ...p,
@@ -833,7 +905,7 @@ function publishCommunityScene(
   source: string,
   baseRevision: number,
 ) {
-  const r = communityRoomFor(ctx, roomId);
+  const r = communityBuildRoom(ctx, roomId);
   requirePropertyEdit(ctx, r.propertyId);
   if (r.revision !== baseRevision)
     fail("Room changed; inspect its latest revision before publishing.");
@@ -854,6 +926,8 @@ function publishCommunityScene(
   });
   ctx.db.communityRoom.id.update({
     ...r,
+    name: scene.name,
+    description: scene.description,
     source: canonical,
     revision: r.revision + 1,
   });
@@ -880,6 +954,38 @@ export const publishCommunityRoom = db.reducer(
   { roomId: t.u64(), source: t.string(), baseRevision: t.u32() },
   (ctx, a) => publishCommunityScene(ctx, a.roomId, a.source, a.baseRevision),
 );
+export const linkPropertyRooms = db.reducer(
+  {
+    fromRoomId: t.u64(),
+    toRoomId: t.u64(),
+    label: t.string(),
+    backLabel: t.string(),
+  },
+  (ctx, a) => {
+    const from = communityBuildRoom(ctx, a.fromRoomId),
+      to = communityBuildRoom(ctx, a.toRoomId);
+    requirePropertyEdit(ctx, from.propertyId);
+    if (from.propertyId !== to.propertyId)
+      fail(
+        "Link rooms within the same property; home entrances are managed separately.",
+      );
+    if (from.id === to.id) fail("Choose different rooms.");
+    if (
+      [...ctx.db.communityExit.fromRoom.filter(from.id)].some(
+        (e) => e.toRoom === to.id,
+      )
+    )
+      fail("These rooms are already connected.");
+    connectCommunityRooms(
+      ctx,
+      from.id,
+      to.id,
+      from.communityId,
+      a.label,
+      a.backLabel,
+    );
+  },
+);
 export const restoreCommunityRoom = db.reducer(
   { revisionId: t.u64(), baseRevision: t.u32() },
   (ctx, a) => {
@@ -894,7 +1000,7 @@ export const myCommunities = db.view(
   t.array(community.rowType),
   (ctx) =>
     [...ctx.db.community.iter()].filter((c) =>
-      communityAccess(ctx, c.id, ctx.sender),
+      communityBuildAccess(ctx, c.id, ctx.sender),
     ),
 );
 export const communityProperties = db.view(
@@ -902,7 +1008,7 @@ export const communityProperties = db.view(
   t.array(property.rowType),
   (ctx) =>
     [...ctx.db.property.iter()].filter((p) =>
-      communityAccess(ctx, p.communityId, ctx.sender),
+      communityBuildAccess(ctx, p.communityId, ctx.sender),
     ),
 );
 export const communityRooms = db.view(
@@ -910,7 +1016,7 @@ export const communityRooms = db.view(
   t.array(communityRoom.rowType),
   (ctx) =>
     [...ctx.db.communityRoom.iter()].filter((r) =>
-      communityAccess(ctx, r.communityId, ctx.sender),
+      communityBuildAccess(ctx, r.communityId, ctx.sender),
     ),
 );
 export const communityExits = db.view(
@@ -918,7 +1024,7 @@ export const communityExits = db.view(
   t.array(communityExit.rowType),
   (ctx) =>
     [...ctx.db.communityExit.iter()].filter((e) =>
-      communityAccess(ctx, e.communityId, ctx.sender),
+      communityBuildAccess(ctx, e.communityId, ctx.sender),
     ),
 );
 export const communityCharacters = db.view(
@@ -926,26 +1032,37 @@ export const communityCharacters = db.view(
   t.array(communityCharacter.rowType),
   (ctx) =>
     [...ctx.db.communityCharacter.iter()].filter((p) =>
-      communityAccess(ctx, p.communityId, ctx.sender),
+      communityBuildAccess(ctx, p.communityId, ctx.sender),
     ),
 );
 export const myCommunityRoles = db.view(
   { name: "my_community_roles", public: true },
   t.array(communityMember.rowType),
   (ctx) =>
-    [...ctx.db.communityMember.iter()].filter(
-      (m) => m.active && m.identity.equals(ctx.sender),
-    ),
+    [...ctx.db.communityMember.iter()]
+      .filter(
+        (m) =>
+          m.active &&
+          !!communityBuildAccess(
+            ctx,
+            m.communityId,
+            ctx.sender,
+          )?.identity.equals(m.identity),
+      )
+      .map((m) => ({
+        ...m,
+        admin: !!communityBuildAccess(ctx, m.communityId, ctx.sender)?.admin,
+      })),
 );
 export const communityHistory = db.view(
   { name: "community_history", public: true },
   t.array(communityRevision.rowType),
   (ctx) =>
     [...ctx.db.communityRevision.iter()].filter((r) => {
-      const m = communityAccess(ctx, r.communityId, ctx.sender);
+      const m = communityBuildAccess(ctx, r.communityId, ctx.sender);
       const room = ctx.db.communityRoom.id.find(r.roomId);
       const p = room && ctx.db.property.id.find(room.propertyId);
-      return !!m && !!p && (p.common ? m.admin : p.owner.equals(ctx.sender));
+      return !!m && !!p && (p.common ? m.admin : p.owner.equals(m.identity));
     }),
 );
 

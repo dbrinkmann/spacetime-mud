@@ -1,5 +1,6 @@
 node_modules/
 dist/
+public/agent/lantern-agent.mjs
 .local-db/
 .env
 .env.local

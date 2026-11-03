@@ -36,6 +36,7 @@ import {
 // Import all reducer arg schemas
 import AddPropertyRoomReducer from "./add_property_room_reducer";
 import AgentBuildReducer from "./agent_build_reducer";
+import AuthorizeCommunityAgentReducer from "./authorize_community_agent_reducer";
 import BuildRoomReducer from "./build_room_reducer";
 import CancelJobReducer from "./cancel_job_reducer";
 import ClaimHomeReducer from "./claim_home_reducer";
@@ -56,6 +57,7 @@ import GoReducer from "./go_reducer";
 import HomeReducer from "./home_reducer";
 import InteractReducer from "./interact_reducer";
 import LayoutRoomReducer from "./layout_room_reducer";
+import LinkPropertyRoomsReducer from "./link_property_rooms_reducer";
 import LinkRoomsReducer from "./link_rooms_reducer";
 import MoveCommunityCharacterReducer from "./move_community_character_reducer";
 import MoveWithinRoomReducer from "./move_within_room_reducer";
@@ -69,6 +71,7 @@ import RemoveTestZoneReducer from "./remove_test_zone_reducer";
 import RequestAgentReducer from "./request_agent_reducer";
 import RestoreCommunityRoomReducer from "./restore_community_room_reducer";
 import ReturnToWelcomeReducer from "./return_to_welcome_reducer";
+import RevokeCommunityAgentReducer from "./revoke_community_agent_reducer";
 import RevokeConsentReducer from "./revoke_consent_reducer";
 import SaveDraftReducer from "./save_draft_reducer";
 import SaveVisualDraftReducer from "./save_visual_draft_reducer";
@@ -95,6 +98,7 @@ import CommunityHistoryRow from "./community_history_table";
 import CommunityPropertiesRow from "./community_properties_table";
 import CommunityRoomsRow from "./community_rooms_table";
 import MyCommunitiesRow from "./my_communities_table";
+import MyCommunityAgentsRow from "./my_community_agents_table";
 import MyCommunityRolesRow from "./my_community_roles_table";
 import MyGrantRow from "./my_grant_table";
 import MyInboxRow from "./my_inbox_table";
@@ -178,6 +182,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyCommunitiesRow),
+  myCommunityAgents: __table({
+    name: 'my_community_agents',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCommunityAgentsRow),
   myCommunityRoles: __table({
     name: 'my_community_roles',
     indexes: [
@@ -303,6 +314,7 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("add_property_room", AddPropertyRoomReducer),
   __reducerSchema("agent_build", AgentBuildReducer),
+  __reducerSchema("authorize_community_agent", AuthorizeCommunityAgentReducer),
   __reducerSchema("build_room", BuildRoomReducer),
   __reducerSchema("cancel_job", CancelJobReducer),
   __reducerSchema("claim_home", ClaimHomeReducer),
@@ -323,6 +335,7 @@ const reducersSchema = __reducers(
   __reducerSchema("home", HomeReducer),
   __reducerSchema("interact", InteractReducer),
   __reducerSchema("layout_room", LayoutRoomReducer),
+  __reducerSchema("link_property_rooms", LinkPropertyRoomsReducer),
   __reducerSchema("link_rooms", LinkRoomsReducer),
   __reducerSchema("move_community_character", MoveCommunityCharacterReducer),
   __reducerSchema("move_within_room", MoveWithinRoomReducer),
@@ -336,6 +349,7 @@ const reducersSchema = __reducers(
   __reducerSchema("request_agent", RequestAgentReducer),
   __reducerSchema("restore_community_room", RestoreCommunityRoomReducer),
   __reducerSchema("return_to_welcome", ReturnToWelcomeReducer),
+  __reducerSchema("revoke_community_agent", RevokeCommunityAgentReducer),
   __reducerSchema("revoke_consent", RevokeConsentReducer),
   __reducerSchema("save_draft", SaveDraftReducer),
   __reducerSchema("save_visual_draft", SaveVisualDraftReducer),

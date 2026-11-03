@@ -19,7 +19,7 @@ Enable Activities after saving the mappings. The `/` mapping also handles the OA
 
 Deployment: `npm run build:staging`, then `wrangler deploy`. Credentials are uploaded through `wrangler secret bulk .bridge/discord-staging/secrets.json`, prepared by `npx tsx scripts/staging-secrets.ts`; that file and its authority token are Git-ignored. The preparation script requires the operator CLI via `SPACETIME_CLI` or PATH. Never upload `.env.local` or `.bridge` as assets. `DISCORD_TEST_GUILD_ID`, when configured, restricts staged sign-in to that server.
 
-Verified hosted assets against local build hashes, origin rejection, CORS, unauthenticated denial, and gateway-authorized HTTP membership updates with a real WebSocket subscription confirming the resulting identity. Run `npx tsx scripts/verify-discord-staging.ts` after deployment. Interactive OAuth and the Discord WebSocket proxy still require URL mapping configuration and an actual Discord launch.
+Verified hosted assets against local build hashes, origin rejection, CORS, unauthenticated denial, and gateway-authorized HTTP membership updates with a real WebSocket subscription confirming the resulting identity. Run `npx tsx scripts/verify-discord-staging.ts` after deployment. The project owner confirmed sign-in and navigation inside Discord after configuring the URL mappings.
 
 ## Implemented and tested locally
 
@@ -29,12 +29,18 @@ Verified hosted assets against local build hashes, origin rejection, CORS, unaut
 - Validated scene publication, revision conflicts and restore, avatar publication.
 - Authoritative movement/seats, separate player sessions, one controller, disconnect grace, automatic home return, bounded walking routines and reconnect takeover at the current position.
 - Development browser at `?community`, shared 3D character rendering, home/common map lists and doorway navigation.
-- Discord Activity bootstrap and OAuth gateway implementation, with mocked Discord verification tests. Actual Discord launch/proxy/OAuth is **not yet verified**.
+- Community MCP building with owner-granted, community-scoped agent access. Admins explicitly delegate common-space editing; current role checks, membership expiry and revocation apply to every mutation and subscription.
+- Downloadable standalone Node MCP client at `/agent/lantern-agent.mjs`, generated with `npm run build:agent` (also part of staging builds). Create provides installation/pairing instructions and grant revocation. No repository checkout or npm dependencies are required by creators beyond Node 22+.
+- Discord Activity bootstrap and OAuth gateway implementation, with mocked Discord verification tests. The project owner confirmed desktop Discord sign-in and navigation; mobile Discord remains to be checked.
+
+The project owner subsequently confirmed successful sign-in, arrival in common space, home creation and return travel inside Discord. Nameplate correction was deployed afterwards. Community agent tests additionally run the packaged client outside the repository, verify live common-space publication through the browser pairing UI, and exercise member/home boundaries, admin scope, role removal, revocation and agent-independent away presence. Run `npm run test:community:agent` and `npm run test:community:agent:browser` against a disposable database.
+
+The agent integration suite also passed against hosted Maincloud staging using the MCP file downloaded from the deployed site (`COMMUNITY_AGENT_PATH` selects that file). These fixtures use a separate, operator-provisioned test community; they do not change the real Discord server's common space or homes.
 
 ## Remaining before a pilot
 
-- Finish Discord URL mappings and test real desktop/mobile Activity launch, proxy WebSockets and OAuth against hosted staging.
-- Community-scoped MCP pairing/delegation and packaged creator distribution. Existing MCP tools still target the legacy game.
+- Complete mobile Discord verification and a multi-member community pilot against hosted staging.
+- Richer agent preview tools and authored activity behaviors. The community client provides room/avatar validation and live publishing; the separate original `mcp/index.ts` client continues targeting legacy zones.
 - Community scripted objects/timers and room chat. Community publication currently rejects legacy `objectId` references deliberately.
 - Visible 3D entrance placement, graph map visualization, cleanup/relocation operations, richer authored routines spanning home rooms, admin moderation/audit UI.
 - Restart/recovery and lease-expiry integration tests, load measurements and real community pilot. The implemented routine is a closed walk inside the home's entrance room followed by a pause; it is not the complete authored activity system.
