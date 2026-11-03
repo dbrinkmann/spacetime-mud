@@ -821,6 +821,7 @@ function run(
         !p ||
         p.roomId !== (tx.objects.get(obj.id) ?? obj).roomId ||
         (r.zoneId !== obj.zoneId &&
+          r.id !== 1n &&
           !(
             obj.roomId === 1n &&
             obj.zoneId === 1n &&
@@ -828,7 +829,7 @@ function run(
           ))
       )
         fail(
-          "Player must be here; destination must be in this zone or a zone entrance reached from the Nexus.",
+          "Player must be here; destination must be in this zone, the Nexus, or a zone entrance reached from the Nexus.",
         );
       const next = { ...p, roomId: r.id };
       tx.players.set(actor.toHexString(), next);

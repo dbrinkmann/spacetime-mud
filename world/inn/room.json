@@ -2810,6 +2810,437 @@
           "color": "#d1b36f"
         }
       ]
+    },
+    "nexus-return-portal": {
+      "boxes": [
+        {
+          "position": [
+            0,
+            1.33,
+            0
+          ],
+          "size": [
+            1.4,
+            2.4,
+            0.16
+          ],
+          "color": "#365875",
+          "emissive": true
+        },
+        {
+          "position": [
+            0,
+            0.1,
+            0.14
+          ],
+          "size": [
+            2,
+            0.2,
+            0.85
+          ],
+          "color": "#514138"
+        },
+        {
+          "position": [
+            0,
+            0.22,
+            0.2
+          ],
+          "size": [
+            1.7,
+            0.05,
+            0.65
+          ],
+          "color": "#c6a05e"
+        },
+        {
+          "position": [
+            -0.86,
+            1.4,
+            0
+          ],
+          "size": [
+            0.24,
+            2.6,
+            0.4
+          ],
+          "color": "#6f4d35"
+        },
+        {
+          "position": [
+            -0.86,
+            1.4,
+            0.23
+          ],
+          "size": [
+            0.1,
+            2.55,
+            0.06
+          ],
+          "color": "#d6b46d"
+        },
+        {
+          "position": [
+            -0.86,
+            0.36,
+            0
+          ],
+          "size": [
+            0.4,
+            0.25,
+            0.6
+          ],
+          "color": "#a6a8b1"
+        },
+        {
+          "position": [
+            -0.86,
+            0.85,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            -0.86,
+            1.25,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            -0.86,
+            1.65,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            -0.86,
+            2.0500000000000003,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            0.86,
+            1.4,
+            0
+          ],
+          "size": [
+            0.24,
+            2.6,
+            0.4
+          ],
+          "color": "#6f4d35"
+        },
+        {
+          "position": [
+            0.86,
+            1.4,
+            0.23
+          ],
+          "size": [
+            0.1,
+            2.55,
+            0.06
+          ],
+          "color": "#d6b46d"
+        },
+        {
+          "position": [
+            0.86,
+            0.36,
+            0
+          ],
+          "size": [
+            0.4,
+            0.25,
+            0.6
+          ],
+          "color": "#a6a8b1"
+        },
+        {
+          "position": [
+            0.86,
+            0.85,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            0.86,
+            1.25,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            0.86,
+            1.65,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            0.86,
+            2.0500000000000003,
+            0.27
+          ],
+          "size": [
+            0.09,
+            0.09,
+            0.035
+          ],
+          "color": "#b8eeee",
+          "emissive": true
+        },
+        {
+          "position": [
+            0,
+            2.75,
+            0
+          ],
+          "size": [
+            2,
+            0.3,
+            0.55
+          ],
+          "color": "#79563c"
+        },
+        {
+          "position": [
+            0,
+            2.94,
+            0
+          ],
+          "size": [
+            1.7,
+            0.09,
+            0.6
+          ],
+          "color": "#d6b46d"
+        },
+        {
+          "position": [
+            0,
+            2.75,
+            0.3
+          ],
+          "size": [
+            0.25,
+            0.25,
+            0.06
+          ],
+          "color": "#d9f8f1",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            -0.44,
+            0.6,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#d9eff7",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            0.22,
+            0.98,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#9fdfeb",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            -0.22,
+            1.3599999999999999,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#d9eff7",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            0.44,
+            1.7400000000000002,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#9fdfeb",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            0,
+            2.12,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#d9eff7",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            -0.44,
+            0.6,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#9fdfeb",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            0.22,
+            0.98,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#d9eff7",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        },
+        {
+          "position": [
+            -0.22,
+            1.3599999999999999,
+            0.12
+          ],
+          "size": [
+            0.1,
+            0.1,
+            0.04
+          ],
+          "color": "#9fdfeb",
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "emissive": true
+        }
+      ]
     }
   },
   "objects": [
@@ -3095,6 +3526,22 @@
         0.9
       ],
       "objectId": "20"
+    },
+    {
+      "id": "nexus-return-portal",
+      "name": "Portal to the Nexus",
+      "model": "nexus-return-portal",
+      "position": [
+        4.85,
+        0,
+        -2.85
+      ],
+      "yaw": 0,
+      "collision": [
+        2,
+        0.85
+      ],
+      "objectId": "22"
     }
   ],
   "lights": [
@@ -3124,6 +3571,15 @@
       ],
       "color": "#ffcf87",
       "intensity": 7
+    },
+    {
+      "position": [
+        4.85,
+        1.9,
+        -2.3
+      ],
+      "color": "#88cde8",
+      "intensity": 5
     }
   ]
 }
