@@ -4,6 +4,8 @@
   "compatibility_date": "2026-11-03",
   "account_id": "33d1b59774fcefc842cf3d6fbf79b792",
   "workers_dev": true,
+  "compatibility_flags": ["nodejs_compat"],
+  "browser": { "binding": "BROWSER" },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

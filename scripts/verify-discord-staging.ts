@@ -12,7 +12,13 @@ assert.equal(health.status, 200);
 assert.equal((await health.json()).environment, "staging");
 const html = await fetch(base);
 assert.equal(html.status, 200);
-for (const file of [...readdirSync("dist/assets").map(f => `assets/${f}`), "agent/lantern-agent.mjs", "agent/COMMUNITY.md"]) {
+for (const file of [
+  ...readdirSync("dist/assets").map((f) => `assets/${f}`),
+  "agent/lantern-agent.mjs",
+  "agent/COMMUNITY.md",
+  "agent/AUTHORING.md",
+  "fonts/NotoSansJP.ttf",
+]) {
   const expected = readFileSync(`dist/${file}`);
   assert(
     !expected.includes(process.env.DISCORD_CLIENT_SECRET!),
@@ -114,6 +120,4 @@ await callReducer(env, "set_community_member", [
 console.log(
   "PASS hosted assets match build; health, origin checks, unauthenticated denial, CORS, and authorized Maincloud HTTP reducers.",
 );
-console.log(
-  "OAuth sign-in is checked separately inside Discord.",
-);
+console.log("OAuth sign-in is checked separately inside Discord.");

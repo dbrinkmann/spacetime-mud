@@ -257,6 +257,19 @@ const db = schema({
   request,
 });
 export default db;
+export const previewPrincipal = db.procedure(
+  { communityId: t.string() },
+  t.string(),
+  (ctx, { communityId }) =>
+    ctx.withTx(
+      (tx) =>
+        communityBuildAccess(
+          tx,
+          communityId,
+          ctx.sender,
+        )?.identity.toHexString() ?? "",
+    ),
+);
 export const serverTime = db.procedure(
   {},
   t.u64(),
@@ -983,6 +996,18 @@ function publishCommunityScene(
       fail(
         `Occupied entrance ${e.entranceSpot} must be preserved. Move it within the room instead.`,
       );
+  }
+  const boundExits = new Set<string>();
+  for (const o of scene.objects) {
+    if (!o.exit) continue;
+    const exit = ctx.db.communityExit.id.find(BigInt(o.exit.id));
+    if (!exit || exit.fromRoom !== r.id || exit.communityId !== r.communityId)
+      fail(`Placement ${o.id}: exit must originate in this room.`);
+    if (exit.entranceSpot)
+      fail("Claimed home doors are already bound by their entrance spot.");
+    if (boundExits.has(o.exit.id))
+      fail("Each exit can be bound to only one placement.");
+    boundExits.add(o.exit.id);
   }
   const canonical = JSON.stringify(scene);
   ctx.db.communityRevision.insert({

@@ -1,3 +1,4 @@
+import { builderRoom } from "./builder-fixture.ts";
 import { entranceRoom } from "./entrance-fixture.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -88,4 +89,36 @@ test("100 meter rooms support edge placements, spawn and navigation", () => {
   assert(route(parsed, parsed.spawn, [-45, 0, 45]));
   room.width = 101;
   assert.throws(() => parseDefinition(JSON.stringify(room), "room"), /width/);
+});
+
+test("signs and decorative NPCs enforce bounded data-only definitions", () => {
+  const room = builderRoom();
+  validateNavigation(parseDefinition(JSON.stringify(room), "room"));
+  room.signs![0].text = "x".repeat(121);
+  assert.throws(() => parseDefinition(JSON.stringify(room), "room"), /signs/);
+  room.signs![0].text = "Welcome";
+  (room.npcs![0] as unknown as { animation: string }).animation = "execute";
+  assert.throws(
+    () => parseDefinition(JSON.stringify(room), "room"),
+    /animation/,
+  );
+  room.npcs![0].animation = "idle";
+  (room.npcs![0].character as unknown as { script: string }).script =
+    "alert(1)";
+  assert.throws(
+    () => parseDefinition(JSON.stringify(room), "room"),
+    /unknown field/,
+  );
+});
+test("exit bindings cannot overlap home spots and must be navigable", () => {
+  const room = entranceRoom();
+  room.objects[0].exit = { id: "123", approach: [0, 0, 1] };
+  assert.throws(
+    () => parseDefinition(JSON.stringify(room), "room"),
+    /cannot also/,
+  );
+  delete room.objects[0].homeEntrance;
+  validateNavigation(parseDefinition(JSON.stringify(room), "room"));
+  room.objects[0].exit.approach[1] = 2;
+  assert.throws(() => validateNavigation(room), /floor/);
 });

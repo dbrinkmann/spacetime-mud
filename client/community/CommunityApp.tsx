@@ -200,6 +200,8 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
     }));
   const exits = data.exits.filter((e) => e.fromRoom === room?.id);
   const spots = scene?.objects.filter((o) => o.homeEntrance) ?? [];
+  const interactive =
+    scene?.objects.filter((o) => o.homeEntrance || o.exit) ?? [];
   const availableSpots = spots.filter(
     (o) => !exits.some((e) => e.entranceSpot === o.id),
   );
@@ -349,14 +351,20 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                   <Viewport
                     room={scene}
                     entrances={Object.fromEntries(
-                      spots.map((o) => {
-                        const exit = exits.find((e) => e.entranceSpot === o.id);
+                      interactive.map((o) => {
+                        const exit = exits.find((e) =>
+                          o.exit
+                            ? String(e.id) === o.exit.id
+                            : e.entranceSpot === o.id,
+                        );
                         return [
                           o.id,
                           {
                             label: exit
                               ? `Enter ${exit.label}`
-                              : `${o.name} · Available`,
+                              : o.exit
+                                ? `${o.name} · Unavailable`
+                                : `${o.name} · Available`,
                             onClick: () => {
                               if (exit)
                                 void act(() =>
@@ -364,6 +372,8 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                                     exitId: exit.id,
                                   }),
                                 );
+                              else if (o.exit)
+                                setError("This exit is no longer available.");
                               else if (!me.homeProperty) {
                                 setSpotId(o.id);
                                 document

@@ -1,6 +1,10 @@
 import { createRoot } from "react-dom/client";
 const root = createRoot(document.getElementById("root")!);
-if (
+if (new URLSearchParams(location.search).has("preview")) {
+  import("./world/HostedPreview").then(({ mountPreview }) =>
+    mountPreview(root),
+  );
+} else if (
   new URLSearchParams(location.search).has("frame_id") ||
   new URLSearchParams(location.search).has("activity")
 ) {

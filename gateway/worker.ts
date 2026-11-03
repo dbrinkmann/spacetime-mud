@@ -1,7 +1,10 @@
+import { preview } from "./preview";
+import type { BrowserWorker } from "@cloudflare/puppeteer";
 import { exchangeDiscordCode, verifyDiscordMember } from "./discord";
 import type { D1Database } from "@cloudflare/workers-types";
 
 type Env = {
+  BROWSER: BrowserWorker;
   ASSETS: { fetch(request: Request): Promise<Response> };
   SESSIONS: D1Database;
   DISCORD_CLIENT_ID: string;
@@ -132,6 +135,7 @@ async function readBody(req: Request): Promise<Record<string, unknown>> {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname === "/api/preview") return preview(req, env);
     if (url.pathname === "/health")
       return reply({ ok: true, environment: "staging" });
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);

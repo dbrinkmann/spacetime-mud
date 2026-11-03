@@ -6,8 +6,11 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all procedure arg schemas
+import * as PreviewPrincipalProcedure from "../preview_principal_procedure";
 import * as ServerTimeProcedure from "../server_time_procedure";
 
+export type PreviewPrincipalArgs = __Infer<typeof PreviewPrincipalProcedure.params>;
+export type PreviewPrincipalResult = __Infer<typeof PreviewPrincipalProcedure.returnType>;
 export type ServerTimeArgs = __Infer<typeof ServerTimeProcedure.params>;
 export type ServerTimeResult = __Infer<typeof ServerTimeProcedure.returnType>;
 

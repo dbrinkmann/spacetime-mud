@@ -14,7 +14,7 @@ await build({
   },
   define: {
     COMMUNITY_AUTHORING: JSON.stringify(
-      readFileSync("public/poc/AUTHORING.md", "utf8"),
+      readFileSync("public/agent/AUTHORING.md", "utf8"),
     ),
     COMMUNITY_ROOM_SCHEMA: JSON.stringify(
       readFileSync("public/poc/room.schema.json", "utf8"),

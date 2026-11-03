@@ -50,6 +50,25 @@ export type Placement = {
   wall?: boolean;
   objectId?: string;
   homeEntrance?: { approach: Vec3 };
+  exit?: { id: string; approach: Vec3 };
+};
+export type Sign = {
+  id: string;
+  text: string;
+  position: Vec3;
+  yaw: number;
+  width: number;
+  height: number;
+  color: string;
+  background?: string;
+  emissive?: boolean;
+};
+export type Npc = {
+  id: string;
+  character: Character;
+  position: Vec3;
+  yaw: number;
+  animation: "idle" | "talk" | "wave";
 };
 export type Room = {
   version: 1;
@@ -61,6 +80,8 @@ export type Room = {
   spawn: Vec3;
   models: Record<string, Model>;
   objects: Placement[];
+  signs?: Sign[];
+  npcs?: Npc[];
   lights: { position: Vec3; color: string; intensity: number }[];
 };
 export class ContractError extends Error {
@@ -153,6 +174,8 @@ export function validate(
           "models",
           "objects",
           "lights",
+          "signs",
+          "npcs",
         ]
       : ["version", "name", "parts", "cosmetics"],
   );
@@ -222,6 +245,7 @@ export function validate(
           "wall",
           "objectId",
           "homeEntrance",
+          "exit",
         ]);
       str(o.id, `${path}.id`, 40);
       str(o.name, `${path}.name`);
@@ -248,6 +272,17 @@ export function validate(
         issue(`${path}.objectId`, "expected an object ID");
       if (o.wall !== undefined && typeof o.wall !== "boolean")
         issue(`${path}.wall`, "expected boolean");
+      if (o.exit !== undefined) {
+        const exit = object(o.exit, `${path}.exit`, ["id", "approach"]);
+        if (typeof exit.id !== "string" || !/^[1-9][0-9]{0,19}$/.test(exit.id))
+          issue(`${path}.exit.id`, "expected exit ID");
+        vector(exit.approach, `${path}.exit.approach`, -3, 3);
+        if (o.homeEntrance || o.seat || o.objectId || o.wall)
+          issue(
+            path,
+            "exit placements cannot also be home entrances, seats, scripted objects or cutaway walls",
+          );
+      }
       if (o.homeEntrance !== undefined) {
         const entrance = object(o.homeEntrance, `${path}.homeEntrance`, [
           "approach",
@@ -277,6 +312,64 @@ export function validate(
       color(l.color, `${p}.color`);
       num(l.intensity, `${p}.intensity`, 0, 30);
     });
+    const extraIds = new Set<string>();
+    for (const [i, value] of list(root.signs ?? [], "signs", 32).entries()) {
+      const p = `signs[${i}]`,
+        sign = object(value, p, [
+          "id",
+          "text",
+          "position",
+          "yaw",
+          "width",
+          "height",
+          "color",
+          "background",
+          "emissive",
+        ]);
+      str(sign.id, `${p}.id`, 40);
+      str(sign.text, `${p}.text`, 120);
+      if (typeof sign.text === "string" && sign.text.split("\n").length > 4)
+        issue(`${p}.text`, "maximum four lines");
+      if (extraIds.has(String(sign.id))) issue(`${p}.id`, "duplicate ID");
+      extraIds.add(String(sign.id));
+      vector(sign.position, `${p}.position`);
+      num(sign.yaw, `${p}.yaw`, -360, 360);
+      num(sign.width, `${p}.width`, 0.1, 20);
+      num(sign.height, `${p}.height`, 0.1, 10);
+      color(sign.color, `${p}.color`);
+      if (sign.background !== undefined)
+        color(sign.background, `${p}.background`);
+      if (sign.emissive !== undefined && typeof sign.emissive !== "boolean")
+        issue(`${p}.emissive`, "expected boolean");
+    }
+    for (const [i, value] of list(root.npcs ?? [], "npcs", 12).entries()) {
+      const p = `npcs[${i}]`,
+        npc = object(value, p, [
+          "id",
+          "character",
+          "position",
+          "yaw",
+          "animation",
+        ]);
+      str(npc.id, `${p}.id`, 40);
+      if (extraIds.has(String(npc.id))) issue(`${p}.id`, "duplicate ID");
+      extraIds.add(String(npc.id));
+      vector(npc.position, `${p}.position`);
+      num(npc.yaw, `${p}.yaw`, -360, 360);
+      if (!["idle", "talk", "wave"].includes(String(npc.animation)))
+        issue(`${p}.animation`, "choose idle, talk or wave");
+      try {
+        const c = validate(npc.character, "character") as Character;
+        rendered +=
+          parts.reduce((n, part) => n + c.parts[part].length, 0) +
+          c.cosmetics.reduce((n, a) => n + a.boxes.length, 0);
+      } catch (e) {
+        issue(
+          `${p}.character`,
+          e instanceof Error ? e.message : "invalid character",
+        );
+      }
+    }
     if (boxes > 1200 || rendered > 2400)
       issue("room", "maximum 1200 model boxes / 2400 placed boxes");
   }

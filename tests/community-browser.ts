@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { builderRoom } from "./builder-fixture.ts";
 import { entranceRoom } from "./entrance-fixture.ts";
 import { until } from "./connect.ts";
 import { chromium, expect } from "@playwright/test";
@@ -52,7 +54,11 @@ try {
       .subscriptionBuilder()
       .onApplied(() => resolve())
       .onError(reject)
-      .subscribe(["SELECT * FROM my_communities"]),
+      .subscribe([
+        "SELECT * FROM my_communities",
+        "SELECT * FROM community_rooms",
+        "SELECT * FROM community_exits",
+      ]),
   );
   await until(() => c.db.myCommunities.id.find(guild));
   const welcome = c.db.myCommunities.id.find(guild)!.welcomeRoom;
@@ -80,6 +86,39 @@ try {
   await expect(
     page.locator(".poc-nameplate").filter({ hasText: "Alice · you" }),
   ).toBeVisible();
+  await until(() =>
+    [...c.db.communityRooms.iter()].some((r) => r.name === "Alice's cottage"),
+  );
+  const home = [...c.db.communityRooms.iter()].find(
+    (r) => r.name === "Alice's cottage",
+  )!;
+  const outside = [...c.db.communityExits.iter()].find(
+    (e) => e.fromRoom === home.id,
+  )!;
+  const interior = builderRoom();
+  interior.name = home.name;
+  interior.objects.forEach((o) => delete o.homeEntrance);
+  interior.objects[0].exit = {
+    id: String(outside.reverseId),
+    approach: [0, 0, 1],
+  };
+  await assert.rejects(
+    c.reducers.publishCommunityRoom({
+      roomId: home.id,
+      source: JSON.stringify(interior),
+      baseRevision: 0,
+    }),
+    /originate/,
+  );
+  interior.objects[0].exit.id = String(outside.id);
+  await c.reducers.publishCommunityRoom({
+    roomId: home.id,
+    source: JSON.stringify(interior),
+    baseRevision: 0,
+  });
+  await expect(
+    page.locator(".community-entrance").filter({ hasText: "Outside: Welcome" }),
+  ).toBeVisible();
   const target = await page.evaluate(() => window.boxWorld!.project([2, 0, 2]));
   await page.mouse.click(target.x, target.y);
   await expect
@@ -94,7 +133,10 @@ try {
       }),
     )
     .toBeGreaterThan(1.5);
-  await page.getByRole("button", { name: "Outside: Welcome" }).click();
+  const outsideDoor = await page.evaluate(() =>
+    window.boxWorld!.project([-2, 1, -3]),
+  );
+  await page.mouse.click(outsideDoor.x, outsideDoor.y);
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();

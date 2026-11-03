@@ -1,3 +1,4 @@
+import { loadSignFont, signMesh } from "./signs";
 import { serverNow } from "./clock";
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
@@ -47,6 +48,7 @@ export type LiveTraveler = {
 };
 type Props = {
   showGuest?: boolean;
+  preview?: { yaw: number; time: number };
   entrances?: Record<string, { label: string; onClick: () => void }>;
   live?: {
     identity: string;
@@ -91,7 +93,14 @@ export function Viewport(props: Props) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#161b20");
     scene.fog = new THREE.Fog("#161b20", 28 * roomScale, 55 * roomScale);
-    const camera = new THREE.OrthographicCamera(-10, 10, 7, -7, 0.1, 80 * roomScale);
+    const camera = new THREE.OrthographicCamera(
+      -10,
+      10,
+      7,
+      -7,
+      0.1,
+      80 * roomScale,
+    );
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.enablePan = false;
@@ -106,6 +115,11 @@ export function Viewport(props: Props) {
     };
     const reset = () => {
       camera.position.set(11 * roomScale, 11 * roomScale, 15 * roomScale);
+      if (props.preview)
+        camera.position.applyAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          THREE.MathUtils.degToRad(props.preview.yaw),
+        );
       camera.zoom = 1;
       controls.target.set(0, 0.65, 0);
       camera.updateProjectionMatrix();
@@ -230,6 +244,25 @@ export function Viewport(props: Props) {
       scene.add(root);
       return { root, body, joints, cosmetics };
     }
+    const signs = (room.signs ?? []).map(signMesh);
+    signs.forEach((s) => scene.add(s.mesh));
+    let disposed = false;
+    if (signs.length)
+      void loadSignFont()
+        .then(() => {
+          if (!disposed) signs.forEach((s) => s.redraw());
+        })
+        .catch(() =>
+          callbacks.current.onError(
+            "Sign font failed to load. Reopen the room to retry.",
+          ),
+        );
+    const npcs = (room.npcs ?? []).map((n) => {
+      const actor = rig(n.character);
+      actor.root.position.fromArray(n.position);
+      actor.root.rotation.y = THREE.MathUtils.degToRad(n.yaw);
+      return { actor, definition: n };
+    });
     const player = rig(character),
       companion = rig(guest);
     player.root.position.fromArray(room.spawn);
@@ -296,7 +329,7 @@ export function Viewport(props: Props) {
       previous = 0,
       lastMessage = "Click the floor to walk. Drag to orbit. Scroll to zoom.";
     const entranceLabels = room.objects
-      .filter((o) => o.homeEntrance && props.entrances?.[o.id])
+      .filter((o) => (o.homeEntrance || o.exit) && props.entrances?.[o.id])
       .map((o) => {
         const element = document.createElement("button");
         element.className = "poc-nameplate community-entrance";
@@ -496,6 +529,20 @@ export function Viewport(props: Props) {
             serverNow(),
           ),
         })),
+        npcs: npcs.map((n) => ({
+          id: n.definition.id,
+          animation: n.definition.animation,
+          position: n.actor.root.position.toArray(),
+          head: n.actor.joints.head.rotation.toArray(),
+        })),
+        signs: (room.signs ?? []).map((s) => s.text),
+        walls: walls.map((g) => ({
+          position: g.position.toArray(),
+          opacity: (
+            (g.children[0] as THREE.Mesh)
+              ?.material as THREE.MeshStandardMaterial
+          )?.opacity,
+        })),
         position: player.root.position.toArray(),
         animation: mode,
         seat: seated?.id ?? null,
@@ -557,7 +604,7 @@ export function Viewport(props: Props) {
     renderer.setAnimationLoop((now) => {
       const dt = Math.min((now - previous) / 1000 || 0.016, 0.05);
       previous = now;
-      elapsed += dt;
+      elapsed = props.preview ? props.preview.time : elapsed + dt;
       if (!callbacks.current.live && path.length) {
         const goal = new THREE.Vector3(...path[0]),
           delta = goal.clone().sub(player.root.position);
@@ -658,6 +705,13 @@ export function Viewport(props: Props) {
           }
         }
       } else animateRig(player, mode, elapsed, dt);
+      for (const n of npcs)
+        animateRig(
+          n.actor,
+          n.definition.animation,
+          elapsed,
+          props.preview ? 1 : dt,
+        );
       animateRig(companion, guestSeat ? "sit" : "idle", elapsed + 0.5, dt);
       controls.update();
       // Only walls between the camera and the room center fade.
@@ -701,6 +755,8 @@ export function Viewport(props: Props) {
     });
     emit();
     return () => {
+      disposed = true;
+      signs.forEach((s) => s.dispose());
       controller.current = null;
       delete window.boxWorld;
       renderer.setAnimationLoop(null);
@@ -728,7 +784,14 @@ export function Viewport(props: Props) {
       visitors.forEach((v) => v.label.remove());
       materials.forEach((m) => m.dispose());
     };
-  }, [props.room, props.character, props.guest, !!props.live, props.showGuest]);
+  }, [
+    props.room,
+    props.character,
+    props.guest,
+    !!props.live,
+    props.showGuest,
+    props.preview,
+  ]);
   useEffect(() => {
     if (!props.live || props.command.id > 0)
       controller.current?.(props.command);

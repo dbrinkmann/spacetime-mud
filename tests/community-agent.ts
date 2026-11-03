@@ -1,7 +1,8 @@
+import { builderRoom } from "./builder-fixture.ts";
 import { entranceRoom } from "./entrance-fixture.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -123,6 +124,9 @@ try {
   const pairing = await ok("world_connect", scope);
   const agentId = Identity.fromString(pairing.agent_id);
   const guide = await ok("world_guide");
+  assert(!guide.contract.includes("world_publish_visual"));
+  assert(!guide.contract.includes("npm run dev"));
+  assert(guide.contract.includes("world_preview"));
   assert(
     guide.room_schema && guide.character_schema && guide.contract.length > 100,
   );
@@ -134,6 +138,28 @@ try {
   });
   for (let i = 0; i < 30 && (await call("world_inspect", scope)).failed; i++)
     await new Promise((r) => setTimeout(r, 50));
+  if (process.env.TEST_PREVIEW === "true") {
+    const preview = await agent.callTool(
+      {
+        name: "world_preview",
+        arguments: {
+          ...scope,
+          source: JSON.stringify(builderRoom()),
+          time: 1.5,
+        },
+      },
+      undefined,
+      { timeout: 90000 },
+    );
+    assert.equal(preview.isError, undefined, JSON.stringify(preview.content));
+    const picture = (
+      preview.content as Array<{ type: string; data?: string }>
+    ).find((c) => c.type === "image");
+    assert(picture?.data);
+    const png = Buffer.from(picture.data, "base64");
+    assert.equal(png.subarray(1, 4).toString(), "PNG");
+    writeFileSync("test-results/mcp-builder-preview.png", png);
+  }
   let state = await ok("world_inspect", scope);
   assert.equal(state.common_space_editing, false);
   await assert.rejects(

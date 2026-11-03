@@ -25,9 +25,11 @@ Example MCP configuration:
 2. The user opens Create inside the Discord Activity, pastes that ID and clicks Connect agent. Server admins can explicitly enable common-space editing. Do not ask the user for their game token or Discord credentials.
 3. Call `world_guide` for the bundled geometry contract, complete JSON schemas and examples. Call `world_inspect` with the `community_id` from the user's setup prompt. If the grant has not arrived yet, ask the user to complete the connection and inspect again.
 4. Inspect `properties[].editable`. Common properties are editable only with a common-space grant from a current admin. The owner's home is separately editable. Inspect the target room's current source and revision before making changes.
-5. Use `world_validate`, then `world_publish_room` with `base_revision`. Updates are live immediately; there is no mandatory review queue. The scene's name and description update the room's name and description. Preserve existing authored content unless the user asks for replacement.
+5. Use `world_validate`, inspect a `world_preview` PNG, then `world_publish_room` with `base_revision`. Updates are live immediately; there is no mandatory review queue. The scene's name and description update the room's name and description. Preserve existing authored content unless the user asks for replacement.
 
 ## Tools
+
+- `world_preview`: hosted PNG from unpublished `source` or a live `room_id`, optional camera `yaw` and animation `time`. Uses the game renderer; no local browser installation.
 
 - `world_inspect`: community, current character/home, properties and edit rights, room metadata, selected room's full source, links and revision history metadata. Specify `room_id` to inspect another room.
 - `world_claim_home`: claim the owner's first home using `common_room_id`, `spot_id` and `name`. The spot must be an available, admin-authored `homeEntrance` placement; rooms without spots cannot accept homes.
@@ -48,3 +50,5 @@ Keep the Activity open while building. Discord membership is reverified there ev
 Admins create entrance spots by publishing visible door, gate or archway geometry in common rooms. Add `"homeEntrance": { "approach": [0, 0, 1] }` to the placement. The approach is local to the placement, rotates with its yaw, and must meet the floor and be reachable from spawn. Do not mark entrances as cutaway walls, seats or scripted objects. The referenced model must contain visible boxes.
 
 The placement `id` is the permanent spot ID. `world_inspect.entrance_spots` reports availability. Claiming a spot atomically connects a home to that door; the game supplies its clickable nameplate. An occupied spot must remain present when publishing or restoring a common room. Admins can move it within that room, retaining its ID and a reachable approach. Do not generate automatic overflow portals or create homes without spots. Home owners cannot create entrance spots in their interiors or edit the common geometry. Threshold customization is not implemented yet.
+
+The community-specific authoring contract is [AUTHORING.md](AUTHORING.md). It documents clickable `exit` placements, bundled-font text `signs`, decorative animated `npcs`, camera and wall cutaway behavior. Download the current MCP bundle after authoring-contract updates.

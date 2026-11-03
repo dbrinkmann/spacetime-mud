@@ -30,6 +30,7 @@ const file = join(
 const token = existsSync(file)
   ? JSON.parse(readFileSync(file, "utf8")).token
   : undefined;
+let sessionToken = token;
 let connection: DbConnection | undefined;
 const connected = new Promise<DbConnection>((resolve, reject) => {
   const timeout = setTimeout(() => {
@@ -42,6 +43,7 @@ const connected = new Promise<DbConnection>((resolve, reject) => {
     .withToken(token)
     .withAutomaticReconnect()
     .onConnect((c, _id, token) => {
+      sessionToken = token;
       writeFileSync(file, JSON.stringify({ token }), { mode: 0o600 });
       c.subscriptionBuilder()
         .onApplied(() => {
@@ -165,6 +167,69 @@ function checkRoom(c: DbConnection, guild: string, roomId: string) {
   inspect(c, guild, roomId);
 }
 server.registerTool(
+  "world_preview",
+  {
+    description:
+      "Render an unpublished room source or an existing room_id using the hosted game renderer. Returns a PNG, without publishing. yaw rotates the default camera in degrees; time freezes character animation in seconds. Requires active pairing. No local browser installation.",
+    inputSchema: {
+      ...scope,
+      source: source.optional(),
+      room_id: id.optional(),
+      character: source.optional(),
+      yaw: z.number().min(-360).max(360).optional(),
+      time: z.number().min(0).max(3600).optional(),
+    },
+  },
+  async (a) => {
+    try {
+      const c = await connected;
+      const state = inspect(c, a.community_id, a.room_id);
+      const roomSource = a.source ?? state.room?.source;
+      if (!roomSource) throw Error("Provide source or an existing room_id.");
+      validateNavigation(parseDefinition(roomSource, "room"));
+      const response = await fetch(`${site}/api/preview`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          community_id: a.community_id,
+          source: roomSource,
+          character: a.character,
+          yaw: a.yaw,
+          time: a.time,
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
+      if (!response.ok) {
+        const e = (await response.json()) as { error?: string };
+        throw Error(e.error ?? `Preview failed (${response.status}).`);
+      }
+      if (!response.headers.get("Content-Type")?.startsWith("image/png"))
+        throw Error("Preview did not return a PNG.");
+      return {
+        content: [
+          {
+            type: "image" as const,
+            mimeType: "image/png",
+            data: Buffer.from(await response.arrayBuffer()).toString("base64"),
+          },
+          {
+            type: "text" as const,
+            text: "Rendered with the hosted game renderer. No changes published. Preview includes authored signs/NPCs and a scale-reference character; live players and UI labels are not included.",
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        ...json({ error: e instanceof Error ? e.message : String(e) }),
+        isError: true,
+      };
+    }
+  },
+);
+server.registerTool(
   "world_connect",
   {
     description:
@@ -198,7 +263,7 @@ server.registerTool(
     contract:
       typeof COMMUNITY_AUTHORING === "undefined"
         ? readFileSync(
-            new URL("../public/poc/AUTHORING.md", import.meta.url),
+            new URL("../public/agent/AUTHORING.md", import.meta.url),
             "utf8",
           )
         : COMMUNITY_AUTHORING,

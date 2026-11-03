@@ -89,6 +89,7 @@ import TravelCommunityReducer from "./travel_community_reducer";
 import VisitZoneReducer from "./visit_zone_reducer";
 
 // Import all procedure arg schemas
+import * as PreviewPrincipalProcedure from "./preview_principal_procedure";
 import * as ServerTimeProcedure from "./server_time_procedure";
 
 // Import all table schema definitions
@@ -370,6 +371,7 @@ const reducersSchema = __reducers(
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("preview_principal", PreviewPrincipalProcedure.params, PreviewPrincipalProcedure.returnType),
   __procedureSchema("server_time", ServerTimeProcedure.params, ServerTimeProcedure.returnType),
 );
 
