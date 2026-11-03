@@ -820,9 +820,16 @@ function run(
       if (
         !p ||
         p.roomId !== (tx.objects.get(obj.id) ?? obj).roomId ||
-        r.zoneId !== obj.zoneId
+        (r.zoneId !== obj.zoneId &&
+          !(
+            obj.roomId === 1n &&
+            obj.zoneId === 1n &&
+            ctx.db.zone.id.find(r.zoneId)?.entrance === r.id
+          ))
       )
-        fail("Player must be here; destination must be in this zone.");
+        fail(
+          "Player must be here; destination must be in this zone or a zone entrance reached from the Nexus.",
+        );
       const next = { ...p, roomId: r.id };
       tx.players.set(actor.toHexString(), next);
       tx.commands.push(() => {
