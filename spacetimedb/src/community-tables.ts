@@ -134,3 +134,58 @@ export const communityRevision = table(
     createdAt: t.timestamp(),
   },
 );
+
+export const communityObject = table(
+  {},
+  {
+    id: t.u64().primaryKey().autoInc(),
+    communityId: t.string().index("btree"),
+    roomId: t.u64().index("btree"),
+    name: t.string(),
+    source: t.string(),
+    actions: t.string(),
+    state: t.string(),
+    revision: t.u32(),
+    lastError: t.string(),
+  },
+);
+export const communityObjectRevision = table(
+  {},
+  {
+    id: t.u64().primaryKey().autoInc(),
+    objectId: t.u64().index("btree"),
+    name: t.string(),
+    source: t.string(),
+    actions: t.string(),
+    revision: t.u32(),
+  },
+);
+export const communityObjectTimer = table(
+  {},
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    scheduledAt: t.scheduleAt(),
+    objectId: t.u64().index("btree"),
+    revision: t.u32(),
+    event: t.string(),
+  },
+);
+export const communitySpeech = table(
+  {},
+  {
+    id: t.u64().primaryKey().autoInc(),
+    recipientKey: t.string().index("btree"),
+    communityId: t.string(),
+    roomId: t.u64(),
+    speakerId: t.string(),
+    speaker: t.string(),
+    scripted: t.bool(),
+    kind: t.string(),
+    message: t.string(),
+    createdAt: t.timestamp(),
+  },
+);
+export const communitySpeechRate = table(
+  {},
+  { key: t.string().primaryKey(), at: t.timestamp() },
+);

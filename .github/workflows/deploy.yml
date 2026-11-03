@@ -47,6 +47,7 @@ jobs:
           npx tsx tests/nexus-portal.ts
           npm run test:community
           npm run test:community:agent
+          npm run test:community:scripts
           npx tsx tests/timers.ts
           npx vitest run
       - name: Real desktop and mobile browser verification
@@ -67,6 +68,7 @@ jobs:
           npm run test:community:browser
           npm run test:community:agent:browser
           npm run test:builder:browser
+          npm run test:community:scripts:browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:

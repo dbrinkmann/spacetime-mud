@@ -44,8 +44,10 @@ import ClaimJobReducer from "./claim_job_reducer";
 import CompleteJobReducer from "./complete_job_reducer";
 import ConfigurePassageReducer from "./configure_passage_reducer";
 import ConsentReducer from "./consent_reducer";
+import CreateCommunityObjectReducer from "./create_community_object_reducer";
 import CreatePlayerReducer from "./create_player_reducer";
 import CreateZoneReducer from "./create_zone_reducer";
+import DeleteCommunityObjectReducer from "./delete_community_object_reducer";
 import DeleteObjectReducer from "./delete_object_reducer";
 import DeleteRoomReducer from "./delete_room_reducer";
 import DeleteZoneReducer from "./delete_zone_reducer";
@@ -56,6 +58,7 @@ import FailJobReducer from "./fail_job_reducer";
 import GoReducer from "./go_reducer";
 import HomeReducer from "./home_reducer";
 import InteractReducer from "./interact_reducer";
+import InteractCommunityObjectReducer from "./interact_community_object_reducer";
 import LayoutRoomReducer from "./layout_room_reducer";
 import LinkPropertyRoomsReducer from "./link_property_rooms_reducer";
 import LinkRoomsReducer from "./link_rooms_reducer";
@@ -64,6 +67,7 @@ import MoveWithinRoomReducer from "./move_within_room_reducer";
 import ProvisionCommunityReducer from "./provision_community_reducer";
 import PruneUnauthoredZoneReducer from "./prune_unauthored_zone_reducer";
 import PublishCommunityAvatarReducer from "./publish_community_avatar_reducer";
+import PublishCommunityObjectReducer from "./publish_community_object_reducer";
 import PublishCommunityRoomReducer from "./publish_community_room_reducer";
 import PublishVersionReducer from "./publish_version_reducer";
 import PublishVisualReducer from "./publish_visual_reducer";
@@ -82,6 +86,7 @@ import SetCommunityGatewayReducer from "./set_community_gateway_reducer";
 import SetCommunityMemberReducer from "./set_community_member_reducer";
 import SetHomeRoutineReducer from "./set_home_routine_reducer";
 import SetWelcomeRoomReducer from "./set_welcome_room_reducer";
+import SpeakCommunityReducer from "./speak_community_reducer";
 import StackZonesReducer from "./stack_zones_reducer";
 import TellReducer from "./tell_reducer";
 import TestDraftReducer from "./test_draft_reducer";
@@ -91,17 +96,22 @@ import VisitZoneReducer from "./visit_zone_reducer";
 // Import all procedure arg schemas
 import * as PreviewPrincipalProcedure from "./preview_principal_procedure";
 import * as ServerTimeProcedure from "./server_time_procedure";
+import * as TestCommunityObjectProcedure from "./test_community_object_procedure";
 
 // Import all table schema definitions
 import AgentJobsRow from "./agent_jobs_table";
 import CommunityCharactersRow from "./community_characters_table";
 import CommunityExitsRow from "./community_exits_table";
 import CommunityHistoryRow from "./community_history_table";
+import CommunityObjectHistoryRow from "./community_object_history_table";
+import CommunityObjectScriptsRow from "./community_object_scripts_table";
+import CommunityObjectsRow from "./community_objects_table";
 import CommunityPropertiesRow from "./community_properties_table";
 import CommunityRoomsRow from "./community_rooms_table";
 import MyCommunitiesRow from "./my_communities_table";
 import MyCommunityAgentsRow from "./my_community_agents_table";
 import MyCommunityRolesRow from "./my_community_roles_table";
+import MyCommunitySpeechRow from "./my_community_speech_table";
 import MyGrantRow from "./my_grant_table";
 import MyInboxRow from "./my_inbox_table";
 import MyInventoryRow from "./my_inventory_table";
@@ -163,6 +173,27 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, CommunityHistoryRow),
+  communityObjectHistory: __table({
+    name: 'community_object_history',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, CommunityObjectHistoryRow),
+  communityObjectScripts: __table({
+    name: 'community_object_scripts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, CommunityObjectScriptsRow),
+  communityObjects: __table({
+    name: 'community_objects',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, CommunityObjectsRow),
   communityProperties: __table({
     name: 'community_properties',
     indexes: [
@@ -198,6 +229,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyCommunityRolesRow),
+  myCommunitySpeech: __table({
+    name: 'my_community_speech',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCommunitySpeechRow),
   myGrant: __table({
     name: 'my_grant',
     indexes: [
@@ -324,8 +362,10 @@ const reducersSchema = __reducers(
   __reducerSchema("complete_job", CompleteJobReducer),
   __reducerSchema("configure_passage", ConfigurePassageReducer),
   __reducerSchema("consent", ConsentReducer),
+  __reducerSchema("create_community_object", CreateCommunityObjectReducer),
   __reducerSchema("create_player", CreatePlayerReducer),
   __reducerSchema("create_zone", CreateZoneReducer),
+  __reducerSchema("delete_community_object", DeleteCommunityObjectReducer),
   __reducerSchema("delete_object", DeleteObjectReducer),
   __reducerSchema("delete_room", DeleteRoomReducer),
   __reducerSchema("delete_zone", DeleteZoneReducer),
@@ -336,6 +376,7 @@ const reducersSchema = __reducers(
   __reducerSchema("go", GoReducer),
   __reducerSchema("home", HomeReducer),
   __reducerSchema("interact", InteractReducer),
+  __reducerSchema("interact_community_object", InteractCommunityObjectReducer),
   __reducerSchema("layout_room", LayoutRoomReducer),
   __reducerSchema("link_property_rooms", LinkPropertyRoomsReducer),
   __reducerSchema("link_rooms", LinkRoomsReducer),
@@ -344,6 +385,7 @@ const reducersSchema = __reducers(
   __reducerSchema("provision_community", ProvisionCommunityReducer),
   __reducerSchema("prune_unauthored_zone", PruneUnauthoredZoneReducer),
   __reducerSchema("publish_community_avatar", PublishCommunityAvatarReducer),
+  __reducerSchema("publish_community_object", PublishCommunityObjectReducer),
   __reducerSchema("publish_community_room", PublishCommunityRoomReducer),
   __reducerSchema("publish_version", PublishVersionReducer),
   __reducerSchema("publish_visual", PublishVisualReducer),
@@ -362,6 +404,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_community_member", SetCommunityMemberReducer),
   __reducerSchema("set_home_routine", SetHomeRoutineReducer),
   __reducerSchema("set_welcome_room", SetWelcomeRoomReducer),
+  __reducerSchema("speak_community", SpeakCommunityReducer),
   __reducerSchema("stack_zones", StackZonesReducer),
   __reducerSchema("tell", TellReducer),
   __reducerSchema("test_draft", TestDraftReducer),
@@ -373,6 +416,7 @@ const reducersSchema = __reducers(
 const proceduresSchema = __procedures(
   __procedureSchema("preview_principal", PreviewPrincipalProcedure.params, PreviewPrincipalProcedure.returnType),
   __procedureSchema("server_time", ServerTimeProcedure.params, ServerTimeProcedure.returnType),
+  __procedureSchema("test_community_object", TestCommunityObjectProcedure.params, TestCommunityObjectProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */

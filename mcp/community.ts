@@ -64,6 +64,9 @@ const connected = new Promise<DbConnection>((resolve, reject) => {
             "community_exits",
             "community_characters",
             "community_history",
+            "community_objects",
+            "community_object_scripts",
+            "community_object_history",
           ].map((n) => `SELECT * FROM ${n}`),
         );
     })
@@ -142,6 +145,17 @@ function inspect(c: DbConnection, guild: string, roomId?: string) {
     properties,
     rooms: rooms.map(({ source: _source, ...r }) => r),
     room,
+    objects: [...c.db.communityObjects.iter()].filter(
+      (o) => o.roomId === selected,
+    ),
+    scripts: [...c.db.communityObjectScripts.iter()].filter(
+      (o) => o.roomId === selected,
+    ),
+    object_history: [...c.db.communityObjectHistory.iter()].filter((v) =>
+      [...c.db.communityObjects.iter()].some(
+        (o) => o.id === v.objectId && o.roomId === selected,
+      ),
+    ),
     entrance_spots: room
       ? parseDefinition(room.source, "room")
           .objects.filter((o) => o.homeEntrance)
@@ -482,6 +496,114 @@ server.registerTool(
     const c = await connected;
     checkRoom(c, a.community_id, a.room_id);
     await c.reducers.setWelcomeRoom({ roomId: BigInt(a.room_id) });
+    return inspect(c, a.community_id, a.room_id);
+  }),
+);
+
+const script = z.string().max(16000);
+const actions = z.array(z.object({ id: z.string(), label: z.string() })).max(8);
+server.registerTool(
+  "world_create_object",
+  {
+    description:
+      "Create a persistent scripted object in a room. Runs on_start. Inspect afterward for its ID, then link a prop or NPC with objectId.",
+    inputSchema: {
+      ...scope,
+      room_id: id,
+      name: z.string(),
+      source: script,
+      actions,
+    },
+  },
+  guard(async (a) => {
+    const c = await connected;
+    checkRoom(c, a.community_id, a.room_id);
+    await c.reducers.createCommunityObject({
+      roomId: BigInt(a.room_id),
+      name: a.name,
+      source: a.source,
+      actions: a.actions,
+    });
+    return inspect(c, a.community_id, a.room_id);
+  }),
+);
+server.registerTool(
+  "world_publish_object",
+  {
+    description:
+      "Update a scripted object with revision protection. Preserves state, cancels old timers, runs on_start. Read world_inspect scripts and object_history first.",
+    inputSchema: {
+      ...scope,
+      room_id: id,
+      object_id: id,
+      base_revision: z.number().int().min(1),
+      name: z.string(),
+      source: script,
+      actions,
+    },
+  },
+  guard(async (a) => {
+    const c = await connected;
+    const info = inspect(c, a.community_id, a.room_id);
+    if (!info.objects.some((o) => String(o.id) === a.object_id))
+      throw Error("Object is not in this room.");
+    await c.reducers.publishCommunityObject({
+      objectId: BigInt(a.object_id),
+      baseRevision: a.base_revision,
+      name: a.name,
+      source: a.source,
+      actions: a.actions,
+    });
+    return inspect(c, a.community_id, a.room_id);
+  }),
+);
+server.registerTool(
+  "world_test_object",
+  {
+    description:
+      "Execute a script handler in the real bounded interpreter without changing the world. Returns buffered speech, timers, resulting state and execution budget. Actor is the paired owner.",
+    inputSchema: {
+      ...scope,
+      room_id: id,
+      source: script,
+      handler: z.string(),
+      state: z.string().default("{}"),
+    },
+  },
+  guard(async (a) => {
+    const c = await connected;
+    checkRoom(c, a.community_id, a.room_id);
+    return JSON.parse(
+      await c.procedures.testCommunityObject({
+        roomId: BigInt(a.room_id),
+        source: a.source,
+        handler: a.handler,
+        state: a.state,
+      }),
+    );
+  }),
+);
+server.registerTool(
+  "world_delete_object",
+  {
+    description:
+      "Delete a script and its timers/history. Remove its objectId references from room visuals first.",
+    inputSchema: {
+      ...scope,
+      room_id: id,
+      object_id: id,
+      base_revision: z.number().int().min(1),
+    },
+  },
+  guard(async (a) => {
+    const c = await connected;
+    const info = inspect(c, a.community_id, a.room_id);
+    if (!info.objects.some((o) => String(o.id) === a.object_id))
+      throw Error("Object is not in this room.");
+    await c.reducers.deleteCommunityObject({
+      objectId: BigInt(a.object_id),
+      baseRevision: a.base_revision,
+    });
     return inspect(c, a.community_id, a.room_id);
   }),
 );

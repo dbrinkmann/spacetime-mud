@@ -203,6 +203,49 @@ try {
   });
   state = await ok("world_inspect", scope);
   const home = state.room.id;
+  const behavior =
+    'function on_hello(ctx){ctx.tell("Hello " + ctx.actorName());}';
+  const trial = await ok("world_test_object", {
+    ...scope,
+    room_id: home,
+    source: behavior,
+    handler: "on_hello",
+  });
+  assert.equal(trial.messages[0].kind, "tell");
+  await ok("world_create_object", {
+    ...scope,
+    room_id: home,
+    name: "Talking lantern",
+    source: behavior,
+    actions: [{ id: "hello", label: "Say hello" }],
+  });
+  let objects = await ok("world_inspect", { ...scope, room_id: home });
+  const oid = objects.objects[0].id;
+  await ok("world_publish_object", {
+    ...scope,
+    room_id: home,
+    object_id: oid,
+    base_revision: 1,
+    name: "Talking lantern",
+    source: behavior,
+    actions: [{ id: "hello", label: "Say hello" }],
+  });
+  await denied("world_publish_object", {
+    ...scope,
+    room_id: home,
+    object_id: oid,
+    base_revision: 1,
+    name: "Stale",
+    source: behavior,
+    actions: [],
+  });
+  await ok("world_delete_object", {
+    ...scope,
+    room_id: home,
+    object_id: oid,
+    base_revision: 2,
+  });
+
   await ok("world_validate", {
     kind: "room",
     source: JSON.stringify(emptyRoom("Home workshop")),

@@ -64,6 +64,7 @@ export type Sign = {
   emissive?: boolean;
 };
 export type Npc = {
+  objectId?: string;
   id: string;
   character: Character;
   position: Vec3;
@@ -347,11 +348,18 @@ export function validate(
         npc = object(value, p, [
           "id",
           "character",
+          "objectId",
           "position",
           "yaw",
           "animation",
         ]);
       str(npc.id, `${p}.id`, 40);
+      if (
+        npc.objectId !== undefined &&
+        (typeof npc.objectId !== "string" ||
+          !/^[1-9][0-9]{0,19}$/.test(npc.objectId))
+      )
+        issue(`${p}.objectId`, "expected object ID");
       if (extraIds.has(String(npc.id))) issue(`${p}.id`, "duplicate ID");
       extraIds.add(String(npc.id));
       vector(npc.position, `${p}.position`);

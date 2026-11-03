@@ -1,5 +1,45 @@
 # Lantern community authoring contract
 
+## Scriptable objects
+
+Anything can speak: props, NPCs, or an invisible narrator. Behavior is a server-owned object separate from geometry. Use the bounded ES5 JavaScript interpreter: ordinary functions and `var`, no imports, native code, network or inference.
+
+Tools:
+- `world_test_object(community_id,room_id,source,handler,state="{}")` executes without changing the world, returning speech, state, timer requests and execution statistics.
+- `world_create_object(community_id,room_id,name,source,actions)` creates and runs on_start. Actions are `{id,label}` entries: greet invokes on_greet. Inspect afterward for the object ID.
+- Link ordinary prop placements or NPCs with `"objectId":"123"`, then publish the room. Click the geometry to select actions, or use the Interact panel. Exit/home-entrance placements cannot also be scripted props.
+- `world_publish_object` takes room_id, object_id, base_revision, name, source, actions. It preserves state, cancels old timers, and runs on_start again. Initialization should be idempotent.
+- `world_inspect` includes editable scripts, state, lastError and object_history. Restore by publishing historical source/actions/name against the current revision; state is not rolled back.
+- Remove visual references before `world_delete_object(room_id,object_id,base_revision)`.
+
+Handlers receive ctx: on_start at creation/publication; on_enter when a player travels into the room; on_ACTION for declared actions; on_EVENT for timers. Start/timers have no triggering player. No chat-listening triggers yet.
+
+API:
+- `ctx.say(text)` speaks to present players in this room.
+- `ctx.tell(text)` privately replies to the triggering player; no effect without an actor.
+- `ctx.emote(text)` narrates an action attributed to the object.
+- `ctx.actorId()` / `ctx.actorName()` return the triggering player or empty strings.
+- `ctx.get(key)` returns a persistent scalar or null; `ctx.set(key,value)` stores string, number, boolean or null.
+- `ctx.after(seconds,event)` schedules one-shot on_event, integer 5..86400 seconds. Replaces the pending timer of that name. Reschedule inside the handler to repeat.
+- `ctx.cancel(event)` cancels a named timer.
+
+Example actions: `[{"id":"greet","label":"Say hello"}]`
+```javascript
+function on_start(ctx) {
+  if (ctx.get("visits") === null) ctx.set("visits", 0);
+}
+function on_greet(ctx) {
+  ctx.set("visits", ctx.get("visits") + 1);
+  ctx.tell("Welcome, " + ctx.actorName() + "! The exit is upstairs.");
+  ctx.emote("bows politely.");
+}
+function on_enter(ctx) { ctx.tell("Welcome to the station!"); }
+```
+
+Speech is room-local: up to 50 messages delivered while present, cleared on room change or new connection. Private replies are not exposed to other players or paired agents. Players can speak and use /me in the room conversation panel. Speech never triggers more scripts. Object output is visibly attributed to an object.
+
+Limits: 16 objects/room, eight actions/object, source 16000 characters, 20000 interpreter steps and 64 API calls/event, eight speech effects of 1000 characters, 64 state keys / 8 KB, four timer effects and four pending timers/object. State, speech and timers are buffered until execution succeeds. Failed interactions roll back; arrival/timer errors appear in lastError. No cross-room writes or player control. Common-space scripts require current admin authority and common-space agent authorization; home scripts require ownership. Preview never executes scripts.
+
 Build through the community MCP. No repository clone, workshop, or local web server is needed. Call `world_inspect` for current source, edit permissions, exits and revision, then `world_validate`, `world_preview`, and `world_publish_room` with the current `base_revision`. Preview accepts unpublished `source` or an existing `room_id`; publication is immediate and records revision history. Use `world_restore_room` for an authorized restore. Preserve existing content and occupied home entrance IDs.
 
 ## Coordinates and boxes
@@ -76,10 +116,10 @@ The bundled Noto Sans JP font supplies Latin, Japanese kana and kanji. No extern
 
 ## Decorative animated characters
 
-Optional `npcs` contains up to 12 static character placements. Each has `id`, a full six-part `character` definition, `position`, `yaw`, and `animation` (`idle`, `talk`, or `wave`). Use your own authored character geometry. Their boxes count toward the room's 2400 rendered-box budget; each character still has its 400-box limit. Position is the rig's foot origin. They animate in place, with rigid cosmetics using the same player rig. They do not speak, move between rooms, claim seats, run AI, or imply a real player's presence. They have no automatic collision; model a counter or another explicit collider if needed.
+Optional `npcs` contains up to 12 static character placements. Each has `id`, a full six-part `character` definition, `position`, `yaw`, and `animation` (`idle`, `talk`, or `wave`). Use your own authored character geometry. Their boxes count toward the room's 2400 rendered-box budget; each character still has its 400-box limit. Position is the rig's foot origin. They animate in place, with rigid cosmetics using the same player rig. They can speak through objectId-linked scripts. They do not move between rooms, claim seats, run AI, or imply a real player's presence. They have no automatic collision; model a counter or another explicit collider if needed.
 
 ## Community behavior and limits
 
 Use `world_create_room` and `world_link_rooms` for property-internal links; `world_set_welcome` requires common-space admin authority. `world_publish_avatar` changes the paired owner's appearance. The character's display name comes from their community identity, not the model name. `world_set_home_routine` controls that owner's away-home walking points; decorative NPCs are independent.
 
-Common-space publication requires a current Discord admin and a common-space agent grant. Home publication requires ownership. All references and revisions are rechecked server-side. `objectId` and legacy scripted-object tools are not supported in community scenes. Publication preserves occupants' valid positions while cancelling stale paths/seats, moving invalid positions to spawn. Agent connections do not keep their owner online. There is no physics, jumping, deformable mesh, terrain heightfield or arbitrary script execution in scene data.
+Common-space publication requires a current Discord admin and a common-space agent grant. Home publication requires ownership. All references and revisions are rechecked server-side. Optional `objectId` on props or NPCs references a community scripted object in this room. Legacy zone tools do not apply. Publication preserves occupants' valid positions while cancelling stale paths/seats, moving invalid positions to spawn. Agent connections do not keep their owner online. There is no physics, jumping, deformable mesh, terrain heightfield or arbitrary script execution in scene data.

@@ -8,6 +8,8 @@ import type {
   Property,
   CommunityMember,
   CommunityAgentGrant,
+  CommunityObjectInfo,
+  CommunitySpeech,
 } from "../module_bindings/types";
 import { HOST, DATABASE } from "../connection";
 import { parseDefinition } from "../../shared/geometry";
@@ -32,6 +34,8 @@ const queries = [
   "community_characters",
   "community_history",
   "my_community_agents",
+  "community_objects",
+  "my_community_speech",
 ].map((t) => `SELECT * FROM ${t}`);
 type Snapshot = {
   communities: Community[];
@@ -41,6 +45,8 @@ type Snapshot = {
   properties: Property[];
   roles: CommunityMember[];
   agents: CommunityAgentGrant[];
+  objects: CommunityObjectInfo[];
+  speech: CommunitySpeech[];
 };
 const empty: Snapshot = {
   communities: [],
@@ -50,6 +56,8 @@ const empty: Snapshot = {
   properties: [],
   roles: [],
   agents: [],
+  objects: [],
+  speech: [],
 };
 const silhouette = neutralCharacter("Traveler");
 const command = { id: 0, action: "idle" as const };
@@ -65,6 +73,8 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(activity?.session.name ?? "");
   const [homeName, setHomeName] = useState("");
+  const [message, setMessage] = useState("");
+  const [selectedObject, setSelectedObject] = useState("");
   const [spotId, setSpotId] = useState("");
   const [tab, setTab] = useState("world");
   const [viewStatus, setViewStatus] = useState<ViewStatus>();
@@ -87,6 +97,8 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
           properties: [...c.db.communityProperties.iter()],
           roles: [...c.db.myCommunityRoles.iter()],
           agents: [...c.db.myCommunityAgents.iter()],
+          objects: [...c.db.communityObjects.iter()],
+          speech: [...c.db.myCommunitySpeech.iter()],
         });
     };
     const c = DbConnection.builder()
@@ -133,6 +145,8 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
       c.db.communityProperties,
       c.db.myCommunityRoles,
       c.db.myCommunityAgents,
+      c.db.communityObjects,
+      c.db.myCommunitySpeech,
     ]) {
       t.onInsert(refresh);
       t.onUpdate(refresh);
@@ -350,6 +364,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                 <section className="community-scene">
                   <Viewport
                     room={scene}
+                    onObject={setSelectedObject}
                     entrances={Object.fromEntries(
                       interactive.map((o) => {
                         const exit = exits.find((e) =>
@@ -415,8 +430,103 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                     onStatus={setViewStatus}
                   />
                   <p>{viewStatus?.message || "Drag to look around."}</p>
+                  <section aria-label="Room conversation">
+                    <h3>Here in {room.name}</h3>
+                    <div
+                      className="room-conversation"
+                      role="log"
+                      aria-live="polite"
+                    >
+                      {data.speech
+                        .filter((m) => m.roomId === room.id)
+                        .sort(
+                          (a, b) =>
+                            Number(
+                              a.createdAt.microsSinceUnixEpoch -
+                                b.createdAt.microsSinceUnixEpoch,
+                            ) || (a.id < b.id ? -1 : 1),
+                        )
+                        .map((m) => (
+                          <p key={String(m.id)}>
+                            <strong>{m.speaker}</strong>
+                            {m.scripted ? " (object)" : ""}
+                            {m.kind === "tell" ? " (to you)" : ""}
+                            {m.kind === "emote" ? " " : ": "}
+                            {m.message}
+                          </p>
+                        ))}
+                    </div>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const value = message.trim();
+                        if (value)
+                          void act(async () => {
+                            await conn!.reducers.speakCommunity({
+                              communityId: community.id,
+                              message: value.startsWith("/me ")
+                                ? value.slice(4)
+                                : value,
+                              emote: value.startsWith("/me "),
+                            });
+                            setMessage("");
+                          });
+                      }}
+                    >
+                      <label>
+                        Say something here
+                        <input
+                          aria-label="Room message"
+                          value={message}
+                          maxLength={1000}
+                          onChange={(e) => setMessage(e.target.value)}
+                          placeholder="Say hello, or /me waves"
+                        />
+                      </label>
+                      <button disabled={busy || !message.trim()}>Say</button>
+                    </form>
+                  </section>
                 </section>
                 <aside>
+                  {data.objects.some((o) => o.roomId === room.id) && (
+                    <section>
+                      <h3>Interact</h3>
+                      {data.objects
+                        .filter((o) => o.roomId === room.id)
+                        .map((o) => (
+                          <div key={String(o.id)}>
+                            <button
+                              aria-pressed={selectedObject === String(o.id)}
+                              onClick={() => setSelectedObject(String(o.id))}
+                            >
+                              {o.name}
+                            </button>
+                            {selectedObject === String(o.id) &&
+                              (
+                                JSON.parse(o.actions) as {
+                                  id: string;
+                                  label: string;
+                                }[]
+                              ).map((a) => (
+                                <button
+                                  key={a.id}
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void act(() =>
+                                      conn!.reducers.interactCommunityObject({
+                                        objectId: o.id,
+                                        action: a.id,
+                                      }),
+                                    )
+                                  }
+                                >
+                                  {a.label}
+                                </button>
+                              ))}
+                          </div>
+                        ))}
+                    </section>
+                  )}
                   <section>
                     <h3>{property?.common ? "Common map" : "Home map"}</h3>
                     <p className="muted">

@@ -29,7 +29,9 @@
     "agent:config": "tsx scripts/agent-config.ts",
     "test:agent": "tsx tests/agent-mcp.ts",
     "test:builder:browser": "tsx tests/builder-browser.ts",
-    "test:builder:preview": "tsx tests/builder-preview.ts"
+    "test:builder:preview": "tsx tests/builder-preview.ts",
+    "test:community:scripts": "tsx tests/community-scripts.ts",
+    "test:community:scripts:browser": "tsx tests/community-scripts-browser.ts"
   },
   "dependencies": {
     "@cloudflare/puppeteer": "1.4.0",

@@ -9,6 +9,7 @@ import {
 } from "spacetimedb/server";
 import { ScheduleAt, type Identity } from "spacetimedb";
 import { executeScript, type Scalar } from "./scripts";
+import { evaluateObject } from "./community-scripts";
 import { seedWorld } from "./showcase";
 
 import { roomScene, avatar, visualDraft, presence } from "./visual-tables";
@@ -25,6 +26,11 @@ import {
   communityAway,
   communityLease,
   communityAgentGrant,
+  communityObject,
+  communityObjectRevision,
+  communityObjectTimer,
+  communitySpeech,
+  communitySpeechRate,
 } from "./community-tables";
 import {
   parseDefinition,
@@ -234,6 +240,11 @@ const db = schema({
   communityAway,
   communityLease,
   communityAgentGrant,
+  communityObject,
+  communityObjectRevision,
+  communityObjectTimer,
+  communitySpeech,
+  communitySpeechRate,
   roomScene,
   avatar,
   visualDraft,
@@ -300,6 +311,7 @@ function placeCommunityCharacter(
   p: ReturnType<Ctx["db"]["communityCharacter"]["insert"]>,
   roomId: bigint,
 ) {
+  clearCommunitySpeech(ctx, p.key);
   ctx.db.communityCharacter.key.update({
     ...p,
     roomId,
@@ -309,6 +321,8 @@ function placeCommunityCharacter(
     seat: "",
     yaw: 0,
   });
+  if (p.roomId !== roomId && p.controller)
+    communityArrival(ctx, roomId, p.identity);
 }
 function requireCharacterControl(ctx: Ctx, id: string) {
   requireCommunity(ctx, id);
@@ -336,6 +350,7 @@ function leaveCommunitySession(ctx: Ctx) {
     return;
   }
   const lifecycle = p.lifecycle + 1;
+  clearCommunitySpeech(ctx, p.key);
   ctx.db.communityCharacter.key.update({ ...p, controller: "", lifecycle });
   ctx.db.communityAway.insert({
     scheduledId: 0n,
@@ -693,6 +708,8 @@ export const enterCommunity = db.reducer(
         characterKey: key,
       });
     const old = ctx.db.communityCharacter.key.find(key);
+    if (!old || old.controller !== ctx.connectionId.toHexString())
+      clearCommunitySpeech(ctx, key);
     if (old) {
       const now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
       const scene = communityScene(ctx, old.roomId);
@@ -808,6 +825,8 @@ export const removeCommunityHome = db.reducer(
       if (ids.has(e.fromRoom) || ids.has(e.toRoom))
         ctx.db.communityExit.id.delete(e.id);
     for (const r of rooms) {
+      for (const o of ctx.db.communityObject.roomId.filter(r.id))
+        deleteCommunityScript(ctx, o.id);
       for (const h of ctx.db.communityRevision.roomId.filter(r.id))
         ctx.db.communityRevision.id.delete(h.id);
       ctx.db.communityRoom.id.delete(r.id);
@@ -980,9 +999,12 @@ function publishCommunityScene(
     fail("Room changed; inspect its latest revision before publishing.");
   const scene = parseDefinition(source, "room");
   validateNavigation(scene);
-  // Legacy object IDs cannot cross into the community runtime.
-  if (scene.objects.some((o) => o.objectId))
-    fail("Community scripted objects are not connected yet.");
+  for (const visual of [...scene.objects, ...(scene.npcs ?? [])]) {
+    if (!visual.objectId) continue;
+    const object = ctx.db.communityObject.id.find(BigInt(visual.objectId));
+    if (!object || object.roomId !== r.id)
+      fail("Scripted object must belong to this community room.");
+  }
   if (
     scene.objects.some((o) => o.homeEntrance) &&
     !ctx.db.property.id.find(r.propertyId)?.common
@@ -1090,6 +1112,404 @@ export const restoreCommunityRoom = db.reducer(
     publishCommunityScene(ctx, old.roomId, old.source, a.baseRevision);
   },
 );
+
+function clearCommunitySpeech(ctx: Ctx, key: string) {
+  for (const row of ctx.db.communitySpeech.recipientKey.filter(key))
+    ctx.db.communitySpeech.id.delete(row.id);
+}
+function emitCommunitySpeech(
+  ctx: Ctx,
+  roomId: bigint,
+  speakerId: string,
+  speaker: string,
+  scripted: boolean,
+  kind: string,
+  message: string,
+  recipient?: Identity,
+) {
+  const r = ctx.db.communityRoom.id.find(roomId)!;
+  for (const p of ctx.db.communityCharacter.communityId.filter(r.communityId)) {
+    if (
+      p.roomId !== roomId ||
+      !p.controller ||
+      p.away ||
+      !communityAccess(ctx, r.communityId, p.identity) ||
+      (recipient && !p.identity.equals(recipient))
+    )
+      continue;
+    const rows = [...ctx.db.communitySpeech.recipientKey.filter(p.key)].sort(
+      (a, b) =>
+        Number(
+          a.createdAt.microsSinceUnixEpoch - b.createdAt.microsSinceUnixEpoch,
+        ) || (a.id < b.id ? -1 : 1),
+    );
+    for (const old of rows.slice(0, Math.max(0, rows.length - 49)))
+      ctx.db.communitySpeech.id.delete(old.id);
+    ctx.db.communitySpeech.insert({
+      id: 0n,
+      recipientKey: p.key,
+      communityId: r.communityId,
+      roomId,
+      speakerId,
+      speaker,
+      scripted,
+      kind,
+      message,
+      createdAt: ctx.timestamp,
+    });
+  }
+}
+function speechThrottle(ctx: Ctx, key: string) {
+  const old = ctx.db.communitySpeechRate.key.find(key);
+  if (
+    old &&
+    ctx.timestamp.microsSinceUnixEpoch - old.at.microsSinceUnixEpoch < 750000n
+  )
+    fail("Please wait a moment before speaking or interacting again.");
+  if (old) ctx.db.communitySpeechRate.key.update({ key, at: ctx.timestamp });
+  else ctx.db.communitySpeechRate.insert({ key, at: ctx.timestamp });
+}
+type CommunityScript = ReturnType<Ctx["db"]["communityObject"]["insert"]>;
+function applyCommunityScript(
+  ctx: Ctx,
+  o: CommunityScript,
+  handler: string,
+  actor?: Identity,
+) {
+  const player = actor
+    ? ctx.db.communityCharacter.key.find(communityKey(o.communityId, actor))
+    : undefined;
+  const result = evaluateObject(
+    o.source,
+    handler,
+    o.state,
+    actor?.toHexString() ?? "",
+    player?.name ?? "",
+  );
+  const current = [...ctx.db.communityObjectTimer.objectId.filter(o.id)];
+  const names = new Set(current.map((t) => t.event));
+  for (const [event, delay] of result.timers) {
+    names.delete(event);
+    if (delay !== null) names.add(event);
+  }
+  if (names.size > 4) fail("Maximum four pending timers per object.");
+  ctx.db.communityObject.id.update({
+    ...o,
+    state: result.state,
+    lastError: "",
+  });
+  for (const [event, delay] of result.timers) {
+    for (const timer of current)
+      if (timer.event === event)
+        ctx.db.communityObjectTimer.scheduledId.delete(timer.scheduledId);
+    if (delay !== null)
+      ctx.db.communityObjectTimer.insert({
+        scheduledId: 0n,
+        scheduledAt: ScheduleAt.time(
+          ctx.timestamp.microsSinceUnixEpoch + BigInt(delay) * 1000000n,
+        ),
+        objectId: o.id,
+        revision: o.revision,
+        event,
+      });
+  }
+  for (const m of result.messages)
+    emitCommunitySpeech(
+      ctx,
+      o.roomId,
+      String(o.id),
+      o.name,
+      true,
+      m.kind,
+      m.message,
+      m.kind === "tell" ? actor : undefined,
+    );
+  return result;
+}
+function communityArrival(ctx: Ctx, roomId: bigint, actor: Identity) {
+  for (const o of ctx.db.communityObject.roomId.filter(roomId)) {
+    try {
+      applyCommunityScript(ctx, o, "on_enter", actor);
+    } catch (e) {
+      ctx.db.communityObject.id.update({
+        ...o,
+        lastError: String(e).slice(0, 1000),
+      });
+    }
+  }
+}
+function deleteCommunityScript(ctx: Ctx, id: bigint) {
+  for (const timer of ctx.db.communityObjectTimer.objectId.filter(id))
+    ctx.db.communityObjectTimer.scheduledId.delete(timer.scheduledId);
+  for (const v of ctx.db.communityObjectRevision.objectId.filter(id))
+    ctx.db.communityObjectRevision.id.delete(v.id);
+  ctx.db.communityObject.id.delete(id);
+}
+function checkedCommunityActions(
+  source: string,
+  actions: Array<{ id: string; label: string }>,
+) {
+  if (actions.length > 8) fail("Maximum eight actions per object.");
+  const ids = new Set<string>();
+  for (const a of actions) {
+    keyName(a.id);
+    text(a.label, "Action label", 40);
+    if (["enter", "start"].includes(a.id) || ids.has(a.id))
+      fail("Duplicate or reserved action ID.");
+    ids.add(a.id);
+    if (!source.includes(`on_${a.id}`)) fail(`Missing on_${a.id} handler.`);
+  }
+  evaluateObject(source, "on_start", "{}", "", "");
+  return JSON.stringify(actions);
+}
+export const createCommunityObject = db.reducer(
+  {
+    roomId: t.u64(),
+    name: t.string(),
+    source: t.string(),
+    actions: t.array(Action),
+  },
+  (ctx, a) => {
+    const r = communityBuildRoom(ctx, a.roomId);
+    requirePropertyEdit(ctx, r.propertyId);
+    if ([...ctx.db.communityObject.roomId.filter(r.id)].length >= 16)
+      fail("Maximum sixteen scripted objects per room.");
+    const o = ctx.db.communityObject.insert({
+      id: 0n,
+      communityId: r.communityId,
+      roomId: r.id,
+      name: text(a.name, "Object name", 80),
+      source: a.source,
+      actions: checkedCommunityActions(a.source, a.actions),
+      state: "{}",
+      revision: 1,
+      lastError: "",
+    });
+    applyCommunityScript(ctx, o, "on_start");
+  },
+);
+export const publishCommunityObject = db.reducer(
+  {
+    objectId: t.u64(),
+    name: t.string(),
+    source: t.string(),
+    actions: t.array(Action),
+    baseRevision: t.u32(),
+  },
+  (ctx, a) => {
+    const o =
+      ctx.db.communityObject.id.find(a.objectId) ?? fail("Object not found.");
+    const r = communityBuildRoom(ctx, o.roomId);
+    requirePropertyEdit(ctx, r.propertyId);
+    if (o.revision !== a.baseRevision)
+      fail("Object changed; inspect its latest revision.");
+    const actions = checkedCommunityActions(a.source, a.actions);
+    ctx.db.communityObjectRevision.insert({
+      id: 0n,
+      objectId: o.id,
+      name: o.name,
+      source: o.source,
+      actions: o.actions,
+      revision: o.revision,
+    });
+    const history = [
+      ...ctx.db.communityObjectRevision.objectId.filter(o.id),
+    ].sort((a, b) => a.revision - b.revision);
+    for (const old of history.slice(0, Math.max(0, history.length - 20)))
+      ctx.db.communityObjectRevision.id.delete(old.id);
+    for (const timer of ctx.db.communityObjectTimer.objectId.filter(o.id))
+      ctx.db.communityObjectTimer.scheduledId.delete(timer.scheduledId);
+    const next = {
+      ...o,
+      name: text(a.name, "Object name", 80),
+      source: a.source,
+      actions,
+      revision: o.revision + 1,
+      lastError: "",
+    };
+    ctx.db.communityObject.id.update(next);
+    applyCommunityScript(ctx, next, "on_start");
+  },
+);
+export const deleteCommunityObject = db.reducer(
+  { objectId: t.u64(), baseRevision: t.u32() },
+  (ctx, a) => {
+    const o =
+      ctx.db.communityObject.id.find(a.objectId) ?? fail("Object not found.");
+    const r = communityBuildRoom(ctx, o.roomId);
+    requirePropertyEdit(ctx, r.propertyId);
+    if (a.baseRevision !== o.revision) fail("Object changed; inspect again.");
+    const scene = communityScene(ctx, r.id);
+    if (
+      [...scene.objects, ...(scene.npcs ?? [])].some(
+        (v) => v.objectId === String(o.id),
+      )
+    )
+      fail(
+        "Remove the scene's objectId references before deleting this object.",
+      );
+    deleteCommunityScript(ctx, o.id);
+  },
+);
+export const interactCommunityObject = db.reducer(
+  { objectId: t.u64(), action: t.string() },
+  (ctx, a) => {
+    const o =
+      ctx.db.communityObject.id.find(a.objectId) ?? fail("Object not found.");
+    requireCommunity(ctx, o.communityId);
+    const p = requireCharacterControl(ctx, o.communityId);
+    if (p.roomId !== o.roomId) fail("You must be in the object's room.");
+    const actions = JSON.parse(o.actions) as Array<{ id: string }>;
+    if (!actions.some((x) => x.id === a.action)) fail("Unknown object action.");
+    speechThrottle(ctx, p.key);
+    applyCommunityScript(ctx, o, `on_${a.action}`, ctx.sender);
+  },
+);
+export const speakCommunity = db.reducer(
+  { communityId: t.string(), message: t.string(), emote: t.bool() },
+  (ctx, a) => {
+    requireCommunity(ctx, a.communityId);
+    const p = requireCharacterControl(ctx, a.communityId);
+    speechThrottle(ctx, p.key);
+    emitCommunitySpeech(
+      ctx,
+      p.roomId,
+      p.identity.toHexString(),
+      p.name,
+      false,
+      a.emote ? "emote" : "say",
+      text(a.message, "Message", 1000),
+    );
+  },
+);
+export const fireCommunityObjectTimer = db.reducer(
+  { onSchedule: communityObjectTimer },
+  { timer: communityObjectTimer.rowType },
+  (ctx, { timer }) => {
+    if (!ctx.sender.equals(ctx.identity) || ctx.connectionId)
+      fail("Scheduler only.");
+    const o = ctx.db.communityObject.id.find(timer.objectId);
+    if (!o || o.revision !== timer.revision) return;
+    ctx.db.communityObjectTimer.scheduledId.delete(timer.scheduledId);
+    try {
+      applyCommunityScript(ctx, o, `on_${timer.event}`);
+    } catch (e) {
+      ctx.db.communityObject.id.update({
+        ...o,
+        lastError: String(e).slice(0, 1000),
+      });
+    }
+  },
+);
+export const testCommunityObject = db.procedure(
+  {
+    roomId: t.u64(),
+    source: t.string(),
+    handler: t.string(),
+    state: t.string(),
+  },
+  t.string(),
+  (ctx, a) =>
+    ctx.withTx((tx) => {
+      const r =
+        tx.db.communityRoom.id.find(a.roomId) ?? fail("Room not found.");
+      const p = tx.db.property.id.find(r.propertyId)!;
+      const m =
+        communityBuildAccess(tx, r.communityId, ctx.sender) ??
+        fail("Membership required.");
+      if (p.common ? !m.admin : !p.owner.equals(m.identity))
+        fail("You cannot edit this property.");
+      if (a.state.length > 8192) fail("State budget exceeded.");
+      const initial = JSON.parse(a.state);
+      if (
+        !initial ||
+        Array.isArray(initial) ||
+        typeof initial !== "object" ||
+        Object.keys(initial).length > 64 ||
+        Object.values(initial).some(
+          (v) =>
+            v !== null && !["string", "number", "boolean"].includes(typeof v),
+        )
+      )
+        fail("State must contain scalar values.");
+      return JSON.stringify(
+        evaluateObject(
+          a.source,
+          a.handler,
+          a.state,
+          m.identity.toHexString(),
+          tx.db.communityCharacter.key.find(
+            communityKey(r.communityId, m.identity),
+          )?.name ?? "Builder",
+        ),
+      );
+    }),
+);
+const CommunityObjectInfo = t.object("CommunityObjectInfo", {
+  id: t.u64(),
+  communityId: t.string(),
+  roomId: t.u64(),
+  name: t.string(),
+  actions: t.string(),
+  revision: t.u32(),
+});
+export const communityObjects = db.view(
+  { name: "community_objects", public: true },
+  t.array(CommunityObjectInfo),
+  (ctx) =>
+    [...ctx.db.communityObject.iter()]
+      .filter((o) => communityBuildAccess(ctx, o.communityId, ctx.sender))
+      .map(({ id, communityId, roomId, name, actions, revision }) => ({
+        id,
+        communityId,
+        roomId,
+        name,
+        actions,
+        revision,
+      })),
+);
+export const communityObjectScripts = db.view(
+  { name: "community_object_scripts", public: true },
+  t.array(communityObject.rowType),
+  (ctx) =>
+    [...ctx.db.communityObject.iter()].filter((o) => {
+      const r = ctx.db.communityRoom.id.find(o.roomId);
+      const p = r && ctx.db.property.id.find(r.propertyId);
+      const m = communityBuildAccess(ctx, o.communityId, ctx.sender);
+      return !!p && !!m && (p.common ? m.admin : p.owner.equals(m.identity));
+    }),
+);
+export const communityObjectHistory = db.view(
+  { name: "community_object_history", public: true },
+  t.array(communityObjectRevision.rowType),
+  (ctx) =>
+    [...ctx.db.communityObjectRevision.iter()].filter((v) => {
+      const o = ctx.db.communityObject.id.find(v.objectId);
+      const r = o && ctx.db.communityRoom.id.find(o.roomId);
+      const p = r && ctx.db.property.id.find(r.propertyId);
+      const m = o && communityBuildAccess(ctx, o.communityId, ctx.sender);
+      return !!p && !!m && (p.common ? m.admin : p.owner.equals(m.identity));
+    }),
+);
+export const myCommunitySpeech = db.view(
+  { name: "my_community_speech", public: true },
+  t.array(communitySpeech.rowType),
+  (ctx) =>
+    [...ctx.db.communityCharacter.iter()]
+      .filter(
+        (p) =>
+          p.identity.equals(ctx.sender) &&
+          p.controller &&
+          !p.away &&
+          communityAccess(ctx, p.communityId, ctx.sender),
+      )
+      .flatMap((p) =>
+        [...ctx.db.communitySpeech.recipientKey.filter(p.key)].filter(
+          (m) => m.roomId === p.roomId,
+        ),
+      ),
+);
+
 export const myCommunities = db.view(
   { name: "my_communities", public: true },
   t.array(community.rowType),

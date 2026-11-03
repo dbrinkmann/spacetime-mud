@@ -47,6 +47,7 @@ export type LiveTraveler = {
   away?: boolean;
 };
 type Props = {
+  onObject?: (id: string) => void;
   showGuest?: boolean;
   preview?: { yaw: number; time: number };
   entrances?: Record<string, { label: string; onClick: () => void }>;
@@ -259,6 +260,12 @@ export function Viewport(props: Props) {
         );
     const npcs = (room.npcs ?? []).map((n) => {
       const actor = rig(n.character);
+      if (n.objectId) {
+        actor.root.traverse((mesh) => {
+          mesh.userData.scriptObjectId = n.objectId;
+        });
+        pickables.push(actor.root);
+      }
       actor.root.position.fromArray(n.position);
       actor.root.rotation.y = THREE.MathUtils.degToRad(n.yaw);
       return { actor, definition: n };
@@ -403,6 +410,10 @@ export function Viewport(props: Props) {
         entrance.onClick();
         return;
       }
+      if (o.objectId && callbacks.current.onObject) {
+        callbacks.current.onObject(o.objectId);
+        return;
+      }
       selected = o;
       selection.box.setFromObject(objects.get(o.id)!);
       selection.visible = true;
@@ -432,6 +443,10 @@ export function Viewport(props: Props) {
       raycaster.setFromCamera(pointer, camera);
       const hit = raycaster.intersectObjects(pickables, true)[0];
       if (!hit) return;
+      if (hit.object.userData.scriptObjectId) {
+        callbacks.current.onObject?.(hit.object.userData.scriptObjectId);
+        return;
+      }
       const id = hit.object.userData.objectId;
       if (id) {
         choose(room.objects.find((o) => o.id === id)!);

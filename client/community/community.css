@@ -182,3 +182,12 @@ body {
   color: #eed7a4;
   background: #211b14e8;
 }
+
+.room-conversation {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.room-conversation p {
+  margin: 0.45rem 0;
+}
