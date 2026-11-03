@@ -1,0 +1,445 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { DbConnection } from "../module_bindings";
+import type {
+  Community,
+  CommunityRoom,
+  CommunityCharacter,
+  CommunityExit,
+  Property,
+} from "../module_bindings/types";
+import { HOST, DATABASE } from "../connection";
+import { parseDefinition } from "../../shared/geometry";
+import { neutralCharacter } from "../../shared/world";
+import {
+  Viewport,
+  type ViewStatus,
+  type LiveTraveler,
+} from "../world/Viewport";
+import { syncClock } from "../world/clock";
+import "../world/world.css";
+import "./community.css";
+import type { ActivityAccess } from "./discord";
+
+const queries = [
+  "my_communities",
+  "my_community_roles",
+  "community_properties",
+  "community_rooms",
+  "community_exits",
+  "community_characters",
+  "community_history",
+].map((t) => `SELECT * FROM ${t}`);
+type Snapshot = {
+  communities: Community[];
+  rooms: CommunityRoom[];
+  characters: CommunityCharacter[];
+  exits: CommunityExit[];
+  properties: Property[];
+};
+const empty: Snapshot = {
+  communities: [],
+  rooms: [],
+  characters: [],
+  exits: [],
+  properties: [],
+};
+const silhouette = neutralCharacter("Traveler");
+const command = { id: 0, action: "idle" as const };
+export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
+  const [conn, setConn] = useState<DbConnection>();
+  const [identity, setIdentity] = useState("");
+  const [data, setData] = useState(empty);
+  const [communityId, setCommunityId] = useState(
+    activity?.session.communityId ?? "",
+  );
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("Connecting");
+  const [busy, setBusy] = useState(false);
+  const [name, setName] = useState(activity?.session.name ?? "");
+  const [homeName, setHomeName] = useState("");
+  const [tab, setTab] = useState("world");
+  const [viewStatus, setViewStatus] = useState<ViewStatus>();
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
+  useEffect(() => {
+    let disposed = false;
+    const tokenKey = `community-world:${HOST}:${DATABASE}`;
+    let token: string | undefined;
+    try {
+      token = localStorage.getItem(tokenKey) ?? undefined;
+    } catch {}
+    if (activity) token = activity.session.token;
+    const refresh = () => {
+      if (!disposed)
+        setData({
+          communities: [...c.db.myCommunities.iter()],
+          rooms: [...c.db.communityRooms.iter()],
+          characters: [...c.db.communityCharacters.iter()],
+          exits: [...c.db.communityExits.iter()],
+          properties: [...c.db.communityProperties.iter()],
+        });
+    };
+    const c = DbConnection.builder()
+      .withUri(HOST)
+      .withDatabaseName(DATABASE)
+      .withToken(token)
+      .withAutomaticReconnect()
+      .onConnect((c, id, token) => {
+        if (!activity)
+          try {
+            localStorage.setItem(tokenKey, token);
+          } catch {}
+        setIdentity(id.toHexString());
+        setConnectionEpoch((n) => n + 1);
+        const sent = performance.now();
+        void c.procedures
+          .serverTime({})
+          .then((t) => syncClock(t, sent))
+          .catch(() => {});
+        c.subscriptionBuilder()
+          .onApplied(() => {
+            setStatus("Connected");
+            refresh();
+          })
+          .onError((ctx) => setError(String(ctx.event)))
+          .subscribe(queries);
+      })
+      .onConnectError((_c, e) => setError(e.message))
+      .onDisconnect(() => {
+        if (!disposed) setStatus("Reconnecting");
+      })
+      .onAutomaticReconnect(() => {
+        if (!disposed) {
+          setStatus("Connected");
+          setConnectionEpoch((n) => n + 1);
+        }
+      })
+      .build();
+    for (const t of [
+      c.db.myCommunities,
+      c.db.communityRooms,
+      c.db.communityCharacters,
+      c.db.communityExits,
+      c.db.communityProperties,
+    ]) {
+      t.onInsert(refresh);
+      t.onUpdate(refresh);
+      t.onDelete(refresh);
+    }
+    setConn(c);
+    const renewal = activity
+      ? setInterval(() => {
+          void activity.renew().catch(() => {
+            setError(
+              "Community access expired. Reopen the Activity to sign in again.",
+            );
+            c.disconnect();
+          });
+        }, 60000)
+      : undefined;
+    return () => {
+      disposed = true;
+      clearInterval(renewal);
+      c.disconnect();
+    };
+  }, []);
+  const community =
+    data.communities.find((c) => c.id === communityId) ??
+    (!activity ? data.communities[0] : undefined);
+  const me = data.characters.find(
+    (c) =>
+      c.communityId === community?.id && c.identity.toHexString() === identity,
+  );
+  useEffect(() => {
+    if (conn && me && community)
+      void conn.reducers
+        .enterCommunity({ communityId: community.id, name: me.name })
+        .catch((e) => setError(String(e)));
+  }, [conn, me?.key, connectionEpoch]);
+  const room = data.rooms.find((r) => r.id === me?.roomId);
+  const property = data.properties.find((p) => p.id === room?.propertyId);
+  const scene = useMemo(
+    () => (room ? parseDefinition(room.source, "room") : undefined),
+    [room?.source],
+  );
+  const travelers: LiveTraveler[] = data.characters
+    .filter((p) => p.roomId === room?.id && (p.controller || p.away))
+    .map((p) => ({
+      id: p.identity.toHexString(),
+      name: p.name + (p.away ? " · Away / At home" : ""),
+      character: p.avatarSource
+        ? parseDefinition(p.avatarSource, "character")
+        : neutralCharacter(p.name),
+      away: p.away,
+      motion: {
+        path: JSON.parse(p.path),
+        started: Number(p.startedAt.microsSinceUnixEpoch / 1000n),
+        pose: p.pose,
+        seat: p.seat,
+        yaw: p.yaw,
+      },
+    }));
+  const exits = data.exits.filter((e) => e.fromRoom === room?.id);
+  const mapRooms = data.rooms.filter((r) => r.propertyId === property?.id);
+  const act = async (fn: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <main className="community-app">
+      <header>
+        <div>
+          <span className="eyebrow">A PLACE FOR YOUR PEOPLE</span>
+          <h1>{community?.name ?? "Community worlds"}</h1>
+        </div>
+        <span>{status}</span>
+      </header>
+      {error && (
+        <p role="alert" className="community-error">
+          {error}
+        </p>
+      )}
+      {!community && (
+        <section>
+          <h2>Connect your community</h2>
+          <p>
+            {activity
+              ? "Verifying your community membership…"
+              : "This development preview requires an operator-provisioned membership. Launch the Discord Activity for verified sign-in."}
+          </p>
+          <p>Your development identity:</p>
+          <code className="identity">{identity || "Connecting…"}</code>
+        </section>
+      )}
+      {community && !me && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(() =>
+              conn!.reducers.enterCommunity({
+                communityId: community.id,
+                name,
+              }),
+            );
+          }}
+        >
+          <h2>Welcome to {community.name}</h2>
+          <label>
+            Your character's name
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              maxLength={40}
+            />
+          </label>
+          <button disabled={busy || !conn}>Enter community</button>
+        </form>
+      )}
+      {community && me && room && scene && (
+        <>
+          <nav>
+            <button
+              aria-pressed={tab === "world"}
+              onClick={() => setTab("world")}
+            >
+              World
+            </button>
+            <button
+              aria-pressed={tab === "create"}
+              onClick={() => setTab("create")}
+            >
+              Create
+            </button>
+            <button
+              disabled={busy}
+              onClick={() =>
+                void act(() =>
+                  conn!.reducers.returnToWelcome({ communityId: community.id }),
+                )
+              }
+            >
+              Return to welcome
+            </button>
+            {!activity && data.communities.length > 1 && (
+              <label>
+                Development community
+                <select
+                  value={community.id}
+                  onChange={(e) => setCommunityId(e.target.value)}
+                >
+                  {data.communities.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </nav>
+          {tab === "create" ? (
+            <section>
+              <h2>Build with your coding agent</h2>
+              <p>
+                Describe the rooms, characters and interactive objects you want
+                in your own agent's conversation. Your home is yours to expand;
+                common spaces belong to the community's administrators.
+              </p>
+              <p>
+                The community MCP adapter is still being connected on this
+                branch. The existing game MCP tools edit the legacy world, not
+                these rooms.
+              </p>
+              <p>
+                {me.homeProperty
+                  ? "Your home is ready for authoring."
+                  : "First choose a common room and create your home's entrance there."}
+              </p>
+            </section>
+          ) : (
+            <>
+              <div className="community-heading">
+                <div>
+                  <span className="eyebrow">
+                    {property?.common
+                      ? "COMMON SPACE"
+                      : `${property?.name} · HOME INTERIOR`}
+                  </span>
+                  <h2>{room.name}</h2>
+                </div>
+                <span>Revision {room.revision}</span>
+              </div>
+              <div className="community-layout">
+                <section className="community-scene">
+                  <Viewport
+                    room={scene}
+                    character={silhouette}
+                    guest={silhouette}
+                    command={command}
+                    live={{
+                      identity,
+                      travelers,
+                      onMove: (x, z, seat, pose) => {
+                        void act(() =>
+                          conn!.reducers.moveCommunityCharacter({
+                            communityId: community.id,
+                            x,
+                            z,
+                            seat,
+                            pose,
+                          }),
+                        );
+                      },
+                    }}
+                    showGuest={false}
+                    onError={setError}
+                    onStatus={setViewStatus}
+                  />
+                  <p>{viewStatus?.message || "Drag to look around."}</p>
+                </section>
+                <aside>
+                  <section>
+                    <h3>{property?.common ? "Common map" : "Home map"}</h3>
+                    <p className="muted">
+                      {property?.common
+                        ? "Named doorways lead to members' home maps."
+                        : "These rooms are shared with every visitor."}
+                    </p>
+                    <ul className="community-map">
+                      {mapRooms.map((r) => {
+                        const link = exits.find((e) => e.toRoom === r.id);
+                        return (
+                          <li
+                            key={String(r.id)}
+                            aria-current={
+                              r.id === room.id ? "location" : undefined
+                            }
+                          >
+                            {link ? (
+                              <button
+                                disabled={busy}
+                                onClick={() =>
+                                  void act(() =>
+                                    conn!.reducers.travelCommunity({
+                                      exitId: link.id,
+                                    }),
+                                  )
+                                }
+                              >
+                                {r.name}
+                              </button>
+                            ) : (
+                              <span>
+                                {r.id === room.id ? "◆ " : "◇ "}
+                                {r.name}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                  <section>
+                    <h3>Doorways</h3>
+                    {exits.length ? (
+                      exits.map((e) => (
+                        <button
+                          className="doorway"
+                          key={String(e.id)}
+                          disabled={busy}
+                          onClick={() =>
+                            void act(() =>
+                              conn!.reducers.travelCommunity({ exitId: e.id }),
+                            )
+                          }
+                        >
+                          {e.label} <span>→</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p>No doorways yet.</p>
+                    )}
+                  </section>
+                  {!!property?.common && !me.homeProperty && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void act(() =>
+                          conn!.reducers.claimHome({
+                            commonRoomId: room.id,
+                            name: homeName,
+                          }),
+                        );
+                      }}
+                    >
+                      <h3>Make your home here</h3>
+                      <p>Add a named entrance from {room.name}.</p>
+                      <label>
+                        Home name
+                        <input
+                          required
+                          maxLength={80}
+                          value={homeName}
+                          onChange={(e) => setHomeName(e.target.value)}
+                          placeholder="The Cloudglass Study"
+                        />
+                      </label>
+                      <button disabled={busy}>Create home</button>
+                    </form>
+                  )}
+                </aside>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </main>
+  );
+}

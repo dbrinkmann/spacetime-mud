@@ -37,11 +37,13 @@ declare global {
   }
 }
 import { sampleMotion, type Motion } from "../../shared/world";
+import { routineMotion } from "../../shared/community-motion";
 export type LiveTraveler = {
   id: string;
   name: string;
   character: Character;
   motion: Motion;
+  away?: boolean;
 };
 type Props = {
   showGuest?: boolean;
@@ -471,7 +473,11 @@ export function Viewport(props: Props) {
         travelers: callbacks.current.live?.travelers.map((t) => ({
           id: t.id,
           name: t.name,
-          ...sampleMotion(t.motion, room, serverNow()),
+          ...sampleMotion(
+            t.away ? routineMotion(t.motion, serverNow()) : t.motion,
+            room,
+            serverNow(),
+          ),
         })),
         position: player.root.position.toArray(),
         animation: mode,
@@ -606,7 +612,11 @@ export function Viewport(props: Props) {
             }
             current = v.rig;
           }
-          const sampled = sampleMotion(t.motion, room, serverNow());
+          const sampled = sampleMotion(
+            t.away ? routineMotion(t.motion, serverNow()) : t.motion,
+            room,
+            serverNow(),
+          );
           current.root.position.fromArray(sampled.position);
           current.root.rotation.y +=
             Math.atan2(

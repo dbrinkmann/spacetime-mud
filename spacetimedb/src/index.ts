@@ -13,12 +13,26 @@ import { seedWorld } from "./showcase";
 
 import { roomScene, avatar, visualDraft, presence } from "./visual-tables";
 import {
+  communityAuthority,
+  community,
+  communityMember,
+  property,
+  communityRoom,
+  communityExit,
+  communityCharacter,
+  communityRevision,
+  communitySession,
+  communityAway,
+  communityLease,
+} from "./community-tables";
+import {
   parseDefinition,
   worldPoint,
   type Room as SceneRoom,
   type Vec3,
 } from "../../shared/geometry";
-import { validateNavigation, route } from "../../shared/navigation";
+import { validateNavigation, route, walkable } from "../../shared/navigation";
+import { routineMotion } from "../../shared/community-motion";
 import { emptyRoom, sampleMotion, type Motion } from "../../shared/world";
 
 const Action = t.object("Action", { id: t.string(), label: t.string() });
@@ -207,6 +221,17 @@ const request = table(
   },
 );
 const db = schema({
+  communityAuthority,
+  community,
+  communityMember,
+  property,
+  communityRoom,
+  communityExit,
+  communityCharacter,
+  communityRevision,
+  communitySession,
+  communityAway,
+  communityLease,
   roomScene,
   avatar,
   visualDraft,
@@ -235,6 +260,695 @@ export const serverTime = db.procedure(
   t.u64(),
   (ctx) => ctx.timestamp.microsSinceUnixEpoch,
 );
+function communityKey(id: string, actor: Identity) {
+  return `${id}:${actor.toHexString()}`;
+}
+function communityScene(ctx: Ctx, roomId: bigint) {
+  const r = ctx.db.communityRoom.id.find(roomId) ?? fail("Room not found.");
+  return parseDefinition(r.source, "room");
+}
+function communityMotionAt(
+  p: ReturnType<Ctx["db"]["communityCharacter"]["insert"]>,
+  now: number,
+) {
+  const m: Motion = {
+    path: JSON.parse(p.path),
+    started: Number(p.startedAt.microsSinceUnixEpoch / 1000n),
+    pose: p.pose,
+    seat: p.seat,
+    yaw: p.yaw,
+  };
+  return p.away ? routineMotion(m, now) : m;
+}
+function placeCommunityCharacter(
+  ctx: Ctx,
+  p: ReturnType<Ctx["db"]["communityCharacter"]["insert"]>,
+  roomId: bigint,
+) {
+  ctx.db.communityCharacter.key.update({
+    ...p,
+    roomId,
+    path: JSON.stringify([communityScene(ctx, roomId).spawn]),
+    startedAt: ctx.timestamp,
+    pose: "idle",
+    seat: "",
+    yaw: 0,
+  });
+}
+function requireCharacterControl(ctx: Ctx, id: string) {
+  requireCommunity(ctx, id);
+  const p =
+    ctx.db.communityCharacter.key.find(communityKey(id, ctx.sender)) ??
+    fail("Enter first.");
+  if (!ctx.connectionId || p.controller !== ctx.connectionId.toHexString())
+    fail("Another session controls this character. Re-enter to take control.");
+  return p;
+}
+function leaveCommunitySession(ctx: Ctx) {
+  if (!ctx.connectionId) return;
+  const s = ctx.db.communitySession.id.find(ctx.connectionId);
+  if (!s) return;
+  ctx.db.communitySession.id.delete(s.id);
+  const p = ctx.db.communityCharacter.key.find(s.characterKey);
+  if (!p) return;
+  const remaining = [...ctx.db.communitySession.characterKey.filter(p.key)];
+  if (remaining.length) {
+    if (p.controller === s.id.toHexString())
+      ctx.db.communityCharacter.key.update({
+        ...p,
+        controller: remaining[0].id.toHexString(),
+      });
+    return;
+  }
+  const lifecycle = p.lifecycle + 1;
+  ctx.db.communityCharacter.key.update({ ...p, controller: "", lifecycle });
+  ctx.db.communityAway.insert({
+    scheduledId: 0n,
+    scheduledAt: ScheduleAt.time(
+      ctx.timestamp.microsSinceUnixEpoch + 10_000_000n,
+    ),
+    characterKey: p.key,
+    lifecycle,
+  });
+}
+export const beginCommunityAway = db.reducer(
+  { onSchedule: communityAway },
+  { timer: communityAway.rowType },
+  (ctx, { timer }) => {
+    const p = ctx.db.communityCharacter.key.find(timer.characterKey);
+    if (
+      !p ||
+      p.lifecycle !== timer.lifecycle ||
+      [...ctx.db.communitySession.characterKey.filter(p.key)].length
+    )
+      return;
+    const home = ctx.db.property.id.find(p.homeProperty);
+    if (!home) return;
+    const scene = communityScene(ctx, home.entrance);
+    const points: Vec3[] = JSON.parse(p.routine);
+    let path: Vec3[] = [scene.spawn];
+    for (const point of [...points, scene.spawn]) {
+      const leg = route(scene, path[path.length - 1], point);
+      if (!leg) {
+        path = [scene.spawn];
+        break;
+      }
+      path.push(...leg);
+    }
+    ctx.db.communityCharacter.key.update({
+      ...p,
+      roomId: home.entrance,
+      away: true,
+      path: JSON.stringify(path),
+      startedAt: ctx.timestamp,
+      pose: "idle",
+      seat: "",
+      yaw: 0,
+    });
+  },
+);
+function requireCommunityOperator(ctx: Ctx) {
+  if (
+    !["operator", "gateway"].some((key) =>
+      ctx.db.communityAuthority.key.find(key)?.identity.equals(ctx.sender),
+    )
+  )
+    fail(
+      "Only the community authentication authority can provision membership.",
+    );
+}
+export const setCommunityGateway = db.reducer(
+  { identity: t.identity() },
+  (ctx, a) => {
+    if (
+      !ctx.db.communityAuthority.key
+        .find("operator")
+        ?.identity.equals(ctx.sender)
+    )
+      fail("Operator required.");
+    const row = { key: "gateway", identity: a.identity };
+    if (ctx.db.communityAuthority.key.find("gateway"))
+      ctx.db.communityAuthority.key.update(row);
+    else ctx.db.communityAuthority.insert(row);
+  },
+);
+function scheduleMembershipExpiry(ctx: Ctx, key: string) {
+  for (const lease of ctx.db.communityLease.memberKey.filter(key))
+    ctx.db.communityLease.scheduledId.delete(lease.scheduledId);
+  ctx.db.communityLease.insert({
+    scheduledId: 0n,
+    memberKey: key,
+    verifiedAt: ctx.timestamp,
+    scheduledAt: ScheduleAt.time(
+      ctx.timestamp.microsSinceUnixEpoch + 180_000_000n,
+    ),
+  });
+}
+function withdrawCommunitySessions(ctx: Ctx, key: string) {
+  for (const s of ctx.db.communitySession.characterKey.filter(key))
+    ctx.db.communitySession.id.delete(s.id);
+  const p = ctx.db.communityCharacter.key.find(key);
+  if (p && !p.away) {
+    const lifecycle = p.lifecycle + 1;
+    ctx.db.communityCharacter.key.update({ ...p, controller: "", lifecycle });
+    ctx.db.communityAway.insert({
+      scheduledId: 0n,
+      characterKey: key,
+      lifecycle,
+      scheduledAt: ScheduleAt.time(
+        ctx.timestamp.microsSinceUnixEpoch + 10_000_000n,
+      ),
+    });
+  }
+}
+export const expireCommunityMembership = db.reducer(
+  { onSchedule: communityLease },
+  { timer: communityLease.rowType },
+  (ctx, { timer }) => {
+    const m = ctx.db.communityMember.key.find(timer.memberKey);
+    if (
+      m &&
+      m.verifiedAt.microsSinceUnixEpoch ===
+        timer.verifiedAt.microsSinceUnixEpoch
+    ) {
+      ctx.db.communityMember.key.update({ ...m, active: false, admin: false });
+      withdrawCommunitySessions(ctx, m.key);
+    }
+  },
+);
+function communityAccess(ctx: ReadCtx, id: string, actor: Identity) {
+  const m = ctx.db.communityMember.key.find(communityKey(id, actor));
+  return m?.active ? m : undefined;
+}
+function requireCommunity(ctx: Ctx, id: string) {
+  return (
+    communityAccess(ctx, id, ctx.sender) ??
+    fail("Community membership required.")
+  );
+}
+function communityRoomFor(ctx: Ctx, id: bigint) {
+  const r = ctx.db.communityRoom.id.find(id) ?? fail("Room not found.");
+  requireCommunity(ctx, r.communityId);
+  return r;
+}
+function requirePropertyEdit(ctx: Ctx, id: bigint) {
+  const p = ctx.db.property.id.find(id) ?? fail("Property not found.");
+  const m = requireCommunity(ctx, p.communityId);
+  if (!(p.common ? m.admin : p.owner.equals(ctx.sender)))
+    fail("You cannot edit this property.");
+  return p;
+}
+function addCommunityRoom(
+  ctx: Ctx,
+  p: ReturnType<Ctx["db"]["property"]["insert"]>,
+  name: string,
+) {
+  return ctx.db.communityRoom.insert({
+    id: 0n,
+    propertyId: p.id,
+    communityId: p.communityId,
+    name: text(name, "Room name", 80),
+    description: "",
+    source: JSON.stringify(emptyRoom()),
+    revision: 0,
+  });
+}
+function connectCommunityRooms(
+  ctx: Ctx,
+  from: bigint,
+  to: bigint,
+  communityId: string,
+  label: string,
+  backLabel: string,
+  homeProperty = 0n,
+) {
+  const a = ctx.db.communityExit.insert({
+    id: 0n,
+    communityId,
+    fromRoom: from,
+    toRoom: to,
+    label: text(label, "Entrance label", 80),
+    homeProperty,
+    reverseId: 0n,
+  });
+  const b = ctx.db.communityExit.insert({
+    id: 0n,
+    communityId,
+    fromRoom: to,
+    toRoom: from,
+    label: text(backLabel, "Return label", 80),
+    homeProperty,
+    reverseId: a.id,
+  });
+  ctx.db.communityExit.id.update({ ...a, reverseId: b.id });
+}
+
+// Provisioning is deliberately not a browser-trusted join/create-server API.
+// The operator is the database initializer on this isolated development module.
+// A Discord gateway must verify membership before invoking this reducer.
+export const provisionCommunity = db.reducer(
+  {
+    communityId: t.string(),
+    name: t.string(),
+    admin: t.identity(),
+    discordUserId: t.string(),
+  },
+  (ctx, a) => {
+    requireCommunityOperator(ctx);
+    if (
+      !/^[0-9]{1,24}$/.test(a.communityId) ||
+      !/^[0-9]{1,24}$/.test(a.discordUserId)
+    )
+      fail("Discord identifiers must be numeric strings.");
+    if (ctx.db.community.id.find(a.communityId))
+      fail("Community already exists.");
+    const p = ctx.db.property.insert({
+      id: 0n,
+      communityId: a.communityId,
+      owner: a.admin,
+      name: "Common spaces",
+      common: true,
+      entrance: 0n,
+    });
+    const r = addCommunityRoom(ctx, p, "Welcome");
+    ctx.db.property.id.update({ ...p, entrance: r.id });
+    ctx.db.community.insert({
+      id: a.communityId,
+      name: text(a.name, "Community name", 80),
+      welcomeRoom: r.id,
+    });
+    ctx.db.communityMember.insert({
+      key: communityKey(a.communityId, a.admin),
+      communityId: a.communityId,
+      identity: a.admin,
+      discordUserId: a.discordUserId,
+      admin: true,
+      active: true,
+      verifiedAt: ctx.timestamp,
+    });
+    scheduleMembershipExpiry(ctx, communityKey(a.communityId, a.admin));
+  },
+);
+export const setCommunityMember = db.reducer(
+  {
+    communityId: t.string(),
+    identity: t.identity(),
+    discordUserId: t.string(),
+    admin: t.bool(),
+    active: t.bool(),
+  },
+  (ctx, a) => {
+    requireCommunityOperator(ctx);
+    if (!ctx.db.community.id.find(a.communityId)) fail("Community not found.");
+    const key = communityKey(a.communityId, a.identity);
+    if (!/^[0-9]{1,24}$/.test(a.discordUserId))
+      fail("Invalid Discord user ID.");
+    const old = ctx.db.communityMember.key.find(key);
+    if (old && old.discordUserId !== a.discordUserId)
+      fail("Identity is already bound.");
+    if (
+      [...ctx.db.communityMember.communityId.filter(a.communityId)].some(
+        (m) =>
+          m.discordUserId === a.discordUserId && !m.identity.equals(a.identity),
+      )
+    )
+      fail("Discord member already has an identity in this community.");
+    const next = {
+      key,
+      communityId: a.communityId,
+      identity: a.identity,
+      discordUserId: a.discordUserId,
+      admin: a.admin,
+      active: a.active,
+      verifiedAt: ctx.timestamp,
+    };
+    if (old) ctx.db.communityMember.key.update(next);
+    else ctx.db.communityMember.insert(next);
+    scheduleMembershipExpiry(ctx, key);
+    if (!a.active) withdrawCommunitySessions(ctx, key);
+  },
+);
+export const enterCommunity = db.reducer(
+  { communityId: t.string(), name: t.string() },
+  (ctx, a) => {
+    requireCommunity(ctx, a.communityId);
+    const key = communityKey(a.communityId, ctx.sender);
+    const c =
+      ctx.db.community.id.find(a.communityId) ?? fail("Community not found.");
+    if (!ctx.connectionId) fail("A player connection is required.");
+    const session = ctx.db.communitySession.id.find(ctx.connectionId);
+    if (session?.characterKey !== key) leaveCommunitySession(ctx);
+    if (!ctx.db.communitySession.id.find(ctx.connectionId))
+      ctx.db.communitySession.insert({
+        id: ctx.connectionId,
+        characterKey: key,
+      });
+    const old = ctx.db.communityCharacter.key.find(key);
+    if (old) {
+      const now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
+      const scene = communityScene(ctx, old.roomId);
+      const position = sampleMotion(communityMotionAt(old, now), scene, now);
+      ctx.db.communityCharacter.key.update({
+        ...old,
+        controller: ctx.connectionId.toHexString(),
+        lifecycle: old.lifecycle + 1,
+        away: false,
+        path: JSON.stringify([position.position]),
+        startedAt: ctx.timestamp,
+        yaw: position.yaw,
+      });
+    } else
+      ctx.db.communityCharacter.insert({
+        key,
+        communityId: c.id,
+        identity: ctx.sender,
+        name: text(a.name, "Character name", 40),
+        roomId: c.welcomeRoom,
+        homeProperty: 0n,
+        controller: ctx.connectionId.toHexString(),
+        lifecycle: 0,
+        away: false,
+        path: JSON.stringify([communityScene(ctx, c.welcomeRoom).spawn]),
+        startedAt: ctx.timestamp,
+        pose: "idle",
+        seat: "",
+        yaw: 0,
+        routine: "[]",
+        avatarSource: "",
+      });
+  },
+);
+export const claimHome = db.reducer(
+  { commonRoomId: t.u64(), name: t.string() },
+  (ctx, a) => {
+    const r = communityRoomFor(ctx, a.commonRoomId);
+    if (!ctx.db.property.id.find(r.propertyId)?.common)
+      fail("Attach homes to common rooms.");
+    const key = communityKey(r.communityId, ctx.sender);
+    const character =
+      ctx.db.communityCharacter.key.find(key) ??
+      fail("Enter the community first.");
+    if (character.homeProperty)
+      fail("You already have a home; expand it with more rooms.");
+    const p = ctx.db.property.insert({
+      id: 0n,
+      communityId: r.communityId,
+      owner: ctx.sender,
+      name: text(a.name, "Home name", 80),
+      common: false,
+      entrance: 0n,
+    });
+    const home = addCommunityRoom(ctx, p, p.name);
+    ctx.db.property.id.update({ ...p, entrance: home.id });
+    connectCommunityRooms(
+      ctx,
+      r.id,
+      home.id,
+      r.communityId,
+      p.name,
+      `Outside: ${r.name}`,
+      p.id,
+    );
+    placeCommunityCharacter(ctx, { ...character, homeProperty: p.id }, home.id);
+  },
+);
+export const addPropertyRoom = db.reducer(
+  {
+    fromRoomId: t.u64(),
+    name: t.string(),
+    label: t.string(),
+    backLabel: t.string(),
+  },
+  (ctx, a) => {
+    const r = communityRoomFor(ctx, a.fromRoomId);
+    const p = requirePropertyEdit(ctx, r.propertyId);
+    if ([...ctx.db.communityRoom.propertyId.filter(p.id)].length >= 100)
+      fail("Property room budget reached.");
+    const next = addCommunityRoom(ctx, p, a.name);
+    connectCommunityRooms(
+      ctx,
+      r.id,
+      next.id,
+      r.communityId,
+      a.label,
+      a.backLabel,
+    );
+  },
+);
+export const travelCommunity = db.reducer({ exitId: t.u64() }, (ctx, a) => {
+  const e =
+    ctx.db.communityExit.id.find(a.exitId) ?? fail("Entrance not found.");
+  requireCommunity(ctx, e.communityId);
+  const p = requireCharacterControl(ctx, e.communityId);
+  if (p.roomId !== e.fromRoom) fail("You must be at this entrance.");
+  const dest = communityRoomFor(ctx, e.toRoom);
+  if (dest.communityId !== e.communityId)
+    fail("Cross-community travel is not allowed.");
+  placeCommunityCharacter(ctx, p, dest.id);
+});
+export const returnToWelcome = db.reducer(
+  { communityId: t.string() },
+  (ctx, a) => {
+    requireCommunity(ctx, a.communityId);
+    const c =
+      ctx.db.community.id.find(a.communityId) ?? fail("Community not found.");
+    const p = requireCharacterControl(ctx, c.id);
+    placeCommunityCharacter(ctx, p, c.welcomeRoom);
+  },
+);
+export const setWelcomeRoom = db.reducer({ roomId: t.u64() }, (ctx, a) => {
+  const r = communityRoomFor(ctx, a.roomId);
+  if (!requireCommunity(ctx, r.communityId).admin)
+    fail("Community administrator required.");
+  if (!ctx.db.property.id.find(r.propertyId)?.common)
+    fail("Welcome room must be common space.");
+  const c = ctx.db.community.id.find(r.communityId)!;
+  ctx.db.community.id.update({ ...c, welcomeRoom: r.id });
+});
+export const moveCommunityCharacter = db.reducer(
+  {
+    communityId: t.string(),
+    x: t.f64(),
+    z: t.f64(),
+    seat: t.string(),
+    pose: t.string(),
+  },
+  (ctx, a) => {
+    const p = requireCharacterControl(ctx, a.communityId);
+    if (
+      !Number.isFinite(a.x) ||
+      !Number.isFinite(a.z) ||
+      !["idle", "wave", "talk", "stand"].includes(a.pose)
+    )
+      fail("Invalid movement.");
+    const scene = communityScene(ctx, p.roomId);
+    const now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
+    const sampled = sampleMotion(communityMotionAt(p, now), scene, now);
+    const oldSeat = scene.objects.find((o) => o.id === p.seat);
+    const start =
+      sampled.animation === "sit" && oldSeat?.seat
+        ? worldPoint(oldSeat, oldSeat.seat.approach)
+        : sampled.position;
+    let target: Vec3 = a.pose === "idle" ? [a.x, 0, a.z] : start;
+    if (a.seat) {
+      const seat = scene.objects.find((o) => o.id === a.seat);
+      if (!seat?.seat) fail("Seat not found.");
+      if (
+        [...ctx.db.communityCharacter.communityId.filter(a.communityId)].some(
+          (other) =>
+            other.key !== p.key &&
+            other.roomId === p.roomId &&
+            other.seat === a.seat,
+        )
+      )
+        fail("Seat occupied.");
+      target = worldPoint(seat, seat.seat.approach);
+    }
+    const path =
+      route(scene, start, target) ?? fail("Unreachable destination.");
+    ctx.db.communityCharacter.key.update({
+      ...p,
+      path: JSON.stringify([start, ...path]),
+      startedAt: ctx.timestamp,
+      pose: a.pose === "stand" ? "idle" : a.pose,
+      seat: a.seat,
+      yaw: sampled.yaw,
+    });
+  },
+);
+export const setHomeRoutine = db.reducer(
+  { communityId: t.string(), points: t.string() },
+  (ctx, a) => {
+    requireCommunity(ctx, a.communityId);
+    const p =
+      ctx.db.communityCharacter.key.find(
+        communityKey(a.communityId, ctx.sender),
+      ) ?? fail("Enter first.");
+    const home =
+      ctx.db.property.id.find(p.homeProperty) ?? fail("Claim a home first.");
+    if (a.points.length > 4000) fail("Routine too large.");
+    const points: unknown = JSON.parse(a.points);
+    if (
+      !Array.isArray(points) ||
+      points.length > 8 ||
+      points.some(
+        (point) =>
+          !Array.isArray(point) ||
+          point.length !== 3 ||
+          point.some((v) => typeof v !== "number" || !Number.isFinite(v)) ||
+          point[1] !== 0,
+      )
+    )
+      fail("Use at most eight ground-level points.");
+    const scene = communityScene(ctx, home.entrance);
+    let start = scene.spawn;
+    for (const point of [...(points as Vec3[]), scene.spawn]) {
+      if (!route(scene, start, point)) fail("Routine point unreachable.");
+      start = point;
+    }
+    ctx.db.communityCharacter.key.update({
+      ...p,
+      routine: JSON.stringify(points),
+    });
+  },
+);
+export const publishCommunityAvatar = db.reducer(
+  { communityId: t.string(), source: t.string() },
+  (ctx, a) => {
+    requireCommunity(ctx, a.communityId);
+    const p =
+      ctx.db.communityCharacter.key.find(
+        communityKey(a.communityId, ctx.sender),
+      ) ?? fail("Enter first.");
+    const avatar = parseDefinition(a.source, "character");
+    ctx.db.communityCharacter.key.update({
+      ...p,
+      avatarSource: JSON.stringify(avatar),
+    });
+  },
+);
+function publishCommunityScene(
+  ctx: Ctx,
+  roomId: bigint,
+  source: string,
+  baseRevision: number,
+) {
+  const r = communityRoomFor(ctx, roomId);
+  requirePropertyEdit(ctx, r.propertyId);
+  if (r.revision !== baseRevision)
+    fail("Room changed; inspect its latest revision before publishing.");
+  const scene = parseDefinition(source, "room");
+  validateNavigation(scene);
+  // Legacy object IDs cannot cross into the community runtime.
+  if (scene.objects.some((o) => o.objectId))
+    fail("Community scripted objects are not connected yet.");
+  const canonical = JSON.stringify(scene);
+  ctx.db.communityRevision.insert({
+    id: 0n,
+    roomId,
+    communityId: r.communityId,
+    revision: r.revision,
+    source: r.source,
+    author: ctx.sender,
+    createdAt: ctx.timestamp,
+  });
+  ctx.db.communityRoom.id.update({
+    ...r,
+    source: canonical,
+    revision: r.revision + 1,
+  });
+  const now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
+  const oldScene = parseDefinition(r.source, "room");
+  for (const p of ctx.db.communityCharacter.communityId.filter(r.communityId)) {
+    if (p.roomId !== r.id) continue;
+    const current = sampleMotion(communityMotionAt(p, now), oldScene, now);
+    const position = walkable(scene, current.position[0], current.position[2])
+      ? current.position
+      : scene.spawn;
+    // Cancel paths invalidated by an edit, retaining each valid location.
+    ctx.db.communityCharacter.key.update({
+      ...p,
+      path: JSON.stringify([position]),
+      startedAt: ctx.timestamp,
+      seat: "",
+      pose: "idle",
+      yaw: current.yaw,
+    });
+  }
+}
+export const publishCommunityRoom = db.reducer(
+  { roomId: t.u64(), source: t.string(), baseRevision: t.u32() },
+  (ctx, a) => publishCommunityScene(ctx, a.roomId, a.source, a.baseRevision),
+);
+export const restoreCommunityRoom = db.reducer(
+  { revisionId: t.u64(), baseRevision: t.u32() },
+  (ctx, a) => {
+    const old =
+      ctx.db.communityRevision.id.find(a.revisionId) ??
+      fail("Revision not found.");
+    publishCommunityScene(ctx, old.roomId, old.source, a.baseRevision);
+  },
+);
+export const myCommunities = db.view(
+  { name: "my_communities", public: true },
+  t.array(community.rowType),
+  (ctx) =>
+    [...ctx.db.community.iter()].filter((c) =>
+      communityAccess(ctx, c.id, ctx.sender),
+    ),
+);
+export const communityProperties = db.view(
+  { name: "community_properties", public: true },
+  t.array(property.rowType),
+  (ctx) =>
+    [...ctx.db.property.iter()].filter((p) =>
+      communityAccess(ctx, p.communityId, ctx.sender),
+    ),
+);
+export const communityRooms = db.view(
+  { name: "community_rooms", public: true },
+  t.array(communityRoom.rowType),
+  (ctx) =>
+    [...ctx.db.communityRoom.iter()].filter((r) =>
+      communityAccess(ctx, r.communityId, ctx.sender),
+    ),
+);
+export const communityExits = db.view(
+  { name: "community_exits", public: true },
+  t.array(communityExit.rowType),
+  (ctx) =>
+    [...ctx.db.communityExit.iter()].filter((e) =>
+      communityAccess(ctx, e.communityId, ctx.sender),
+    ),
+);
+export const communityCharacters = db.view(
+  { name: "community_characters", public: true },
+  t.array(communityCharacter.rowType),
+  (ctx) =>
+    [...ctx.db.communityCharacter.iter()].filter((p) =>
+      communityAccess(ctx, p.communityId, ctx.sender),
+    ),
+);
+export const myCommunityRoles = db.view(
+  { name: "my_community_roles", public: true },
+  t.array(communityMember.rowType),
+  (ctx) =>
+    [...ctx.db.communityMember.iter()].filter(
+      (m) => m.active && m.identity.equals(ctx.sender),
+    ),
+);
+export const communityHistory = db.view(
+  { name: "community_history", public: true },
+  t.array(communityRevision.rowType),
+  (ctx) =>
+    [...ctx.db.communityRevision.iter()].filter((r) => {
+      const m = communityAccess(ctx, r.communityId, ctx.sender);
+      const room = ctx.db.communityRoom.id.find(r.roomId);
+      const p = room && ctx.db.property.id.find(room.propertyId);
+      return !!m && !!p && (p.common ? m.admin : p.owner.equals(ctx.sender));
+    }),
+);
+
 function sceneFor(ctx: ReadCtx, roomId: bigint): SceneRoom {
   const row = ctx.db.roomScene.roomId.find(roomId);
   return row ? parseDefinition(row.source, "room") : emptyRoom();
@@ -984,7 +1698,10 @@ function createRoom(
   });
   return next;
 }
-export const init = db.init((ctx) => seedWorld(ctx));
+export const init = db.init((ctx) => {
+  seedWorld(ctx);
+  ctx.db.communityAuthority.insert({ key: "operator", identity: ctx.sender });
+});
 export const onConnect = db.clientConnected((ctx) => {
   if (ctx.connectionId)
     ctx.db.connection.insert({ id: ctx.connectionId, identity: ctx.sender });
@@ -992,6 +1709,7 @@ export const onConnect = db.clientConnected((ctx) => {
   if (p) updatePlayer(ctx, { ...p, online: true });
 });
 export const onDisconnect = db.clientDisconnected((ctx) => {
+  leaveCommunitySession(ctx);
   if (ctx.connectionId) ctx.db.connection.id.delete(ctx.connectionId);
   if (![...ctx.db.connection.identity.filter(ctx.sender)].length) {
     const p = ctx.db.player.identity.find(ctx.sender);

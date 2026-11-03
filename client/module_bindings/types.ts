@@ -36,6 +36,120 @@ export const Chat = __t.object("Chat", {
 });
 export type Chat = __Infer<typeof Chat>;
 
+export const Community = __t.object("Community", {
+  id: __t.string(),
+  name: __t.string(),
+  welcomeRoom: __t.u64(),
+});
+export type Community = __Infer<typeof Community>;
+
+export const CommunityAuthority = __t.object("CommunityAuthority", {
+  key: __t.string(),
+  identity: __t.identity(),
+});
+export type CommunityAuthority = __Infer<typeof CommunityAuthority>;
+
+export const CommunityAway = __t.object("CommunityAway", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  characterKey: __t.string(),
+  lifecycle: __t.u32(),
+});
+export type CommunityAway = __Infer<typeof CommunityAway>;
+
+export const CommunityCharacter = __t.object("CommunityCharacter", {
+  key: __t.string(),
+  communityId: __t.string(),
+  identity: __t.identity(),
+  name: __t.string(),
+  roomId: __t.u64(),
+  homeProperty: __t.u64(),
+  controller: __t.string(),
+  lifecycle: __t.u32(),
+  away: __t.bool(),
+  path: __t.string(),
+  startedAt: __t.timestamp(),
+  pose: __t.string(),
+  seat: __t.string(),
+  yaw: __t.f64(),
+  routine: __t.string(),
+  avatarSource: __t.string(),
+});
+export type CommunityCharacter = __Infer<typeof CommunityCharacter>;
+
+export const CommunityCharacters = __t.object("CommunityCharacters", {});
+export type CommunityCharacters = __Infer<typeof CommunityCharacters>;
+
+export const CommunityExit = __t.object("CommunityExit", {
+  id: __t.u64(),
+  communityId: __t.string(),
+  fromRoom: __t.u64(),
+  toRoom: __t.u64(),
+  label: __t.string(),
+  homeProperty: __t.u64(),
+  reverseId: __t.u64(),
+});
+export type CommunityExit = __Infer<typeof CommunityExit>;
+
+export const CommunityExits = __t.object("CommunityExits", {});
+export type CommunityExits = __Infer<typeof CommunityExits>;
+
+export const CommunityHistory = __t.object("CommunityHistory", {});
+export type CommunityHistory = __Infer<typeof CommunityHistory>;
+
+export const CommunityLease = __t.object("CommunityLease", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  memberKey: __t.string(),
+  verifiedAt: __t.timestamp(),
+});
+export type CommunityLease = __Infer<typeof CommunityLease>;
+
+export const CommunityMember = __t.object("CommunityMember", {
+  key: __t.string(),
+  communityId: __t.string(),
+  identity: __t.identity(),
+  discordUserId: __t.string(),
+  admin: __t.bool(),
+  active: __t.bool(),
+  verifiedAt: __t.timestamp(),
+});
+export type CommunityMember = __Infer<typeof CommunityMember>;
+
+export const CommunityProperties = __t.object("CommunityProperties", {});
+export type CommunityProperties = __Infer<typeof CommunityProperties>;
+
+export const CommunityRevision = __t.object("CommunityRevision", {
+  id: __t.u64(),
+  roomId: __t.u64(),
+  communityId: __t.string(),
+  revision: __t.u32(),
+  source: __t.string(),
+  author: __t.identity(),
+  createdAt: __t.timestamp(),
+});
+export type CommunityRevision = __Infer<typeof CommunityRevision>;
+
+export const CommunityRoom = __t.object("CommunityRoom", {
+  id: __t.u64(),
+  propertyId: __t.u64(),
+  communityId: __t.string(),
+  name: __t.string(),
+  description: __t.string(),
+  source: __t.string(),
+  revision: __t.u32(),
+});
+export type CommunityRoom = __Infer<typeof CommunityRoom>;
+
+export const CommunityRooms = __t.object("CommunityRooms", {});
+export type CommunityRooms = __Infer<typeof CommunityRooms>;
+
+export const CommunitySession = __t.object("CommunitySession", {
+  id: __t.connectionId(),
+  characterKey: __t.string(),
+});
+export type CommunitySession = __Infer<typeof CommunitySession>;
+
 export const Connection = __t.object("Connection", {
   id: __t.connectionId(),
   identity: __t.identity(),
@@ -108,6 +222,12 @@ export const Member = __t.object("Member", {
 });
 export type Member = __Infer<typeof Member>;
 
+export const MyCommunities = __t.object("MyCommunities", {});
+export type MyCommunities = __Infer<typeof MyCommunities>;
+
+export const MyCommunityRoles = __t.object("MyCommunityRoles", {});
+export type MyCommunityRoles = __Infer<typeof MyCommunityRoles>;
+
 export const MyGrant = __t.object("MyGrant", {});
 export type MyGrant = __Infer<typeof MyGrant>;
 
@@ -167,6 +287,16 @@ export const Presence = __t.object("Presence", {
   yaw: __t.f64(),
 });
 export type Presence = __Infer<typeof Presence>;
+
+export const Property = __t.object("Property", {
+  id: __t.u64(),
+  communityId: __t.string(),
+  owner: __t.identity(),
+  name: __t.string(),
+  common: __t.bool(),
+  entrance: __t.u64(),
+});
+export type Property = __Infer<typeof Property>;
 
 export const Request = __t.object("Request", {
   key: __t.string(),

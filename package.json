@@ -7,6 +7,9 @@
     "build": "tsc --noEmit && vite build",
     "check:server": "tsc --noEmit -p spacetimedb/tsconfig.json",
     "bridge": "tsx bridge/index.ts",
+    "discord:gateway": "tsx gateway/index.ts",
+    "test:community": "tsx tests/community.ts",
+    "test:community:browser": "tsx tests/community-browser.ts",
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx tests/integration.ts",
     "test:timers": "tsx tests/timers.ts",
@@ -22,6 +25,7 @@
     "test:agent": "tsx tests/agent-mcp.ts"
   },
   "dependencies": {
+    "@discord/embedded-app-sdk": "2.5.0",
     "@modelcontextprotocol/sdk": "1.32.2",
     "react": "19.2.0",
     "react-dom": "19.2.0",

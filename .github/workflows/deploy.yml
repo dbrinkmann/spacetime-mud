@@ -1,7 +1,7 @@
 name: Test and deploy game
 on:
   push:
-    branches: [main]
+    branches: [main, feature/discord-community-worlds]
     paths-ignore: ['docs/**', 'README.md']
   workflow_dispatch:
 permissions:
@@ -9,7 +9,7 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   test-and-build:
@@ -44,6 +44,7 @@ jobs:
           npx tsx tests/cleanup.ts
           npx tsx tests/prune.ts
           npx tsx tests/nexus-portal.ts
+          npm run test:community
           npx tsx tests/timers.ts
           npx vitest run
       - name: Real desktop and mobile browser verification
@@ -61,6 +62,7 @@ jobs:
           npm run test:visual:browser
           npm run test:agent
           npm run test:poc:browser
+          npm run test:community:browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -75,6 +77,7 @@ jobs:
         with:
           path: dist
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: test-and-build
     runs-on: ubuntu-latest
     environment:

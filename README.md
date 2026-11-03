@@ -4,6 +4,8 @@ A shared, room-based 3D world built by its players. Hang out, chat, walk and sit
 
 **[Play](https://dbrinkmann.github.io/spacetime-mud/)**
 
+Next product direction: [Discord community worlds implementation plan](docs/discord-community-plan.md). This records the planned community spaces, expandable player homes and persistent away characters; Discord integration is not shipped yet.
+
 ## Create with your agent
 
 Open **Create** in the game for setup instructions. There is no model-specific prompt box or player-facing JSON editor.

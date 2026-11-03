@@ -1,0 +1,60 @@
+# Discord branch development
+
+Branch: `feature/discord-community-worlds`. Production is unchanged. The new private community tables coexist with the legacy game during implementation; the community preview never subscribes to legacy rooms or zones.
+
+## Implemented and tested locally
+
+- Operator/gateway-provisioned communities and memberships, separate common/member properties, configured welcome rooms.
+- Transactional home claims, multiple named doorways from one common room, interior expansion without coordinate claims, return travel.
+- Community-scoped subscriptions and edit permissions, revocation, three-minute membership leases.
+- Validated scene publication, revision conflicts and restore, avatar publication.
+- Authoritative movement/seats, separate player sessions, one controller, disconnect grace, automatic home return, bounded walking routines and reconnect takeover at the current position.
+- Development browser at `?community`, shared 3D character rendering, home/common map lists and doorway navigation.
+- Discord Activity bootstrap and OAuth gateway implementation, with mocked Discord verification tests. Actual Discord launch/proxy/OAuth is **not yet verified**.
+
+## Remaining before a pilot
+
+- Create/configure a Discord application and test server; deploy a gateway with persistent storage and verify real desktop/mobile Activity launch, proxy WebSockets and OAuth.
+- Community-scoped MCP pairing/delegation and packaged creator distribution. Existing MCP tools still target the legacy game.
+- Community scripted objects/timers and room chat. Community publication currently rejects legacy `objectId` references deliberately.
+- Visible 3D entrance placement, graph map visualization, cleanup/relocation operations, richer authored routines spanning home rooms, admin moderation/audit UI.
+- Restart/recovery and lease-expiry integration tests, load measurements and real community pilot. The implemented routine is a closed walk inside the home's entrance room followed by a pause; it is not the complete authored activity system.
+
+## Local preview
+
+Use a new disposable database. Do not publish this evolving schema over production.
+
+```powershell
+$env:SPACETIME_HOST='http://127.0.0.1:3030'
+$env:SPACETIME_DATABASE='mud-community-work'
+$env:SPACETIME_CLI='D:\dev\personal\scratch\tools\spacetimedb\spacetimedb-cli.exe'
+& $env:SPACETIME_CLI publish --no-config $env:SPACETIME_DATABASE --server $env:SPACETIME_HOST --module-path spacetimedb --yes
+$env:VITE_SPACETIME_HOST=$env:SPACETIME_HOST
+$env:VITE_SPACETIME_DATABASE=$env:SPACETIME_DATABASE
+npm run dev -- --port 5176
+```
+
+Open `http://127.0.0.1:5176/?community`. An unprovisioned connection displays its public development identity. The database initializer can call `provision_community` with a numeric test guild ID, community name, identity and numeric test Discord user ID. Additional identities use `set_community_member`. These APIs are authority-only, never trusted browser claims. Development memberships expire after three minutes unless renewed, just like gateway memberships.
+
+In another terminal with the same database/CLI environment:
+
+```powershell
+npm run test:community
+$env:GAME_URL='http://127.0.0.1:5176'
+npm run test:community:browser
+```
+
+The tests provision isolated numeric community IDs and exercise real SpacetimeDB connections. They leave fixtures in the disposable database. Browser screenshots go to ignored `test-results/community-desktop.png` and `community-mobile.png`.
+
+## Discord setup
+
+1. Create a Discord application and development server. Configure its Activity following the [official guide](https://docs.discord.com/developers/activities/building-an-activity). Record the application ID; keep the client secret only in the gateway environment.
+2. Set `VITE_DISCORD_CLIENT_ID` when building the web client. Discord's `frame_id` launches Activity authentication automatically; `?activity` also selects that path.
+3. Configure URL mappings: `/` to the frontend host, `/api` to the gateway's `/api` path, and `/db` to the SpacetimeDB host. The SDK patches WebSocket URLs to `/db`. Verify actual mapping/path behavior inside Discord before publishing.
+4. Set gateway `SPACETIME_HOST`, `SPACETIME_DATABASE`, and a durable `DISCORD_STATE_DIR`. Run `npm run discord:gateway -- --init` to create its credential and print its public identity. Authorize that identity with the database operator's `set_community_gateway` reducer.
+5. Set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and comma-separated exact `DISCORD_ALLOWED_ORIGINS` (including the Activity's actual origin). Run `npm run discord:gateway`. Default bind is loopback port 8787; set `HOST`/`PORT` for your chosen HTTPS reverse proxy or host.
+6. An administrator opens the Activity first to provision common space. Members authenticate with `identify`, `guilds`, and `guilds.members.read`. The gateway verifies the current user, membership and effective guild permissions with Discord; client-supplied roles are never accepted.
+
+The gateway issues a stable SpacetimeDB token per Discord member per guild, retained in its private durable store. Back up that store: losing it loses the identity mapping. Run one gateway process against the store; it is not a multi-instance storage design. Store files contain credentials, are ignored by Git, and must not be published with frontend assets. No Discord access/refresh tokens are persisted. The Activity re-verifies membership every minute; loss of access stops renewal and the server's lease expires within three minutes. Long-lived OAuth token expiry currently requires reopening the Activity.
+
+The Discord SDK's pinned Zod 3 dependency is reported by `npm audit` under GHSA-mrhx-c7xc-m3w5. No compatible upstream SDK fix is currently reported by npm; do not blindly override it with Zod 4. Resolve/review this before public release.
