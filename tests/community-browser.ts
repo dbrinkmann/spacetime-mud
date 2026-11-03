@@ -53,6 +53,9 @@ try {
   await expect(
     page.getByRole("img", { name: "Interactive 3D room" }),
   ).toBeVisible();
+  await expect(
+    page.locator(".poc-nameplate").filter({ hasText: "Alice · you" }),
+  ).toBeVisible();
   const target = await page.evaluate(() => window.boxWorld!.project([2, 0, 2]));
   await page.mouse.click(target.x, target.y);
   await expect

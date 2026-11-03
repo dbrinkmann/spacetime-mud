@@ -611,6 +611,7 @@ export function Viewport(props: Props) {
               visitors.set(t.id, v);
             }
             current = v.rig;
+            if (v.label.textContent !== t.name) v.label.textContent = t.name;
           }
           const sampled = sampleMotion(
             t.away ? routineMotion(t.motion, serverNow()) : t.motion,
@@ -625,6 +626,8 @@ export function Viewport(props: Props) {
             ) * Math.min(1, dt * 12);
           animateRig(current, sampled.animation, elapsed, dt);
           if (t.id === live.identity) {
+            const nameplate = `${t.name} · you`;
+            if (label.textContent !== nameplate) label.textContent = nameplate;
             const nextSeat = room.objects.find((o) => o.id === t.motion.seat);
             if (mode !== sampled.animation || seated?.id !== nextSeat?.id) {
               mode = sampled.animation;

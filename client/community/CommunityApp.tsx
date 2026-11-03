@@ -161,6 +161,13 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
     () => (room ? parseDefinition(room.source, "room") : undefined),
     [room?.source],
   );
+  const ownCharacter = useMemo(
+    () =>
+      me?.avatarSource
+        ? { ...parseDefinition(me.avatarSource, "character"), name: me.name }
+        : neutralCharacter(me?.name ?? "Traveler"),
+    [me?.avatarSource, me?.name],
+  );
   const travelers: LiveTraveler[] = data.characters
     .filter((p) => p.roomId === room?.id && (p.controller || p.away))
     .map((p) => ({
@@ -320,7 +327,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                 <section className="community-scene">
                   <Viewport
                     room={scene}
-                    character={silhouette}
+                    character={ownCharacter}
                     guest={silhouette}
                     command={command}
                     live={{
