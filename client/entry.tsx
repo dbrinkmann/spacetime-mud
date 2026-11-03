@@ -20,6 +20,22 @@ if (
         </main>,
       ),
     );
+} else if (import.meta.env.VITE_COMMUNITY_ONLY === "true") {
+  root.render(
+    <main
+      style={{
+        padding: "3rem",
+        fontFamily: "Georgia, serif",
+        background: "#111619",
+        color: "#e7ddc9",
+        minHeight: "100vh",
+      }}
+    >
+      <h1>Lantern</h1>
+      <p>A place for your Discord community.</p>
+      <p>Open Lantern from your server's App Launcher to enter your world.</p>
+    </main>,
+  );
 } else if (new URLSearchParams(location.search).has("community")) {
   import("./community/CommunityApp").then(({ CommunityApp }) =>
     root.render(<CommunityApp />),

@@ -2,7 +2,7 @@
 
 Updated November 3, 2026. Status: agreed product direction and implementation plan; not a description of shipped Discord functionality.
 
-Implementation has started on `feature/discord-community-worlds`. See [development status and setup](discord-development.md) for implemented slices, verification and remaining work. None of the branch changes are deployed to the production game yet.
+Implementation has started on `feature/discord-community-worlds`. See [development status and setup](discord-development.md) for implemented slices, verification and remaining work. A separate hosted staging deployment is available; the original production game is unchanged.
 
 ## Product
 

@@ -8,6 +8,7 @@
     "check:server": "tsc --noEmit -p spacetimedb/tsconfig.json",
     "bridge": "tsx bridge/index.ts",
     "discord:gateway": "tsx gateway/index.ts",
+    "build:staging": "tsx scripts/build-discord-staging.ts",
     "test:community": "tsx tests/community.ts",
     "test:community:browser": "tsx tests/community-browser.ts",
     "test": "tsx --test tests/*.test.ts",
@@ -34,6 +35,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261103.1",
     "@playwright/test": "^1.64.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",

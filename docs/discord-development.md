@@ -1,6 +1,25 @@
 # Discord branch development
 
-Branch: `feature/discord-community-worlds`. Production is unchanged. The new private community tables coexist with the legacy game during implementation; the community preview never subscribes to legacy rooms or zones.
+Branch: `feature/discord-community-worlds`. The original game is unchanged. The new private community tables coexist with the legacy game during implementation; the community preview never subscribes to legacy rooms or zones.
+
+## Hosted staging
+
+Frontend and OAuth gateway: **https://lantern-staging.dbrinkmann.workers.dev**
+
+World database: `dbrinkmann-lantern-staging` on Maincloud. The Cloudflare Worker serves the built frontend and `/api/discord/*`; its D1 binding stores stable member identities across worker restarts and concurrent launches. The Node gateway below is retained for development, not required on a player's machine.
+
+Discord Activity URL mappings (targets have no `https://` prefix):
+
+| Prefix | Target |
+| --- | --- |
+| `/` | `lantern-staging.dbrinkmann.workers.dev` |
+| `/db` | `maincloud.spacetimedb.com` |
+
+Enable Activities after saving the mappings. The `/` mapping also handles the OAuth API; no separate `/api` mapping is needed for this hosted deployment. Visiting the site in a regular browser shows instructions to open the Discord Activity.
+
+Deployment: `npm run build:staging`, then `wrangler deploy`. Credentials are uploaded through `wrangler secret bulk .bridge/discord-staging/secrets.json`, prepared by `npx tsx scripts/staging-secrets.ts`; that file and its authority token are Git-ignored. The preparation script requires the operator CLI via `SPACETIME_CLI` or PATH. Never upload `.env.local` or `.bridge` as assets. `DISCORD_TEST_GUILD_ID`, when configured, restricts staged sign-in to that server.
+
+Verified hosted assets against local build hashes, origin rejection, CORS, unauthenticated denial, and gateway-authorized HTTP membership updates with a real WebSocket subscription confirming the resulting identity. Run `npx tsx scripts/verify-discord-staging.ts` after deployment. Interactive OAuth and the Discord WebSocket proxy still require URL mapping configuration and an actual Discord launch.
 
 ## Implemented and tested locally
 
@@ -14,7 +33,7 @@ Branch: `feature/discord-community-worlds`. Production is unchanged. The new pri
 
 ## Remaining before a pilot
 
-- Create/configure a Discord application and test server; deploy a gateway with persistent storage and verify real desktop/mobile Activity launch, proxy WebSockets and OAuth.
+- Finish Discord URL mappings and test real desktop/mobile Activity launch, proxy WebSockets and OAuth against hosted staging.
 - Community-scoped MCP pairing/delegation and packaged creator distribution. Existing MCP tools still target the legacy game.
 - Community scripted objects/timers and room chat. Community publication currently rejects legacy `objectId` references deliberately.
 - Visible 3D entrance placement, graph map visualization, cleanup/relocation operations, richer authored routines spanning home rooms, admin moderation/audit UI.
