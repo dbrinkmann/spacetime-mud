@@ -78,6 +78,45 @@ try {
   await expect(page.getByLabel("Agent setup instructions")).toHaveValue(
     new RegExp(guild),
   );
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  // Reproduce Discord denying writeText; the user-gesture copy must still work.
+  await page.evaluate(`Object.defineProperty(navigator.clipboard, "writeText", {
+    configurable: true,
+    value: async () => { throw new DOMException("Blocked by iframe policy", "NotAllowedError"); }
+  })`);
+  await page
+    .getByRole("button", { name: "Copy instructions", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("Copied.");
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n")).toBe(
+    await page.getByLabel("Agent setup instructions").inputValue(),
+  );
+  // If both APIs are blocked, leave an actual selection and actionable feedback.
+  await page.evaluate("document.execCommand = () => false");
+  await page.getByRole("button", { name: "Copied", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Instructions selected.",
+  );
+  expect(
+    await page
+      .getByLabel("Agent setup instructions")
+      .evaluate(
+        (field: HTMLTextAreaElement) =>
+          field.selectionStart === 0 &&
+          field.selectionEnd === field.value.length &&
+          document.activeElement === field,
+      ),
+  ).toBe(true);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+  await page
+    .getByRole("button", { name: "Copy instructions", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("Ctrl+C");
   await expect(page.getByLabel("Allow editing common spaces")).toBeChecked();
   await page.getByLabel("Agent pairing ID").fill(pairing.value.agent_id);
   await page

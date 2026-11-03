@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Identity } from "spacetimedb";
 import type { DbConnection } from "../module_bindings";
 import type { CommunityAgentGrant } from "../module_bindings/types";
@@ -24,6 +24,39 @@ export function CommunityCreate({
   const [agent, setAgent] = useState("");
   const [commonSpace, setCommonSpace] = useState(isAdmin);
   const [copied, setCopied] = useState(false);
+  const [copyMessage, setCopyMessage] = useState("");
+  const instructions = useRef<HTMLTextAreaElement>(null);
+  const copyInstructions = async () => {
+    const field = instructions.current;
+    if (!field) return;
+    field.focus();
+    field.select();
+    field.setSelectionRange(0, field.value.length);
+    setCopied(false);
+    setCopyMessage(
+      "Instructions selected. Press Ctrl+C (Cmd+C on Mac), or use your device's Copy menu.",
+    );
+    // Discord's iframe can deny the async Clipboard API. Try selection-based
+    // copying synchronously while the button's user gesture is still active.
+    let success = false;
+    try {
+      success = document.execCommand("copy");
+    } catch {}
+    if (!success) {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(field.value);
+          success = true;
+        }
+      } catch {}
+    }
+    if (success) {
+      setCopied(true);
+      setCopyMessage(
+        "Copied. Paste these instructions into your coding agent.",
+      );
+    }
+  };
   const prompt = `Help me build in Lantern, a shared 3D world inside Discord.
 Read https://lantern-staging.dbrinkmann.workers.dev/agent/COMMUNITY.md.
 Download the standalone MCP client from https://lantern-staging.dbrinkmann.workers.dev/agent/lantern-agent.mjs and configure it in your MCP client using Node.js 22 or newer. No repository clone is needed.
@@ -42,22 +75,19 @@ Validate your geometry and publish directly with the current base_revision. Keep
       </p>
       <h3>1. Give your agent these instructions</h3>
       <textarea
+        ref={instructions}
         aria-label="Agent setup instructions"
         readOnly
         value={prompt}
         rows={9}
         onFocus={(e) => e.target.select()}
       />
-      <button
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(prompt)
-            .then(() => setCopied(true))
-            .catch(() => setCopied(false));
-        }}
-      >
+      <button onClick={() => void copyInstructions()}>
         {copied ? "Copied" : "Copy instructions"}
       </button>
+      <p role="status" aria-live="polite">
+        {copyMessage}
+      </p>
       <p className="muted">
         If copying is unavailable in Discord, select the text above and copy it.
         Your agent uses your existing coding tools and model subscription.
