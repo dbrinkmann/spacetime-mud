@@ -51,6 +51,7 @@ import UpgradeBehaviorReducer from "./upgrade_behavior_reducer";
 // Import all procedure arg schemas
 import * as GetPackageProcedure from "./get_package_procedure";
 import * as InspectEntityProcedure from "./inspect_entity_procedure";
+import * as RuntimeInfoProcedure from "./runtime_info_procedure";
 
 // Import all table schema definitions
 
@@ -81,6 +82,7 @@ const reducersSchema = __reducers(
 const proceduresSchema = __procedures(
   __procedureSchema("get_package", GetPackageProcedure.params, GetPackageProcedure.returnType),
   __procedureSchema("inspect_entity", InspectEntityProcedure.params, InspectEntityProcedure.returnType),
+  __procedureSchema("runtime_info", RuntimeInfoProcedure.params, RuntimeInfoProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */

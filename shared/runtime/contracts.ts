@@ -123,6 +123,7 @@ export type Effect =
       name: string;
       payload: Value;
       receipt: string;
+      slot?: string;
     }
   | { type: "component"; key: string; value: Value }
   | { type: "public"; key: string; value: Value }

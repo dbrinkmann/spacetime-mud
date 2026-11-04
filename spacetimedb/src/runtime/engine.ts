@@ -22,6 +22,10 @@ import type {
 import { validateComponent } from "../../../shared/runtime/components";
 import { executeBehavior, migrateBehavior } from "./execution";
 import { validateSource } from "./sandbox";
+import {
+  admitInvocation,
+  settleInvocation,
+} from "../../../shared/runtime/budgets";
 import { canonical } from "../../../shared/runtime/digest";
 import { prepareOperations } from "./operations";
 import {
@@ -398,6 +402,7 @@ export class WorldRuntime {
           .filter(
             (s) =>
               s.enabled &&
+              (!effect.slot || s.id === effect.slot) &&
               this.store.package(s.packageHash)?.manifest.handlers[
                 `message:${effect.name}`
               ],
@@ -483,6 +488,7 @@ export class WorldRuntime {
   step(entityId: string): boolean {
     const delivery = this.store.pending(entityId)[0];
     if (!delivery) return false;
+    if ((delivery.notBefore ?? 0) > this.now) return false;
     const event = delivery.event,
       entity = this.store.entity(entityId);
     if (!entity || !entity.enabled || entity.generation !== event.generation) {
@@ -572,6 +578,13 @@ export class WorldRuntime {
         return true;
       }
     }
+    const retryAt = admitInvocation(this.store, entity, slot, this.now);
+    if (retryAt !== null) {
+      delivery.notBefore = retryAt;
+      this.store.putDelivery(delivery);
+      return false;
+    }
+    delete delivery.notBefore;
     let result: ExecutionResult,
       prepared: ReturnType<WorldRuntime["validateResult"]>;
     try {
@@ -606,6 +619,7 @@ export class WorldRuntime {
     }
     // All expected user errors have been validated before mutations. Database failures
     // must escape to roll back the host transaction, never be caught as script faults.
+    settleInvocation(this.store, entity, slot, this.now, result.stats.steps);
     this.store.putSlot({
       ...slot,
       state: result.state,
@@ -661,7 +675,7 @@ export class WorldRuntime {
           effect.name,
           effect.payload,
           { kind: "behavior", id: slot.id, generation: slot.generation },
-          undefined,
+          effect.slot,
           undefined,
           event.correlation,
           event.depth + 1,

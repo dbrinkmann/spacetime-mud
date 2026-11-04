@@ -95,6 +95,31 @@ export function executeBehavior(
           value: entity.variables?.[key] ?? null,
         };
   };
+  const send = (
+    target: string,
+    name: string,
+    payload: Value,
+    targetSlot?: string,
+  ) => {
+    if (effects.filter((e) => e.type === "message").length >= BUDGETS.messages)
+      throw Error("Message budget exceeded.");
+    identifier(target);
+    identifier(name);
+    if (targetSlot !== undefined) {
+      identifier(targetSlot);
+      if (targetSlot.includes(":")) throw Error("Use a local slot name.");
+    }
+    const receipt = `message:${event.sequence}:${slot.id}:${effects.length}`;
+    record({
+      type: "message",
+      target,
+      name,
+      payload: copyValue(payload),
+      receipt,
+      slot: targetSlot === undefined ? undefined : `${target}:${targetSlot}`,
+    });
+    return receipt;
+  };
   const api: ScriptApi = {
     "variables.has": (key: string) => variable(key).exists,
     "variables.get": (key: string) => {
@@ -136,23 +161,14 @@ export function executeBehavior(
     "event.correlation": () => event.correlation,
     "entities.inspect": (id: string) =>
       copyValue(inspect(identifier(id, "entity ID"))),
-    "messages.send": (target: string, name: string, payload: Value) => {
-      if (
-        effects.filter((e) => e.type === "message").length >= BUDGETS.messages
-      )
-        throw Error("Message budget exceeded.");
-      identifier(target);
-      identifier(name);
-      const receipt = `message:${event.sequence}:${slot.id}:${effects.length}`;
-      record({
-        type: "message",
-        target,
-        name,
-        payload: copyValue(payload),
-        receipt,
-      });
-      return receipt;
-    },
+    "messages.send": (target: string, name: string, payload: Value) =>
+      send(target, name, payload),
+    "messages.sendToSlot": (
+      target: string,
+      targetSlot: string,
+      name: string,
+      payload: Value,
+    ) => send(target, name, payload, targetSlot),
     "components.get": (key: string) => {
       identifier(key);
       const staged = effects
@@ -241,6 +257,7 @@ export function executeBehavior(
       "state.set",
       "variables.set",
       "messages.send",
+      "messages.sendToSlot",
       "components.set",
       "operations.animate",
       "public.set",

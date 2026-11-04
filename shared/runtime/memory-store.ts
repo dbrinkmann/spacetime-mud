@@ -1,10 +1,18 @@
 import type { RuntimeStore, Delivery, Receipt, Timer } from "./store";
 import type { Entity, Slot, Package } from "./contracts";
+import type { WorkMeter } from "./budgets";
 import { operationDeadline, type Operation } from "./operations";
 const clone = <T>(v: T): T =>
   v === undefined ? v : JSON.parse(JSON.stringify(v));
 /** Deterministic simulation store. Production uses table-backed storage. */
 export class MemoryStore implements RuntimeStore {
+  private meters = new Map<string, WorkMeter>();
+  workMeter(key: string) {
+    return clone(this.meters.get(key));
+  }
+  putWorkMeter(m: WorkMeter) {
+    this.meters.set(m.key, clone(m));
+  }
   private entities = new Map<string, Entity>();
   private instances = new Map<string, Slot>();
   private packages = new Map<string, Package>();
@@ -132,6 +140,7 @@ export class MemoryStore implements RuntimeStore {
       sequence: this.sequence,
       revoked: [...this.revoked],
       animations: [...this.animations],
+      meters: [...this.meters],
     });
   }
   static restore(source: string) {
@@ -147,6 +156,7 @@ export class MemoryStore implements RuntimeStore {
     store.sequence = data.sequence;
     store.revoked = new Set(data.revoked ?? []);
     store.animations = new Map(data.animations ?? []);
+    store.meters = new Map(data.meters ?? []);
     return store;
   }
 }

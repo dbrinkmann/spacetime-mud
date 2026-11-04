@@ -17,6 +17,9 @@ import {
 import { operationDeadline } from "../../shared/runtime/operations";
 import type { Timer } from "../../shared/runtime/store";
 export default db;
+export const runtimeInfo = db.procedure({}, t.string(), () =>
+  JSON.stringify({ apiVersion: 2, status: "development" }),
+);
 import {
   requireOperator,
   requireGateway,
@@ -408,6 +411,19 @@ export const inspectEntity = db.procedure(
           JSON.parse(r.data),
         ),
         pending: [...tx.db.inbox.entity.filter(a.id)].length,
+        operations: [...tx.db.operation.entity.filter(a.id)].map((o) =>
+          JSON.parse(o.data),
+        ),
+        work: tx.db.workMeter.key.find(`entity:${a.id}`),
+        queue: [...tx.db.inbox.entity.filter(a.id)].map((row) => {
+          const d = JSON.parse(row.data);
+          return {
+            event: d.event.id,
+            type: d.event.type,
+            name: d.event.name,
+            notBefore: d.notBefore ?? null,
+          };
+        }),
       });
     }),
 );

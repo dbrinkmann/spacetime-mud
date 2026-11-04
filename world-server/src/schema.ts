@@ -131,7 +131,12 @@ const installedGrant = table(
     resources: t.string(),
   },
 );
+const workMeter = table(
+  {},
+  { key: t.string().primaryKey(), window: t.f64(), count: t.u32() },
+);
 export const db = schema({
+  workMeter,
   community,
   membership,
   builderGrant,

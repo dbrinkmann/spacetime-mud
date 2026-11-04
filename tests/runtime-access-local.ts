@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { DbConnection } from "../world-client/module_bindings/index.ts";
 import { canonical, sha256 } from "../shared/runtime/digest.ts";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createRuntimeMcp } from "../mcp/runtime.ts";
+const closeMcp: Array<() => Promise<void>> = [];
 const cli =
   process.env.SPACETIME_CLI ??
   "D:\\dev\\personal\\scratch\\tools\\spacetimedb\\spacetimedb-cli.exe";
@@ -129,6 +133,34 @@ try {
     await new Promise((r) => setTimeout(r, 50));
   }
   assert.equal(state.entity.components.light.intensity, 3);
+  const server = createRuntimeMcp(async () => agent),
+    mcp = new Client({ name: "live-builder-fixture", version: "1.0.0" });
+  const [serverTransport, clientTransport] =
+    InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await mcp.connect(clientTransport);
+  closeMcp.push(async () => {
+    await mcp.close();
+    await server.close();
+  });
+  const exported = await mcp.callTool({
+    name: "world_get_package",
+    arguments: { community: guild, id: manifest.id, version: "1.0.0" },
+  });
+  assert(!exported.isError);
+  assert.equal(
+    JSON.parse((exported.content as Array<{ text: string }>)[0].text).hash,
+    hash,
+  );
+  const authored = await mcp.callTool({
+    name: "world_create_entity",
+    arguments: {
+      ...command,
+      id: `mcp${guild}`,
+      components: { text: "Built through MCP" },
+    },
+  });
+  assert(!authored.isError);
   await assert.rejects(member.procedures.inspectEntity({ id }), /denied/i);
   call(
     "set_community_member",
@@ -154,6 +186,15 @@ try {
     communityId: guild,
     agent: agent.identity!,
   });
+  const denied = await mcp.callTool({
+    name: "world_inspect",
+    arguments: { id },
+  });
+  assert.equal(
+    denied.isError,
+    true,
+    "MCP must preserve server-side revocation",
+  );
   await assert.rejects(
     agent.reducers.createEntity({ ...command, id: `revoked${guild}` }),
     /membership|grant/i,
@@ -172,5 +213,6 @@ try {
     }),
   );
 } finally {
+  for (const close of closeMcp) await close();
   clients.forEach((c) => c.disconnect());
 }

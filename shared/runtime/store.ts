@@ -1,6 +1,7 @@
 import type { Entity, Event, Package, Slot } from "./contracts";
 import type { Value } from "./values";
 import type { Operation } from "./operations";
+import type { WorkMeter } from "./budgets";
 export type Receipt = {
   id: string;
   event: string;
@@ -26,6 +27,7 @@ export type Delivery = {
   admitted?: Array<{ id: string; generation: number }>;
   cursor: number;
   started: boolean;
+  notBefore?: number;
 };
 export type Timer = {
   id: string;
@@ -40,6 +42,8 @@ export type Timer = {
 };
 /** All mutation calls occur within the host's transaction. No callbacks perform I/O. */
 export interface RuntimeStore {
+  workMeter(key: string): WorkMeter | undefined;
+  putWorkMeter(meter: WorkMeter): void;
   entity(id: string): Entity | undefined;
   putEntity(entity: Entity): void;
   slots(entity: string): Slot[];

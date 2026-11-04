@@ -5,6 +5,44 @@ import { WorldRuntime } from "../spacetimedb/src/runtime/engine.ts";
 import type { Entity, Package } from "../shared/runtime/contracts.ts";
 const empty = { type: "object" as const, properties: {} };
 const nil = { type: "null" as const };
+test("slot-directed messages validate only the selected contract and do not invoke siblings", () => {
+  const store = new MemoryStore(),
+    world = new WorldRuntime(store, 0);
+  world.create(entity("sender"));
+  world.create(entity("receiver"));
+  world.register(
+    packageOf(
+      "send",
+      'function on_use(ctx){ctx.messages.sendToSlot("receiver","counter","set",7);}',
+      { "action:use": { handler: "on_use", input: nil } },
+    ),
+  );
+  world.register(
+    packageOf(
+      "counter",
+      'function on_set(ctx,value){ctx.state.set("count",value);}',
+      { "message:set": { handler: "on_set", input: { type: "number" } } },
+    ),
+  );
+  world.register(
+    packageOf(
+      "other",
+      'function on_set(ctx,value){ctx.state.set("count",99);}',
+      { "message:set": { handler: "on_set", input: { type: "string" } } },
+    ),
+  );
+  world.attach("sender", "send", "send", {});
+  world.attach("receiver", "counter", "counter", {});
+  world.attach("receiver", "other", "other", {});
+  world.drain("sender");
+  world.drain("receiver");
+  world.action("sender", "use", null, "alice");
+  world.drain("sender");
+  world.drain("receiver");
+  assert.equal(store.slot("receiver:counter")!.state.count, 7);
+  assert.equal(store.slot("receiver:other")!.state.count, undefined);
+  assert.equal(store.slot("sender:send")!.lastError, "");
+});
 test("shared variables declare readers and writers, coalesce changes, and keep private state out of inspection", () => {
   const store = new MemoryStore(),
     world = new WorldRuntime(store, 0);

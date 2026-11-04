@@ -1,4 +1,5 @@
 import { copyValue } from "../../../shared/runtime/values";
+import { WORK_LIMITS } from "../../../shared/runtime/budgets";
 // Existing ES5 interpreter; only the game API crosses the sandbox boundary.
 // Its untyped internal API is isolated in this adapter.
 // @ts-ignore Generated upstream bundle; see scripts/bundle-interpreter.mjs.
@@ -177,7 +178,7 @@ export function executeSandbox(
   };
   const step = vm.step.bind(vm);
   vm.step = () => {
-    if (++steps > 20000 || vm.stateStack.length > 128)
+    if (++steps > WORK_LIMITS.maxInvocationSteps || vm.stateStack.length > 128)
       throw Error("Script execution budget exceeded.");
     for (const state of vm.stateStack) bounded(state.value);
     return step();

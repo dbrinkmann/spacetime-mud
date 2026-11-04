@@ -1,6 +1,6 @@
 # Programmable world development module
 
-This module is an **incomplete isolated replacement**, not the deployed Lantern application. Authoring checks gateway-provisioned membership, property ownership/admin authority and delegated builder grants. Player action injection and root property provisioning remain operator-only development entry points. The Activity and MCP integration, aggregate execution quotas, full authority lifecycle cleanup and functionality parity gates must be completed before public deployment.
+This module is an **incomplete isolated replacement**, not the deployed Lantern application. Authoring checks gateway-provisioned membership, property ownership/admin authority and delegated builder grants. Player action injection and root property provisioning remain operator-only development entry points. The Activity integration, complete creator tools, full authority lifecycle cleanup and functionality parity gates must be completed before public deployment.
 
 The shared contracts live in `shared/runtime`. `spacetimedb/src/runtime` contains the interpreter adapter, buffered behavior execution, dispatcher and virtual-clock simulator. The existing production interpreter entry point delegates to that extracted adapter; there is no second interpreter implementation.
 
@@ -19,6 +19,7 @@ Install this module's dependencies with `npm install --prefix world-server`. Pub
 spacetimedb-cli publish lantern-runtime-refactor --module-path world-server --server http://127.0.0.1:3030 --no-config --delete-data=never --yes=all
 npm run test:runtime:local
 npm run test:runtime:access
+npm run test:runtime:mcp
 ```
 
 The local integration scripts deliberately fix their target to `http://127.0.0.1:3030` / `lantern-runtime-refactor`. Set `SPACETIME_CLI` to the CLI executable if it is not at the workspace's existing Windows tools path. They create uniquely named fixture entities, communities and immutable packages; they do not delete the database. Provisioning uses the publishing operator's CLI identity. The access test uses three separate anonymous SDK identities and authorizes them through the trusted provisioning reducers before checking permissions.
@@ -27,7 +28,11 @@ Current authoring contracts are development contracts. Packages declare typed ev
 
 The initial component set is visibility, transform, light and text. A handler stages changes; the dispatcher validates the whole invocation before committing. Messages are asynchronous, same-property, generation-scoped and schema-checked. A returned message ID is provisional until commit and identifies its queued delivery. Actions cannot invoke uninitialized slots. State survives suspension; resume does not replay successful creation. Explicit upgrade migrations preserve the previous installed slot if validation or execution fails.
 
-The simulator uses the same runtime with a virtual clock and transaction snapshots. Advancing a large time interval delivers each overdue timer once; it does not replay missed recurring intervals. The scheduler processes bounded work per entity. Per-entity/community rate accounting and complete receipt/status APIs remain release prerequisites.
+The simulator uses the same runtime with a virtual clock and transaction snapshots. Advancing a large time interval delivers each overdue timer once; it does not replay missed recurring intervals. The scheduler processes bounded work per entity. Persisted fixed one-second windows limit invocations and interpreter work per slot, entity and community. Exhaustion defers the current delivery without dropping it or faulting the script; the entity preserves FIFO order. Failed invocations retain their maximum work reservation. These are fixed windows, not sliding-window limits. Complete causal-work accounting and receipt/status APIs remain release prerequisites.
+
+Run `npm run mcp:runtime` for the development stdio MCP server. It defaults to the isolated local module; override with `LANTERN_RUNTIME_HOST` and `LANTERN_RUNTIME_DATABASE`. Legacy `SPACETIME_*` settings are deliberately ignored. The client checks `runtimeInfo` before returning its public identity. Credentials are stored separately under `~/.lantern-agent/runtime-v2`; tool responses never include the token. This is not yet the hosted creator installation flow.
+
+`world_guide`, `world_validate_package` and `world_simulate` work without a live connection. Simulation uses the same runtime and caps a whole request at 256 scheduler steps. Live tools support paired package publication/export, entity creation, behavior attachment/upgrade/suspension and authorized diagnostic inspection. They do not yet author room geometry or connect the replacement to the Activity. `ctx.messages.sendToSlot(entityId, localSlotName, name, payload)` targets one behavior; `send` addresses all subscribed behaviors on an entity. Both validate recipient schemas and recheck sender authority at delivery.
 
 Timed transform operations use `ctx.operations.animate("transform", { position: [x,y,z], rotation: [x,y,z] }, seconds)`, plus `pause`, `resume`, and `cancel` with the resource key. The returned ID identifies the committed operation. Replacement starts from the current sampled pose and queues a cancellation event for the old operation. `operation:completed` and `operation:cancelled` receive `{ id, resource, outcome }`. Angles interpolate in authored degrees along each axis; this API does not imply physics, navigation clearance, parenting or passenger support. Both inspection and the shared sampler resolve state from the persisted timing anchor. Client rendering integration is pending.
 

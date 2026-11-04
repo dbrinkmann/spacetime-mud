@@ -8,8 +8,11 @@ import { type Infer as __Infer } from "spacetimedb";
 // Import all procedure arg schemas
 import * as GetPackageProcedure from "../get_package_procedure";
 import * as InspectEntityProcedure from "../inspect_entity_procedure";
+import * as RuntimeInfoProcedure from "../runtime_info_procedure";
 
 export type GetPackageArgs = __Infer<typeof GetPackageProcedure.params>;
 export type GetPackageResult = __Infer<typeof GetPackageProcedure.returnType>;
 export type InspectEntityArgs = __Infer<typeof InspectEntityProcedure.params>;
 export type InspectEntityResult = __Infer<typeof InspectEntityProcedure.returnType>;
+export type RuntimeInfoArgs = __Infer<typeof RuntimeInfoProcedure.params>;
+export type RuntimeInfoResult = __Infer<typeof RuntimeInfoProcedure.returnType>;

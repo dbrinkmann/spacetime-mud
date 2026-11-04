@@ -12,7 +12,16 @@ import {
   type Operation,
 } from "../../shared/runtime/operations";
 import { canExecuteInstalled } from "../../shared/runtime/permissions";
+import type { WorkMeter } from "../../shared/runtime/budgets";
 export class TableStore implements RuntimeStore {
+  workMeter(key: string) {
+    return this.ctx.db.workMeter.key.find(key) ?? undefined;
+  }
+  putWorkMeter(m: WorkMeter) {
+    if (this.ctx.db.workMeter.key.find(m.key))
+      this.ctx.db.workMeter.key.update(m);
+    else this.ctx.db.workMeter.insert(m);
+  }
   canRun(slot: Slot, entity: Entity) {
     const grant = this.ctx.db.installedGrant.slot.find(slot.id),
       property = this.ctx.db.propertyAuthority.id.find(entity.property);
@@ -169,10 +178,10 @@ export class TableStore implements RuntimeStore {
   }
   schedule() {
     for (const id of this.touched) {
-      const pending = this.pending(id).length > 0,
+      const pending = this.pending(id)[0],
         timers = [...this.ctx.db.timer.entity.filter(id)];
       const due = pending
-        ? now(this.ctx) + 0.01
+        ? Math.max(now(this.ctx) + 0.01, pending.notBefore ?? 0)
         : Math.min(
             ...timers.map((t) => t.due),
             ...this.operations(id).map(operationDeadline),

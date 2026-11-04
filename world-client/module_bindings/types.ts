@@ -139,3 +139,10 @@ export const Wake = __t.object("Wake", {
   scheduledAt: __t.scheduleAt(),
 });
 export type Wake = __Infer<typeof Wake>;
+
+export const WorkMeter = __t.object("WorkMeter", {
+  key: __t.string(),
+  window: __t.f64(),
+  count: __t.u32(),
+});
+export type WorkMeter = __Infer<typeof WorkMeter>;
