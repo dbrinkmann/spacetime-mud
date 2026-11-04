@@ -13,4 +13,3 @@ export type GetPackageArgs = __Infer<typeof GetPackageProcedure.params>;
 export type GetPackageResult = __Infer<typeof GetPackageProcedure.returnType>;
 export type InspectEntityArgs = __Infer<typeof InspectEntityProcedure.params>;
 export type InspectEntityResult = __Infer<typeof InspectEntityProcedure.returnType>;
-

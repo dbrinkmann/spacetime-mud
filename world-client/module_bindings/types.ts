@@ -139,4 +139,3 @@ export const Wake = __t.object("Wake", {
   scheduledAt: __t.scheduleAt(),
 });
 export type Wake = __Infer<typeof Wake>;
-

@@ -33,4 +33,3 @@ export type SetCommunityGatewayParams = __Infer<typeof SetCommunityGatewayReduce
 export type SetCommunityMemberParams = __Infer<typeof SetCommunityMemberReducer>;
 export type SuspendBehaviorParams = __Infer<typeof SuspendBehaviorReducer>;
 export type UpgradeBehaviorParams = __Infer<typeof UpgradeBehaviorReducer>;
-
