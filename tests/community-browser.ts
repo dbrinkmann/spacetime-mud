@@ -107,6 +107,8 @@ try {
   )!;
   const interior = builderRoom();
   interior.name = home.name;
+  interior.width = 80;
+  interior.depth = 80;
   interior.models.road = {
     boxes: [{ position: [0, 0, 0], size: [8, 0.04, 4], color: "#28282a" }],
   };
@@ -139,6 +141,19 @@ try {
   await expect(
     page.locator(".community-entrance").filter({ hasText: "Outside: Welcome" }),
   ).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window.boxWorld!.inspect() as { camera: { span: number } }).camera
+            .span,
+      ),
+    )
+    .toBe(4.5);
+  // An overview is still available through manual zoom for distant doors.
+  await page.locator(".poc-viewport").hover();
+  await page.mouse.wheel(0, 1000);
+  await page.waitForTimeout(200);
   const hoverDoor = await page.evaluate(() =>
     window.boxWorld!.project([-2, 1, -3]),
   );
@@ -166,6 +181,20 @@ try {
       }),
     )
     .toBeGreaterThan(1.5);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const s = window.boxWorld!.inspect() as {
+          camera: { target: number[] };
+          position: number[];
+        };
+        return (
+          Math.abs(s.camera.target[0] - s.position[0]) < 0.01 &&
+          Math.abs(s.camera.target[2] - s.position[2]) < 0.01
+        );
+      }),
+    )
+    .toBe(true);
   const outsideDoor = await page.evaluate(() =>
     window.boxWorld!.project([-2, 1, -3]),
   );
@@ -173,6 +202,9 @@ try {
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();
+  await page.locator(".poc-viewport").hover();
+  await page.mouse.wheel(0, 1000);
+  await page.waitForTimeout(200);
   const hoverHome = await page.evaluate(() =>
     window.boxWorld!.project([-2, 1, -3]),
   );

@@ -113,14 +113,26 @@ export function Viewport(props: Props) {
       RIGHT: THREE.MOUSE.ROTATE,
     };
     const reset = () => {
-      camera.position.set(11 * roomScale, 11 * roomScale, 15 * roomScale);
+      const live = callbacks.current.live;
+      const me = live?.travelers.find((t) => t.id === live.identity);
+      const origin = live
+        ? me
+          ? sampleMotion(me.motion, props.room, serverNow()).position
+          : props.room.spawn
+        : [0, 0, 0];
+      const distanceScale = live ? 1 : roomScale;
+      camera.position.set(
+        origin[0] + 11 * distanceScale,
+        11 * distanceScale,
+        origin[2] + 15 * distanceScale,
+      );
       if (props.preview)
         camera.position.applyAxisAngle(
           new THREE.Vector3(0, 1, 0),
           THREE.MathUtils.degToRad(props.preview.yaw),
         );
       camera.zoom = 1;
-      controls.target.set(0, 0.65, 0);
+      controls.target.set(origin[0], 0.65, origin[2]);
       camera.updateProjectionMatrix();
       controls.update();
     };
@@ -535,10 +547,14 @@ export function Viewport(props: Props) {
       );
     };
     const size = () => {
-      const w = container.clientWidth,
-        h = container.clientHeight;
+      const w = Math.max(1, container.clientWidth),
+        h = Math.max(1, container.clientHeight);
       const extent = Math.max(room.width, room.depth);
-      const span = Math.max(extent * 0.61, (extent * 0.78) / (w / h));
+      // Live play frames the character at a consistent scale, irrespective of
+      // the room footprint. Authoring previews still show the complete scene.
+      const span = props.live
+        ? Math.max(4.5, 3 / (w / h))
+        : Math.max(extent * 0.61, (extent * 0.78) / (w / h));
       camera.left = (-span * w) / h;
       camera.right = (span * w) / h;
       camera.top = span;
@@ -582,6 +598,11 @@ export function Viewport(props: Props) {
               ?.material as THREE.MeshStandardMaterial
           )?.opacity,
         })),
+        camera: {
+          span: camera.top,
+          zoom: camera.zoom,
+          target: controls.target.toArray(),
+        },
         position: player.root.position.toArray(),
         animation: mode,
         seat: seated?.id ?? null,
@@ -752,11 +773,30 @@ export function Viewport(props: Props) {
           props.preview ? 1 : dt,
         );
       animateRig(companion, guestSeat ? "sit" : "idle", elapsed + 0.5, dt);
+      if (live) {
+        const destination = new THREE.Vector3(
+          player.root.position.x,
+          0.65,
+          player.root.position.z,
+        );
+        const shift = destination.sub(controls.target);
+        camera.position.add(shift);
+        controls.target.add(shift);
+      }
       controls.update();
-      // Only walls between the camera and the room center fade.
+      // Fade walls on the camera side of the current focus, including when
+      // following a character far from the room origin.
       for (const g of walls) {
-        const toward = new THREE.Vector3(g.position.x, 0, g.position.z),
-          eye = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+        const toward = new THREE.Vector3(
+            g.position.x - controls.target.x,
+            0,
+            g.position.z - controls.target.z,
+          ),
+          eye = new THREE.Vector3(
+            camera.position.x - controls.target.x,
+            0,
+            camera.position.z - controls.target.z,
+          );
         const obstructs = toward.dot(eye) > 0;
         g.traverse((c) => {
           if (c instanceof THREE.Mesh) {
