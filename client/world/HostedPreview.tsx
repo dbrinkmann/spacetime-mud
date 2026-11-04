@@ -11,6 +11,8 @@ export type PreviewInput = {
   character?: string;
   yaw?: number;
   time?: number;
+  focus?: [number, number, number];
+  zoom?: number;
 };
 declare global {
   interface Window {
@@ -33,7 +35,12 @@ export function mountPreview(root: Root) {
             character={character}
             guest={character}
             showGuest={false}
-            preview={{ yaw: input.yaw ?? 0, time: input.time ?? 0 }}
+            preview={{
+              yaw: input.yaw ?? 0,
+              time: input.time ?? 0,
+              focus: input.focus,
+              zoom: input.zoom,
+            }}
             command={{ id: 0, action: "idle" }}
             onStatus={() => {}}
             onError={(e) => {

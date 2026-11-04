@@ -185,7 +185,7 @@ server.registerTool(
   "world_preview",
   {
     description:
-      "Render an unpublished room source or an existing room_id using the hosted game renderer. Returns a PNG, without publishing. yaw rotates the default camera in degrees; time freezes character animation and decorative prop motion in seconds. Requires active pairing. No local browser installation.",
+      "Render an unpublished room source or an existing room_id using the hosted game renderer. Returns a PNG, without publishing. yaw rotates the default camera in degrees; time freezes character animation and decorative prop motion in seconds. Requires active pairing. Optional focus is a world-space camera target; zoom (0.25..20, default 1) magnifies the whole-room framing. No local browser installation.",
     inputSchema: {
       ...scope,
       source: source.optional(),
@@ -193,6 +193,14 @@ server.registerTool(
       character: source.optional(),
       yaw: z.number().min(-360).max(360).optional(),
       time: z.number().min(0).max(3600).optional(),
+      focus: z
+        .tuple([
+          z.number().min(-100).max(100),
+          z.number().min(-100).max(100),
+          z.number().min(-100).max(100),
+        ])
+        .optional(),
+      zoom: z.number().min(0.25).max(20).optional(),
     },
   },
   async (a) => {
@@ -227,6 +235,8 @@ server.registerTool(
           character: a.character,
           yaw: a.yaw,
           time: a.time,
+          focus: a.focus,
+          zoom: a.zoom,
         }),
         signal: AbortSignal.timeout(90000),
       });
@@ -329,7 +339,7 @@ server.registerTool(
   "world_validate",
   {
     description:
-      "Validate a room or character, including geometry budgets and reachable navigation, without publishing.",
+      "Validate without publishing. Required arguments: kind (room or character) and source (JSON text). Does not accept community_id or room_id. Checks geometry budgets and reachable navigation.",
     inputSchema: { kind: z.enum(["room", "character"]), source },
   },
   guard(async (a) => {
@@ -346,18 +356,23 @@ server.registerTool(
   "world_publish_room",
   {
     description:
-      "Publish validated 3D room geometry live. Requires owner/common-space authority and current base_revision. Also updates room name/description.",
+      "Publish validated room data live with current base_revision. Set appearance_only:true to have the server reject changes outside box appearance and floor appearance fields.",
     inputSchema: {
       ...scope,
       room_id: id,
       base_revision: z.number().int().nonnegative(),
       source,
+      appearance_only: z.boolean().optional(),
     },
   },
   guard(async (a) => {
     const c = await connected;
     checkRoom(c, a.community_id, a.room_id);
-    await c.reducers.publishCommunityRoom({
+    await (
+      a.appearance_only
+        ? c.reducers.publishCommunityRoomAppearance
+        : c.reducers.publishCommunityRoom
+    )({
       roomId: BigInt(a.room_id),
       source: a.source,
       baseRevision: a.base_revision,

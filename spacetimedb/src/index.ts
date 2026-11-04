@@ -1,3 +1,4 @@
+import { assertAppearanceOnly } from "../../shared/appearance";
 import {
   schema,
   table,
@@ -992,12 +993,24 @@ function publishCommunityScene(
   roomId: bigint,
   source: string,
   baseRevision: number,
+  appearanceOnly = false,
 ) {
   const r = communityBuildRoom(ctx, roomId);
   requirePropertyEdit(ctx, r.propertyId);
   if (r.revision !== baseRevision)
     fail("Room changed; inspect its latest revision before publishing.");
   const scene = parseDefinition(source, "room");
+  if (appearanceOnly) {
+    try {
+      assertAppearanceOnly(parseDefinition(r.source, "room"), scene);
+    } catch (error) {
+      fail(
+        error instanceof Error
+          ? error.message
+          : "Appearance-only publish rejected.",
+      );
+    }
+  }
   validateNavigation(scene);
   for (const visual of [...scene.objects, ...(scene.npcs ?? [])]) {
     if (!visual.objectId) continue;
@@ -1048,6 +1061,7 @@ function publishCommunityScene(
     source: canonical,
     revision: r.revision + 1,
   });
+  if (appearanceOnly) return; // Appearance edits do not interrupt movement or seating.
   const now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
   const oldScene = parseDefinition(r.source, "room");
   for (const p of ctx.db.communityCharacter.communityId.filter(r.communityId)) {
@@ -1070,6 +1084,11 @@ function publishCommunityScene(
 export const publishCommunityRoom = db.reducer(
   { roomId: t.u64(), source: t.string(), baseRevision: t.u32() },
   (ctx, a) => publishCommunityScene(ctx, a.roomId, a.source, a.baseRevision),
+);
+export const publishCommunityRoomAppearance = db.reducer(
+  { roomId: t.u64(), source: t.string(), baseRevision: t.u32() },
+  (ctx, a) =>
+    publishCommunityScene(ctx, a.roomId, a.source, a.baseRevision, true),
 );
 export const linkPropertyRooms = db.reducer(
   {

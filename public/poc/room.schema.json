@@ -1105,6 +1105,27 @@
           "animation"
         ]
       }
+    },
+    "floorMaterial": {
+      "enum": [
+        "plain",
+        "asphalt",
+        "concrete",
+        "metal",
+        "wood",
+        "fabric",
+        "glass"
+      ]
+    },
+    "floorRoughness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "floorWear": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
     }
   },
   "required": [

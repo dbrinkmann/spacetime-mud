@@ -139,3 +139,15 @@ Signs may bind their text to a home entrance: `"binding":{"kind":"homeName","ent
 Signs can attach to a placement with `"attachTo":"station-wall"`. With attachTo, sign position and yaw are local to that placement; without it, they remain room coordinates. Attached signs follow the placement's motion and fade with cutaway walls. Convert existing world coordinates to parent-local coordinates when attaching; do not simply add attachTo to an existing world-space sign. Signs are now single-sided by default to prevent mirrored text from behind; set `doubleSided:true` only when mirrored backfaces are intentional. Binding a sign's text to a home and attaching it to geometry are independent features and can be combined.
 
 Scripts may declare top-level `var` values (including arrays/objects) for per-event constants. Initializers run inside the interpreter budgets on every event. Use ctx.get/ctx.set for persistent state; globals do not persist between events.
+
+### Close-up previews and guarded material edits
+
+`world_preview` accepts optional `focus:[x,y,z]` in room/world coordinates (-100..100) and `zoom` (0.25..20, default 1). Focus is the camera target, not a crop or room edit. Zoom multiplies the normal whole-room framing; use e.g. `focus:[12,0.5,2], zoom:4` to inspect street detail. Yaw orbits around this focus. Keep the complete original source and room context. Omit both options for the normal overview.
+
+Rooms accept `floorMaterial` (same seven box presets), `floorRoughness` and `floorWear` (0..1). Existing rooms default to plain. Runtime floor seams are shown for plain/concrete only; asphalt, wood, metal, fabric and glass floors have no automatic tile grid. Authored overlays still cover the runtime floor and need their own materials.
+
+Glass is transparent, not an opaque mask: glass in front of emissive geometry exposes its glow and can read as a bright block. Use plain opaque boxes for dark frames/panels that must obscure neon; reserve glass for intentional see-through panes.
+
+`world_validate` requires `kind:"room"` or `kind:"character"`, plus `source` JSON text. It does not accept community_id or room_id.
+
+For retrofits, call `world_publish_room` with `appearance_only:true`. The server compares against the current `base_revision` and rejects all changes except box `color/material/roughness/wear/emissive` (including NPC character boxes), and room `floorColor/floorMaterial/floorRoughness/floorWear`. Preserve all other data, including array order, model IDs, signs, lights, geometry, scripts, names, descriptions, exits and motion. A successful guarded publish records history but does not stop walking or clear seats. This flag is optional; ordinary publishing remains available for intentional structural edits.

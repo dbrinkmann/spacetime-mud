@@ -67,7 +67,7 @@ type Props = {
   speech?: WorldSpeech[];
   onObject?: (id: string) => void;
   showGuest?: boolean;
-  preview?: { yaw: number; time: number };
+  preview?: { yaw: number; time: number; focus?: Vec3; zoom?: number };
   entrances?: Record<string, { label: string; onClick: () => void }>;
   live?: {
     identity: string;
@@ -155,8 +155,17 @@ export function Viewport(props: Props) {
           new THREE.Vector3(0, 1, 0),
           THREE.MathUtils.degToRad(props.preview.yaw),
         );
-      camera.zoom = 1;
-      controls.target.set(origin[0], 0.65, origin[2]);
+      const focus = props.preview?.focus;
+      if (focus)
+        camera.position.add(
+          new THREE.Vector3(focus[0], focus[1] - 0.65, focus[2]),
+        );
+      camera.zoom = props.preview?.zoom ?? 1;
+      controls.target.set(
+        focus?.[0] ?? origin[0],
+        focus?.[1] ?? 0.65,
+        focus?.[2] ?? origin[2],
+      );
       camera.updateProjectionMatrix();
       controls.update();
     };
@@ -216,6 +225,9 @@ export function Viewport(props: Props) {
       position: [0, -0.14, 0],
       size: [room.width, 0.25, room.depth],
       color: room.floorColor,
+      material: room.floorMaterial,
+      roughness: room.floorRoughness,
+      wear: room.floorWear,
     });
     floor.userData.floor = true;
     // Meter-spaced tile seams rather than a fixed grid stretched to room size.
@@ -229,16 +241,17 @@ export function Viewport(props: Props) {
       "position",
       new THREE.Float32BufferAttribute(seamPoints, 3),
     );
-    scene.add(
-      new THREE.LineSegments(
-        seamGeometry,
-        new THREE.LineBasicMaterial({
-          color: "#171b1e",
-          transparent: true,
-          opacity: 0.3,
-        }),
-      ),
+    const floorSeams = new THREE.LineSegments(
+      seamGeometry,
+      new THREE.LineBasicMaterial({
+        color: "#171b1e",
+        transparent: true,
+        opacity: 0.3,
+      }),
     );
+    floorSeams.visible =
+      !room.floorMaterial || ["plain", "concrete"].includes(room.floorMaterial);
+    scene.add(floorSeams);
     const objects = new Map<string, THREE.Group>(),
       walls: THREE.Group[] = [];
     const pickables: THREE.Object3D[] = [floor];

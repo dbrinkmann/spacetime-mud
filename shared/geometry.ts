@@ -101,6 +101,9 @@ export type Room = {
   width: number;
   depth: number;
   floorColor: string;
+  floorMaterial?: SurfaceMaterial;
+  floorRoughness?: number;
+  floorWear?: number;
   spawn: Vec3;
   models: Record<string, Model>;
   objects: Placement[];
@@ -205,6 +208,9 @@ export function validate(
           "width",
           "depth",
           "floorColor",
+          "floorMaterial",
+          "floorRoughness",
+          "floorWear",
           "spawn",
           "models",
           "objects",
@@ -249,6 +255,14 @@ export function validate(
     num(root.width, "width", 4, 100);
     num(root.depth, "depth", 4, 100);
     color(root.floorColor, "floorColor");
+    if (
+      root.floorMaterial !== undefined &&
+      !surfaceMaterials.includes(root.floorMaterial as SurfaceMaterial)
+    )
+      issue("floorMaterial", "unknown material");
+    if (root.floorRoughness !== undefined)
+      num(root.floorRoughness, "floorRoughness", 0, 1);
+    if (root.floorWear !== undefined) num(root.floorWear, "floorWear", 0, 1);
     vector(root.spawn, "spawn", -50, 50);
     const models =
       root.models &&

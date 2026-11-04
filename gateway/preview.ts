@@ -24,6 +24,8 @@ export async function preview(req: Request, env: Env) {
     character?: string;
     yaw?: number;
     time?: number;
+    focus?: [number, number, number];
+    zoom?: number;
   };
   try {
     const reader = req.body?.getReader();
@@ -56,6 +58,7 @@ export async function preview(req: Request, env: Env) {
     for (const [key, min, max] of [
       ["yaw", -360, 360],
       ["time", 0, 3600],
+      ["zoom", 0.25, 20],
     ] as const) {
       const n = input[key];
       if (
@@ -64,6 +67,16 @@ export async function preview(req: Request, env: Env) {
       )
         throw Error(`Invalid ${key}.`);
     }
+    if (
+      input.focus !== undefined &&
+      (!Array.isArray(input.focus) ||
+        input.focus.length !== 3 ||
+        input.focus.some(
+          (n) =>
+            typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > 100,
+        ))
+    )
+      throw Error("focus must contain three finite coordinates in -100..100.");
     validateNavigation(parseDefinition(input.source, "room"));
     if (input.character !== undefined) {
       if (typeof input.character !== "string")
@@ -125,6 +138,8 @@ export async function preview(req: Request, env: Env) {
         character: input.character,
         yaw: input.yaw,
         time: input.time,
+        focus: input.focus,
+        zoom: input.zoom,
       },
     );
     await new Promise((resolve) => setTimeout(resolve, 300));

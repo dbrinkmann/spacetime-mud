@@ -166,6 +166,42 @@ try {
       assert.deepEqual(await position(), [-2, 0, 2]);
     }
   }
+  neon.width = 60;
+  neon.depth = 16;
+  neon.floorMaterial = "asphalt";
+  await page.evaluate(
+    async (source) => window.renderLanternPreview!({ source }),
+    JSON.stringify(neon),
+  );
+  const before = await page.evaluate(() => {
+    const a = window.boxWorld!.project([3, 0, 2]),
+      b = window.boxWorld!.project([4, 0, 2]);
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  });
+  await page.evaluate(
+    async (source) =>
+      window.renderLanternPreview!({
+        source,
+        focus: [3, 0, 2],
+        zoom: 4,
+        yaw: 0,
+      }),
+    JSON.stringify(neon),
+  );
+  const close = await page.evaluate(() => {
+    const a = window.boxWorld!.project([3, 0, 2]),
+      b = window.boxWorld!.project([4, 0, 2]);
+    return { a, distance: Math.hypot(b.x - a.x, b.y - a.y) };
+  });
+  assert.ok(
+    Math.abs(close.a.x - 700) < 1 && Math.abs(close.a.y - 450) < 1,
+    "focus must be centered",
+  );
+  assert.ok(
+    Math.abs(close.distance / before - 4) < 0.01,
+    "zoom must magnify without resizing source",
+  );
+  await page.screenshot({ path: "test-results/art-style-closeup.png" });
   console.log(JSON.stringify(errors));
   if (errors.length) throw Error("Rendering errors");
 } finally {

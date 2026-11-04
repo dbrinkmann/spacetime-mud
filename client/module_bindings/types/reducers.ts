@@ -41,6 +41,7 @@ import PruneUnauthoredZoneReducer from "../prune_unauthored_zone_reducer";
 import PublishCommunityAvatarReducer from "../publish_community_avatar_reducer";
 import PublishCommunityObjectReducer from "../publish_community_object_reducer";
 import PublishCommunityRoomReducer from "../publish_community_room_reducer";
+import PublishCommunityRoomAppearanceReducer from "../publish_community_room_appearance_reducer";
 import PublishVersionReducer from "../publish_version_reducer";
 import PublishVisualReducer from "../publish_visual_reducer";
 import RemoveCommunityHomeReducer from "../remove_community_home_reducer";
@@ -100,6 +101,7 @@ export type PruneUnauthoredZoneParams = __Infer<typeof PruneUnauthoredZoneReduce
 export type PublishCommunityAvatarParams = __Infer<typeof PublishCommunityAvatarReducer>;
 export type PublishCommunityObjectParams = __Infer<typeof PublishCommunityObjectReducer>;
 export type PublishCommunityRoomParams = __Infer<typeof PublishCommunityRoomReducer>;
+export type PublishCommunityRoomAppearanceParams = __Infer<typeof PublishCommunityRoomAppearanceReducer>;
 export type PublishVersionParams = __Infer<typeof PublishVersionReducer>;
 export type PublishVisualParams = __Infer<typeof PublishVisualReducer>;
 export type RemoveCommunityHomeParams = __Infer<typeof RemoveCommunityHomeReducer>;
