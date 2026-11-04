@@ -274,7 +274,7 @@ try {
             .querySelector(".poc-viewport canvas")!
             .getBoundingClientRect();
           const input = document
-            .querySelector('[aria-label="Room message"]')!
+            .querySelector(".speak-toggle")!
             .getBoundingClientRect();
           return (
             document.documentElement.scrollHeight <= innerHeight &&

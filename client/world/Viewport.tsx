@@ -47,7 +47,17 @@ export type LiveTraveler = {
   motion: Motion;
   away?: boolean;
 };
+type WorldSpeech = {
+  id: string;
+  speakerId: string;
+  speaker: string;
+  scripted: boolean;
+  kind: string;
+  message: string;
+  createdAt: number;
+};
 type Props = {
+  speech?: WorldSpeech[];
   onObject?: (id: string) => void;
   showGuest?: boolean;
   preview?: { yaw: number; time: number };
@@ -353,6 +363,10 @@ export function Viewport(props: Props) {
       previous = 0,
       lastMessage =
         "Click the floor to walk. Drag to orbit. Right-drag to pan. Scroll to zoom.";
+    const speechBubbles = new Map<
+      string,
+      { element: HTMLDivElement; signature: string }
+    >();
     const entranceLabels = room.objects
       .filter((o) => (o.homeEntrance || o.exit) && props.entrances?.[o.id])
       .map((o) => {
@@ -870,6 +884,107 @@ export function Viewport(props: Props) {
         element.style.visibility =
           Math.abs(point.x) > 1 || Math.abs(point.y) > 1 ? "hidden" : "visible";
       }
+      const speaking = new Map<string, WorldSpeech[]>();
+      for (const m of callbacks.current.speech ?? []) {
+        const age = serverNow() - m.createdAt;
+        if (
+          age > Math.min(30000, Math.max(12000, m.message.length * 60)) ||
+          age < -5000
+        )
+          continue;
+        const key = (m.scripted ? "object:" : "player:") + m.speakerId;
+        const messages = speaking.get(key) ?? [];
+        messages.push(m);
+        speaking.set(key, messages);
+      }
+      for (const [key, bubble] of speechBubbles)
+        if (!speaking.has(key)) {
+          bubble.element.remove();
+          speechBubbles.delete(key);
+        }
+      for (const [key, messages] of speaking) {
+        const recent = messages
+          .sort(
+            (a, b) =>
+              a.createdAt - b.createdAt ||
+              (BigInt(a.id) < BigInt(b.id) ? -1 : 1),
+          )
+          .slice(-3);
+        const latest = recent[recent.length - 1];
+        let bubble = speechBubbles.get(key);
+        if (!bubble) {
+          const element = document.createElement("div");
+          element.className = "world-speech-bubble";
+          element.setAttribute("role", "status");
+          element.setAttribute("aria-live", "polite");
+          container.appendChild(element);
+          bubble = { element, signature: "" };
+          speechBubbles.set(key, bubble);
+        }
+        const signature = recent.map((m) => m.id).join(",");
+        if (bubble.signature !== signature) {
+          bubble.element.replaceChildren();
+          for (const m of recent) {
+            const line = document.createElement("p");
+            const name = document.createElement("strong");
+            name.textContent =
+              m.speaker +
+              (m.scripted ? " (object)" : "") +
+              (m.kind === "tell" ? " (to you)" : "");
+            line.append(
+              name,
+              document.createTextNode(
+                (m.kind === "emote" ? " " : ": ") + m.message,
+              ),
+            );
+            if (m.kind === "emote") line.className = "speech-emote";
+            bubble.element.appendChild(line);
+          }
+          bubble.signature = signature;
+        }
+        let anchor: THREE.Vector3 | undefined;
+        if (!latest.scripted) {
+          const actor =
+            latest.speakerId === callbacks.current.live?.identity
+              ? player
+              : visitors.get(latest.speakerId)?.rig;
+          if (actor)
+            anchor = actor.root.position
+              .clone()
+              .add(new THREE.Vector3(0, 2.6, 0));
+        } else {
+          const npc = npcs.find(
+            (n) => n.definition.objectId === latest.speakerId,
+          );
+          const placement = room.objects.find(
+            (o) => o.objectId === latest.speakerId,
+          );
+          if (npc)
+            anchor = npc.actor.root.position
+              .clone()
+              .add(new THREE.Vector3(0, 2.6, 0));
+          else if (placement) {
+            const bounds = new THREE.Box3().setFromObject(
+              objects.get(placement.id)!,
+            );
+            anchor = bounds.getCenter(new THREE.Vector3());
+            anchor.y = bounds.max.y + 0.4;
+          }
+        }
+        const projected = anchor?.project(camera);
+        bubble.element.classList.toggle("room-voice", !anchor);
+        bubble.element.style.visibility =
+          projected &&
+          (Math.abs(projected.x) > 1 ||
+            Math.abs(projected.y) > 1 ||
+            Math.abs(projected.z) > 1)
+            ? "hidden"
+            : "visible";
+        const width = container.clientWidth;
+        const half = Math.min(150, (width - 16) / 2);
+        bubble.element.style.left = `${projected ? THREE.MathUtils.clamp(((projected.x + 1) / 2) * width, half + 8, width - half - 8) : width / 2}px`;
+        bubble.element.style.top = `${projected ? Math.max(bubble.element.offsetHeight + 8, ((1 - projected.y) / 2) * container.clientHeight) : bubble.element.offsetHeight + 12}px`;
+      }
       // Raycast the door geometry rather than the projected label. Re-evaluate as
       // the camera moves so a stationary pointer cannot leave a stale tooltip.
       let hoveredEntrance: string | undefined;
@@ -919,6 +1034,7 @@ export function Viewport(props: Props) {
       renderer.forceContextLoss();
       renderer.domElement.remove();
       entranceLabels.forEach((e) => e.element.remove());
+      speechBubbles.forEach((b) => b.element.remove());
       label.remove();
       guestLabel.remove();
       visitors.forEach((v) => v.label.remove());

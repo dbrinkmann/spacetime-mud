@@ -36,7 +36,7 @@ function on_greet(ctx) {
 function on_enter(ctx) { ctx.tell("Welcome to the station!"); }
 ```
 
-Speech is room-local: up to 50 messages delivered while present, cleared on room change or new connection. Private replies are not exposed to other players or paired agents. Players can speak and use /me in the room conversation panel. Speech never triggers more scripts. Object output is visibly attributed to an object.
+Speech is room-local: up to 50 messages delivered while present, cleared on room change or new connection. Private replies are not exposed to other players or paired agents. Players press Enter or click Speak to compose speech or /me actions. Messages appear as temporary bubbles above the speaker; scripted props and NPCs use their linked scene position. Invisible objects use a room narration bubble. Private replies are labeled to you. Bubbles last 12-30 seconds depending on length and show at most three recent lines per speaker; there is no permanent chat panel. Speech never triggers more scripts. Object output is visibly attributed to an object.
 
 Limits: 16 objects/room, eight actions/object, source 16000 characters, 20000 interpreter steps and 64 API calls/event, eight speech effects of 1000 characters, 64 state keys / 8 KB, four timer effects and four pending timers/object. State, speech and timers are buffered until execution succeeds. Failed interactions roll back; arrival/timer errors appear in lastError. No cross-room writes or player control. Common-space scripts require current admin authority and common-space agent authorization; home scripts require ownership. Preview never executes scripts.
 

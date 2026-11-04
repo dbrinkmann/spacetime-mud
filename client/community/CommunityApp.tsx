@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { DbConnection } from "../module_bindings";
 import type {
   Community,
@@ -62,7 +62,7 @@ const empty: Snapshot = {
 const silhouette = neutralCharacter("Traveler");
 const command = { id: 0, action: "idle" as const };
 export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
-  const chatLog = useRef<HTMLDivElement>(null);
+  const [composing, setComposing] = useState(false);
   const [conn, setConn] = useState<DbConnection>();
   const [identity, setIdentity] = useState("");
   const [data, setData] = useState(empty);
@@ -83,9 +83,28 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
   const [viewStatus, setViewStatus] = useState<ViewStatus>();
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   useEffect(() => {
-    const log = chatLog.current;
-    if (log) log.scrollTop = log.scrollHeight;
-  }, [data.speech.at(-1)?.id, tab]);
+    const key = (e: KeyboardEvent) => {
+      if (tab !== "world") return;
+      if (e.key === "Escape") {
+        setComposing(false);
+        return;
+      }
+      const target = e.target as HTMLElement;
+      if (
+        e.key === "Enter" &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !target.isContentEditable &&
+        !["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(target.tagName)
+      ) {
+        e.preventDefault();
+        setComposing(true);
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [tab]);
   useEffect(() => {
     let disposed = false;
     const tokenKey = `community-world:${HOST}:${DATABASE}`;
@@ -194,6 +213,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
   useEffect(() => {
     setToolTab("room");
     setToolsOpen(false);
+    setComposing(false);
   }, [room?.id]);
   const scene = useMemo(
     () => (room ? parseDefinition(room.source, "room") : undefined),
@@ -382,6 +402,19 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                 <section className="community-scene">
                   <Viewport
                     room={scene}
+                    speech={data.speech
+                      .filter((m) => m.roomId === room.id)
+                      .map((m) => ({
+                        id: String(m.id),
+                        speakerId: m.speakerId,
+                        speaker: m.speaker,
+                        scripted: m.scripted,
+                        kind: m.kind,
+                        message: m.message,
+                        createdAt: Number(
+                          m.createdAt.microsSinceUnixEpoch / 1000n,
+                        ),
+                      }))}
                     onObject={(id) => {
                       setSelectedObject(id);
                       setToolTab("objects");
@@ -452,65 +485,55 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                     onStatus={setViewStatus}
                   />
                   <p>{viewStatus?.message || "Drag to look around."}</p>
-                  <section
-                    className="community-chat"
-                    aria-label="Room conversation"
-                  >
-                    <h3>Here in {room.name}</h3>
-                    <div
-                      ref={chatLog}
-                      className="room-conversation"
-                      role="log"
-                      aria-live="polite"
-                    >
-                      {data.speech
-                        .filter((m) => m.roomId === room.id)
-                        .sort(
-                          (a, b) =>
-                            Number(
-                              a.createdAt.microsSinceUnixEpoch -
-                                b.createdAt.microsSinceUnixEpoch,
-                            ) || (a.id < b.id ? -1 : 1),
-                        )
-                        .map((m) => (
-                          <p key={String(m.id)}>
-                            <strong>{m.speaker}</strong>
-                            {m.scripted ? " (object)" : ""}
-                            {m.kind === "tell" ? " (to you)" : ""}
-                            {m.kind === "emote" ? " " : ": "}
-                            {m.message}
-                          </p>
-                        ))}
-                    </div>
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        const value = message.trim();
-                        if (value)
-                          void act(async () => {
-                            await conn!.reducers.speakCommunity({
-                              communityId: community.id,
-                              message: value.startsWith("/me ")
-                                ? value.slice(4)
-                                : value,
-                              emote: value.startsWith("/me "),
+                  <div className="world-speech-controls">
+                    {!composing ? (
+                      <button
+                        className="speak-toggle"
+                        onClick={() => setComposing(true)}
+                        title="Speak (Enter)"
+                      >
+                        Speak
+                      </button>
+                    ) : (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const value = message.trim();
+                          if (value)
+                            void act(async () => {
+                              await conn!.reducers.speakCommunity({
+                                communityId: community.id,
+                                message: value.startsWith("/me ")
+                                  ? value.slice(4)
+                                  : value,
+                                emote: value.startsWith("/me "),
+                              });
+                              setMessage("");
+                              setComposing(false);
                             });
-                            setMessage("");
-                          });
-                      }}
-                    >
-                      <label>
-                        <input
-                          aria-label="Room message"
-                          value={message}
-                          maxLength={1000}
-                          onChange={(e) => setMessage(e.target.value)}
-                          placeholder="Say hello, or /me waves"
-                        />
-                      </label>
-                      <button disabled={busy || !message.trim()}>Say</button>
-                    </form>
-                  </section>
+                        }}
+                      >
+                        <label>
+                          <input
+                            autoFocus
+                            aria-label="Room message"
+                            value={message}
+                            maxLength={1000}
+                            onChange={(e) => setMessage(e.target.value)}
+                            placeholder="Say hello, or /me waves"
+                          />
+                        </label>
+                        <button disabled={busy || !message.trim()}>Say</button>
+                        <button
+                          type="button"
+                          onClick={() => setComposing(false)}
+                          aria-label="Cancel speech"
+                        >
+                          Cancel
+                        </button>
+                      </form>
+                    )}
+                  </div>
                 </section>
                 <aside
                   id="room-tools"

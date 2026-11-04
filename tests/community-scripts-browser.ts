@@ -90,16 +90,48 @@ try {
   await page
     .getByRole("button", { name: "Ask receptionist", exact: true })
     .click();
-  await expect(page.getByRole("log")).toContainText("Welcome to the station!");
-  await expect(page.getByRole("log")).toContainText("(to you)");
+  await expect(
+    page
+      .locator(".world-speech-bubble")
+      .filter({ hasText: "Welcome to the station!" }),
+  ).toContainText("Welcome to the station!");
+  await expect(
+    page
+      .locator(".world-speech-bubble")
+      .filter({ hasText: "Welcome to the station!" }),
+  ).toContainText("(to you)");
   await page.waitForTimeout(800);
+  await expect(page.getByLabel("Room message")).toHaveCount(0);
+  await page.getByRole("button", { name: "Speak", exact: true }).click();
   await page.getByLabel("Room message").fill("Hello room");
   await page.getByRole("button", { name: "Say", exact: true }).click();
-  await expect(page.getByRole("log")).toContainText("Hello room");
+  await expect(
+    page.locator(".world-speech-bubble").filter({ hasText: "Hello room" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Room message")).toHaveCount(0);
   mkdirSync("test-results", { recursive: true });
   await page.screenshot({
     path: "test-results/community-scripts-browser.png",
     fullPage: true,
+  });
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Room message")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Room message")).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Close room tools" }).click();
+  await page.getByRole("button", { name: "Speak", exact: true }).click();
+  await expect(page.getByLabel("Room message")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <= innerWidth &&
+        document.documentElement.scrollHeight <= innerHeight,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "Cancel speech" }).click();
+  await expect(page.locator(".world-speech-bubble")).toHaveCount(0, {
+    timeout: 32000,
   });
   assert.deepEqual(errors, []);
   console.log(
