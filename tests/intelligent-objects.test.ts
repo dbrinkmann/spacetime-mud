@@ -5,6 +5,9 @@ import {
   viewIntersection,
   propTrajectory,
   validateView,
+  validateRegion,
+  regionsOverlap,
+  regionContains,
   type ViewDefinition,
 } from "../shared/intelligent-objects.ts";
 import type { Placement } from "../shared/geometry.ts";
@@ -140,5 +143,51 @@ test("duplicate terminal waypoints stay at the end and loop progress wraps", () 
       true,
     ).distance,
     2,
+  );
+});
+
+test("volumetric sensors solve vertical crossings and retain boundary members", () => {
+  const volume = { ...view, box: { ...view.box, height: 2 } };
+  const overhead = pathTrajectory(
+    [
+      [0, 5, 0],
+      [0, 0, 0],
+    ],
+    0,
+    1,
+  );
+  assert.equal(viewIntersection(volume, stationary(0, 0), overhead).next, 4);
+  assert.equal(
+    viewIntersection(
+      volume,
+      stationary(0, 0),
+      pathTrajectory([[0, 3, 0]], 0, 0),
+    ).inside,
+    false,
+  );
+  assert.equal(
+    viewIntersection(view, stationary(0, 0), stationary(1.01, 0), true).inside,
+    true,
+  );
+  assert.equal(
+    viewIntersection(view, stationary(0, 0), stationary(1.01, 0), false).inside,
+    false,
+  );
+  assert.equal(
+    viewIntersection(view, stationary(0, 0), stationary(1.06, 0), true).inside,
+    false,
+  );
+  assert.throws(() => validateView({ ...volume, hysteresis: -1 }));
+});
+test("reservations use bounded three-dimensional regions", () => {
+  const r = validateRegion({ center: [0, 1, 0], size: [2, 2, 2] });
+  assert.equal(regionContains(r, [0, 1, 0]), true);
+  assert.equal(
+    regionsOverlap(r, { center: [0, 4, 0], size: [2, 2, 2] }),
+    false,
+  );
+  assert.equal(regionsOverlap(r, { center: [1, 1, 0], size: [2, 2, 2] }), true);
+  assert.throws(() =>
+    validateRegion({ center: [0, 0, 0], size: [Infinity, 1, 1] }),
   );
 });

@@ -281,6 +281,8 @@ export type Inbox = __Infer<typeof Inbox>;
 export const IntelligenceClock = __t.object("IntelligenceClock", {
   roomId: __t.u64(),
   generation: __t.u64(),
+  window: __t.f64(),
+  ticks: __t.u32(),
 });
 export type IntelligenceClock = __Infer<typeof IntelligenceClock>;
 
@@ -384,6 +386,13 @@ export const ObjectMotion = __t.object("ObjectMotion", {
 });
 export type ObjectMotion = __Infer<typeof ObjectMotion>;
 
+export const ObjectTimerBudget = __t.object("ObjectTimerBudget", {
+  objectId: __t.u64(),
+  window: __t.f64(),
+  count: __t.u32(),
+});
+export type ObjectTimerBudget = __Infer<typeof ObjectTimerBudget>;
+
 export const ObjectViews = __t.object("ObjectViews", {
   objectId: __t.u64(),
   roomId: __t.u64(),
@@ -450,6 +459,17 @@ export const RoomScene = __t.object("RoomScene", {
   revision: __t.u32(),
 });
 export type RoomScene = __Infer<typeof RoomScene>;
+
+export const SpatialReservation = __t.object("SpatialReservation", {
+  scheduledId: __t.u64(),
+  key: __t.string(),
+  objectId: __t.u64(),
+  roomId: __t.u64(),
+  region: __t.string(),
+  expires: __t.f64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type SpatialReservation = __Infer<typeof SpatialReservation>;
 
 export const State = __t.object("State", {
   key: __t.string(),

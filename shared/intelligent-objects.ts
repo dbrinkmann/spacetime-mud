@@ -18,7 +18,8 @@ export type Trajectory = {
 };
 export type ViewDefinition = {
   frame: "self" | "room";
-  box: { center: Vec3; size: [number, number] };
+  box: { center: Vec3; size: [number, number]; height?: number };
+  hysteresis?: number;
   include: string[];
 };
 export type SensedEntity = {
@@ -123,6 +124,14 @@ export function validateView(value: unknown): ViewDefinition {
     !Array.isArray(v.box.size) ||
     v.box.size.length !== 2 ||
     v.box.size.some((n) => !Number.isFinite(n) || n < 0.1 || n > 50) ||
+    (v.box.height !== undefined &&
+      (!Number.isFinite(v.box.height) ||
+        v.box.height < 0.1 ||
+        v.box.height > 100)) ||
+    (v.hysteresis !== undefined &&
+      (!Number.isFinite(v.hysteresis) ||
+        v.hysteresis < 0 ||
+        v.hysteresis > 5)) ||
     !Array.isArray(v.include) ||
     !v.include.length ||
     v.include.length > 8 ||
@@ -142,6 +151,7 @@ export function viewIntersection(
   view: ViewDefinition,
   self: Trajectory,
   entity: Trajectory,
+  wasInside = false,
 ) {
   const angle = view.frame === "self" ? (self.yaw * Math.PI) / 180 : 0,
     c = Math.cos(angle),
@@ -157,10 +167,16 @@ export function viewIntersection(
       dx * s + dz * c - view.box.center[2],
     ],
     v = [vx * c - vz * s, vx * s + vz * c];
+  const sizes = [...view.box.size];
+  if (view.box.height !== undefined) {
+    p.push(entity.position[1] - origin[1] - view.box.center[1]);
+    v.push(entity.velocity[1] - (view.frame === "self" ? self.velocity[1] : 0));
+    sizes.push(view.box.height);
+  }
   let enter = -Infinity,
     exit = Infinity;
-  for (let i = 0; i < 2; i++) {
-    const half = view.box.size[i] / 2;
+  for (let i = 0; i < sizes.length; i++) {
+    const half = sizes[i] / 2 + (wasInside ? (view.hysteresis ?? 0.05) : 0);
     if (Math.abs(v[i]) < 1e-12) {
       if (Math.abs(p[i]) > half + 1e-9)
         return { inside: false, next: Infinity };
@@ -174,4 +190,30 @@ export function viewIntersection(
   if (exit <= enter || exit < 0) return { inside: false, next: Infinity };
   const inside = enter <= 1e-7 && exit > 1e-7;
   return { inside, next: inside ? exit : enter > 1e-7 ? enter : Infinity };
+}
+
+export type SpatialRegion = { center: Vec3; size: Vec3 };
+export function validateRegion(value: unknown): SpatialRegion {
+  const r = value as SpatialRegion;
+  if (
+    !r ||
+    !Array.isArray(r.center) ||
+    r.center.length !== 3 ||
+    r.center.some((n) => !Number.isFinite(n) || Math.abs(n) > 100) ||
+    !Array.isArray(r.size) ||
+    r.size.length !== 3 ||
+    r.size.some((n) => !Number.isFinite(n) || n < 0.1 || n > 50)
+  )
+    throw Error(
+      "Region requires center [x,y,z] within ?100 and size [width,height,depth] .1..50.",
+    );
+  return r;
+}
+export function regionsOverlap(a: SpatialRegion, b: SpatialRegion) {
+  return a.center.every(
+    (n, i) => Math.abs(n - b.center[i]) < (a.size[i] + b.size[i]) / 2,
+  );
+}
+export function regionContains(r: SpatialRegion, p: Vec3) {
+  return r.center.every((n, i) => Math.abs(n - p[i]) <= r.size[i] / 2);
 }

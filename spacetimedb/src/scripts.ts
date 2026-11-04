@@ -144,7 +144,7 @@ export function executeScript(
       path[path.length - 1],
       vm.createNativeFunction((...args: unknown[]) => {
         if (++effects > 64) throw Error("Game API call limit (64) exceeded.");
-        const acceptsStructured = name === "subscribe";
+        const acceptsStructured = name === "subscribe" || name === "reserve";
         if (acceptsStructured) args = args.map((a) => structured(a));
         for (const value of args) {
           if (

@@ -228,3 +228,24 @@ export const intelligenceEvent = table(
     at: t.f64(),
   },
 );
+
+export const spatialReservation = table(
+  {},
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    key: t.string().unique(),
+    objectId: t.u64().index("btree"),
+    roomId: t.u64().index("btree"),
+    region: t.string(),
+    expires: t.f64(),
+    scheduledAt: t.scheduleAt(),
+  },
+);
+export const objectTimerBudget = table(
+  {},
+  {
+    objectId: t.u64().primaryKey(),
+    window: t.f64(),
+    count: t.u32(),
+  },
+);

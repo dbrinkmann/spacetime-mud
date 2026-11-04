@@ -599,7 +599,12 @@ server.registerTool(
       ...scope,
       room_id: id,
       source: script,
-      handler: z.string(),
+      handler: z
+        .string()
+        .regex(
+          /^on_[a-zA-Z][a-zA-Z0-9_]{0,39}$/,
+          "Use on_NAME, for example on_start",
+        ),
       state: z.string().default("{}"),
     },
   },

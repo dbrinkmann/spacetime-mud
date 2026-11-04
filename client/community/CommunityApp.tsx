@@ -1,3 +1,4 @@
+import { startRenewal } from "./renewal";
 import type { MotionState } from "../../shared/intelligent-objects";
 import { homeSignText } from "../../shared/scene-features";
 import React, { useEffect, useMemo, useState } from "react";
@@ -79,6 +80,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
     activity?.session.communityId ?? "",
   );
   const [error, setError] = useState("");
+  const [renewalError, setRenewalError] = useState("");
   const [status, setStatus] = useState("Connecting");
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(activity?.session.name ?? "");
@@ -191,18 +193,20 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
     }
     setConn(c);
     const renewal = activity
-      ? setInterval(() => {
-          void activity.renew().catch(() => {
-            setError(
-              "Community access expired. Reopen the Activity to sign in again.",
-            );
-            c.disconnect();
-          });
-        }, 60000)
+      ? startRenewal(
+          activity.renew,
+          setRenewalError,
+          activity.session.renewAfterSeconds,
+        )
       : undefined;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void renewal?.retry();
+    };
+    if (activity) document.addEventListener("visibilitychange", onVisible);
     return () => {
       disposed = true;
-      clearInterval(renewal);
+      renewal?.stop();
+      document.removeEventListener("visibilitychange", onVisible);
       c.disconnect();
     };
   }, []);
@@ -327,9 +331,9 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
         </div>
         <span>{status}</span>
       </header>
-      {error && (
+      {(error || renewalError) && (
         <p role="alert" className="community-error">
-          {error}
+          {error || renewalError}
         </p>
       )}
       {!community && (

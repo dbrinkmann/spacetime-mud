@@ -1,4 +1,4 @@
-import { validateView } from "../../shared/intelligent-objects";
+import { validateView, validateRegion } from "../../shared/intelligent-objects";
 import { executeScript, type Scalar, type ScriptApi } from "./scripts";
 export function evaluateObject(
   source: string,
@@ -36,6 +36,19 @@ export function evaluateObject(
     source,
     handler,
     {
+      reserve: (name, region, seconds) => {
+        key(name);
+        validateRegion(region);
+        if (!Number.isFinite(seconds) || seconds < 0.25 || seconds > 60)
+          throw Error("Reservation duration must be .25..60 seconds.");
+        return false;
+      },
+      release: (name) => {
+        key(name);
+      },
+      unsubscribe: (name) => {
+        key(name);
+      },
       subscribe: (name, view) => {
         key(name);
         validateView(view);
@@ -86,11 +99,11 @@ export function evaluateObject(
       after: (seconds, event) => {
         if (
           typeof seconds !== "number" ||
-          !Number.isInteger(seconds) ||
-          seconds < 5 ||
+          !Number.isFinite(seconds) ||
+          seconds < 0.25 ||
           seconds > 86400
         )
-          throw Error("Timer delay must be 5-86400 whole seconds.");
+          throw Error("Timer delay must be 0.25-86400 seconds.");
         timers.set(key(event), seconds);
         if (timers.size > 4)
           throw Error("Maximum four timer effects per event.");

@@ -11,6 +11,9 @@ import {
   pathTrajectory,
   viewIntersection,
   validateView,
+  validateRegion,
+  regionsOverlap,
+  regionContains,
   type MotionState,
   type ViewDefinition,
   type SensedEntity,
@@ -89,6 +92,22 @@ function entities(
     throw Error("Intelligent rooms support at most 128 sensed entities.");
   return result;
 }
+function previouslyInside(
+  ctx: Ctx,
+  id: string,
+  view: ViewDefinition,
+  entity: string,
+) {
+  const row = ctx.db.objectViews.objectId.find(BigInt(id));
+  if (!row) return false;
+  const definitions = JSON.parse(row.definitions),
+    membership = JSON.parse(row.members);
+  return Object.keys(definitions).some(
+    (name) =>
+      JSON.stringify(definitions[name]) === JSON.stringify(view) &&
+      (membership[name] ?? []).some((e: { id: string }) => e.id === entity),
+  );
+}
 function members(
   ctx: Ctx,
   prop: Placement,
@@ -106,7 +125,12 @@ function members(
         view.include.some((f) =>
           f === "player" ? e.kind === "player" : e.tags.includes(f.slice(4)),
         ) &&
-        viewIntersection(view, self, e.trajectory).inside,
+        viewIntersection(
+          view,
+          self,
+          e.trajectory,
+          previouslyInside(ctx, prop.objectId!, view, e.id),
+        ).inside,
     )
     .map((e) => ({ id: e.id, kind: e.kind, tags: e.tags }));
 }
@@ -125,6 +149,17 @@ export function prepareIntelligence(ctx: Ctx, id: bigint, resetViews = false) {
     resetViews ? "{}" : (oldViews?.definitions ?? "{}"),
   );
   let changed = resetViews && !!oldViews;
+  const reservations = new Map(
+    [...ctx.db.spatialReservation.objectId.filter(id)]
+      .filter((r) => !resetViews && r.expires > now)
+      .map((r) => [r.key, r]),
+  );
+  let reservationsChanged = resetViews;
+  const reservationKey = (name: string) => {
+    if (typeof name !== "string" || !/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(name))
+      throw Error("Invalid reservation name.");
+    return String(id) + ":" + name;
+  };
   const anchor = () => {
     if (!prop) {
       changed = true;
@@ -152,6 +187,48 @@ export function prepareIntelligence(ctx: Ctx, id: bigint, resetViews = false) {
   let random =
     Number((ctx.timestamp.microsSinceUnixEpoch + id) % 2147483647n) || 1;
   const api: ScriptApi = {
+    reserve: (name, value, seconds) => {
+      const key = reservationKey(name),
+        region = validateRegion(value);
+      if (!Number.isFinite(seconds) || seconds < 0.25 || seconds > 60)
+        throw Error("Reservation duration must be .25..60 seconds.");
+      if (!prop) return false;
+      const occupied = entities(ctx, room, object.roomId, now).some(
+        (e) =>
+          e.id !== String(id) && regionContains(region, e.trajectory.position),
+      );
+      const claimed = [
+        ...ctx.db.spatialReservation.roomId.filter(object.roomId),
+      ].some(
+        (r) =>
+          r.objectId !== id &&
+          r.expires > now &&
+          regionsOverlap(region, JSON.parse(r.region)),
+      );
+      if (occupied || claimed) return false;
+      if (!reservations.has(key) && reservations.size >= 4)
+        throw Error("Maximum four reservations per object.");
+      const expires = now + seconds;
+      reservations.set(key, {
+        scheduledId: 0n,
+        key,
+        objectId: id,
+        roomId: object.roomId,
+        region: JSON.stringify(region),
+        expires,
+        scheduledAt: ScheduleAt.time(BigInt(Math.round(expires * 1e6))),
+      });
+      reservationsChanged = true;
+      return true;
+    },
+    release: (name) => {
+      reservations.delete(reservationKey(name));
+      reservationsChanged = true;
+    },
+    unsubscribe: (name) => {
+      delete definitions[name];
+      changed = true;
+    },
     subscribe: (name, value) => {
       if (
         typeof name !== "string" ||
@@ -216,6 +293,12 @@ export function prepareIntelligence(ctx: Ctx, id: bigint, resetViews = false) {
   return {
     api,
     commit: () => {
+      if (reservationsChanged) {
+        for (const old of ctx.db.spatialReservation.objectId.filter(id))
+          ctx.db.spatialReservation.key.delete(old.key);
+        for (const r of reservations.values())
+          ctx.db.spatialReservation.insert({ ...r, scheduledId: 0n });
+      }
       if (!changed) return;
       const next = {
         objectId: id,
@@ -231,7 +314,16 @@ export function prepareIntelligence(ctx: Ctx, id: bigint, resetViews = false) {
         objectId: id,
         roomId: object.roomId,
         definitions: JSON.stringify(definitions),
-        members: oldViews?.members ?? "{}",
+        members: resetViews
+          ? "{}"
+          : JSON.stringify(
+              Object.fromEntries(
+                Object.entries(JSON.parse(oldViews?.members ?? "{}")).filter(
+                  ([name]) =>
+                    Object.prototype.hasOwnProperty.call(definitions, name),
+                ),
+              ),
+            ),
       };
       if (oldViews) ctx.db.objectViews.objectId.update(views);
       else ctx.db.objectViews.insert(views);
@@ -246,24 +338,37 @@ export function syncIntelligence(ctx: Ctx, roomId: bigint, run: ScriptRunner) {
   for (const old of ctx.db.objectMotion.roomId.filter(roomId))
     if (!room.objects.some((p) => p.objectId === String(old.objectId))) {
       ctx.db.objectMotion.objectId.delete(old.objectId);
+      for (const reservation of ctx.db.spatialReservation.objectId.filter(
+        old.objectId,
+      ))
+        ctx.db.spatialReservation.key.delete(reservation.key);
     }
-  for (const prop of room.objects) {
-    if (!prop.objectId) continue;
-    const objectId = BigInt(prop.objectId),
-      old = ctx.db.objectMotion.objectId.find(objectId),
-      definition = JSON.stringify(prop.motion ?? null);
-    if (old?.placementId === prop.id && old.definition === definition) continue;
-    const next = {
-      objectId,
-      roomId,
-      communityId: r.communityId,
-      placementId: prop.id,
-      definition,
-      state: JSON.stringify(initial(prop, now)),
-    };
-    if (old) ctx.db.objectMotion.objectId.update(next);
-    else ctx.db.objectMotion.insert(next);
-    run(ctx, objectId, "on_start");
+  const nested = running.has(ctx);
+  running.add(ctx);
+  try {
+    const initialized: bigint[] = [];
+    for (const prop of room.objects) {
+      if (!prop.objectId) continue;
+      const objectId = BigInt(prop.objectId),
+        old = ctx.db.objectMotion.objectId.find(objectId),
+        definition = JSON.stringify(prop.motion ?? null);
+      if (old?.placementId === prop.id && old.definition === definition)
+        continue;
+      const next = {
+        objectId,
+        roomId,
+        communityId: r.communityId,
+        placementId: prop.id,
+        definition,
+        state: JSON.stringify(initial(prop, now)),
+      };
+      if (old) ctx.db.objectMotion.objectId.update(next);
+      else ctx.db.objectMotion.insert(next);
+      initialized.push(objectId);
+    }
+    for (const id of initialized) run(ctx, id, "on_start");
+  } finally {
+    if (!nested) running.delete(ctx);
   }
   reconcileIntelligence(ctx, roomId, run);
 }
@@ -334,7 +439,12 @@ export function reconcileIntelligence(
               )
             )
               continue;
-            const intersection = viewIntersection(view, self, e.trajectory);
+            const intersection = viewIntersection(
+              view,
+              self,
+              e.trajectory,
+              (previous[name] ?? []).some((p) => p.id === e.id),
+            );
             next = Math.min(next, e.trajectory.next, intersection.next);
             if (intersection.inside)
               current[name].push({ id: e.id, kind: e.kind, tags: e.tags });

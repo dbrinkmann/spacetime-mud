@@ -20,7 +20,7 @@ API:
 - `ctx.emote(text)` narrates an action attributed to the object.
 - `ctx.actorId()` / `ctx.actorName()` return the triggering player or empty strings.
 - `ctx.get(key)` returns a persistent scalar or null; `ctx.set(key,value)` stores string, number, boolean or null.
-- `ctx.after(seconds,event)` schedules one-shot on_event, integer 5..86400 seconds. Replaces the pending timer of that name. Reschedule inside the handler to repeat.
+- `ctx.after(seconds,event)` schedules one-shot on_event, 0.25..86400 seconds (fractional seconds supported). Replaces the pending timer of that name. Reschedule inside the handler to repeat.
 - `ctx.cancel(event)` cancels a named timer.
 
 Example actions: `[{"id":"greet","label":"Say hello"}]`
@@ -180,10 +180,38 @@ function on_view_enter(ctx, view, entity) {
 function on_view_exit(ctx, view, entity) {}
 ```
 
-Views are horizontal rectangles: center is `[x,y,z]` (Y is currently ignored), size is `[width,depth]`. `frame:"self"` follows the placement's position and current heading (+Z is forward); `frame:"room"` uses fixed room coordinates. Filters are ORed: `player` includes present player characters, including offline home avatars; `tag:car` includes visible scripted placements tagged car. An object never senses itself. Membership tests entity origins, not model bounds or line of sight. Configure clearances to account for geometry.
+Views are horizontal rectangles: center is `[x,y,z]` (Y is ignored unless `box.height` is supplied), size is `[width,depth]`. Optional `box.height` (0.1..100m) adds vertical bounds centered on Y. `frame:"self"` follows the placement's position and current heading (+Z is forward); `frame:"room"` uses fixed room coordinates. Filters are ORed: `player` includes present player characters, including offline home avatars; `tag:car` includes visible scripted placements tagged car. An object never senses itself. Membership tests entity origins, not model bounds or line of sight. Configure clearances to account for geometry.
+
+`ctx.unsubscribe(name)` removes a subscription. Optional `hysteresis` (0..5m, default 0.05m) expands a view for existing members until they leave that outer boundary; new members still enter at the original boundary. `ctx.view(name)` uses the same membership rule. This prevents immediate boundary reversals when a handler changes motion; larger behavioral stop/resume distances remain an authoring choice.
 
 `ctx.view(name)` returns current members as `{id,kind,tags}` records; kind is `player` or `object`. Entry and exit handlers receive `(ctx,viewName,entity)`. Player events supply actorId/actorName and private tell; object events have no player actor. Already-present entities generate entries when a subscription becomes active. Position/path changes, pauses, restarts, visibility and room transitions invalidate pending predictions. The scheduler solves linear crossings and waypoints, rounded forward to milliseconds; actual event delivery can be delayed by server load. There is no per-frame reducer polling. Clients, including late joiners, derive positions from persisted motion state and server time. `world_inspect.object_motion` exposes current state to authorized builders.
 
 Limits: four views per object; view centers within ±100 and dimensions 0.1..50; up to eight filters; 128 sensed entities per room; 64 delivered view/completion events per reconciliation and 128 scheduled room events/second. Existing interpreter budgets also apply. A runaway cascade disables the room's views, clears pending intelligence events and reports `lastError`; fix and republish scripts to restore subscriptions. Motion/visibility/subscription changes from a failing handler are discarded. Dry-run `world_test_object` checks API use but does not simulate live membership or motion; `world_preview` shows authored paths at `time`, never live script state.
 
 For respawning props, test occupancy at the **spawn position**, not the previous endpoint: while hidden, restart then pause, query the forward view, and only show/resume when clear. Retrying via `ctx.after` must recheck occupancy. Choose sufficient view depth for geometry and scheduling latency. The builder authors routes, yielding rules, timers and visuals; Lantern supplies the general primitives.
+
+
+## Spatial reservations and lifecycle guarantees
+
+`ctx.reserve(name, {center:[x,y,z], size:[width,height,depth]}, seconds)` attempts an atomic, exclusive claim on a fixed, room-coordinate axis-aligned volume. It returns true on success, false if another object's unexpired reservation overlaps or a visible sensed entity origin is inside. The caller is excluded. Hidden objects remain covered by their reservations. Reservations do not move with their owner, block player movement, or test mesh bounds/walls; choose your region accordingly. All cooperating scripts must acquire a reservation before using a shared area.
+
+Use `ctx.release(name)` when finished. Reusing a name renews/replaces that object's claim only if the new region is clear; a failed attempt retains the previous claim until release/expiry. Four reservations per object; center coordinates ?100m, size 0.1..50m per axis, lifetime 0.25..60 seconds. They expire automatically, and are released on unbinding, deletion or successful on_start initialization (including script replacement). All reservation changes are buffered with the event; failing scripts acquire nothing and release nothing. Unbound objects return false. Dry-run tests validate reservation arguments but return false, as they do not claim live space.
+
+```javascript
+function on_use(ctx) {
+  if (!ctx.reserve("workArea", {center:[5,1,5],size:[2,2,2]}, 10)) {
+    ctx.tell("This area is busy. Try again shortly.");
+    return;
+  }
+  ctx.set("working", true);
+  ctx.after(2.5, "finish");
+}
+function on_finish(ctx) {
+  ctx.set("working", false);
+  ctx.release("workArea");
+}
+```
+
+When a room binds multiple objects, all new motion rows are initialized from authored speed/offset and the binding timestamp before any initializer runs. Initializers commit before spatial entry/completion events are delivered. Existing motion is preserved when its placement ID and motion definition are unchanged. Subscriptions declared by a successful on_start begin with fresh membership, so entities already inside receive entry events after initialization. Scripts should still initialize persistent business state idempotently.
+
+Short timers retain the four-pending/four-effects limits. Each object is limited to eight timer callbacks per server second; exceeding that budget cancels its pending timers and sets lastError. A timer's delay is a minimum, not a frame-rate guarantee. Use motion paths for continuous animation rather than recurring timer movement. Invalid dry-run handlers return a validation error; names must be `on_NAME`.

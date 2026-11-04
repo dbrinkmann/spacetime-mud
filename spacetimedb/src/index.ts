@@ -41,6 +41,8 @@ import {
   objectViews,
   intelligenceClock,
   intelligenceEvent,
+  spatialReservation,
+  objectTimerBudget,
 } from "./community-tables";
 import {
   parseDefinition,
@@ -259,6 +261,8 @@ const db = schema({
   objectViews,
   intelligenceClock,
   intelligenceEvent,
+  spatialReservation,
+  objectTimerBudget,
   roomScene,
   avatar,
   visualDraft,
@@ -1247,7 +1251,8 @@ function applyCommunityScript(
       ctx.db.communityObjectTimer.insert({
         scheduledId: 0n,
         scheduledAt: ScheduleAt.time(
-          ctx.timestamp.microsSinceUnixEpoch + BigInt(delay) * 1000000n,
+          ctx.timestamp.microsSinceUnixEpoch +
+            BigInt(Math.round(delay * 1000000)),
         ),
         objectId: o.id,
         revision: o.revision,
@@ -1339,6 +1344,9 @@ function communityArrival(ctx: Ctx, roomId: bigint, actor: Identity) {
   }
 }
 function deleteCommunityScript(ctx: Ctx, id: bigint) {
+  ctx.db.objectTimerBudget.objectId.delete(id);
+  for (const row of ctx.db.spatialReservation.objectId.filter(id))
+    ctx.db.spatialReservation.key.delete(row.key);
   ctx.db.objectMotion.objectId.delete(id);
   ctx.db.objectViews.objectId.delete(id);
   for (const timer of ctx.db.communityObjectTimer.objectId.filter(id))
@@ -1493,6 +1501,26 @@ export const fireCommunityObjectTimer = db.reducer(
     const o = ctx.db.communityObject.id.find(timer.objectId);
     if (!o || o.revision !== timer.revision) return;
     ctx.db.communityObjectTimer.scheduledId.delete(timer.scheduledId);
+    const window = Math.floor(Number(ctx.timestamp.microsSinceUnixEpoch) / 1e6);
+    const budget = ctx.db.objectTimerBudget.objectId.find(o.id);
+    const count = (budget?.window === window ? budget.count : 0) + 1;
+    if (count > 8) {
+      for (const pending of ctx.db.communityObjectTimer.objectId.filter(o.id))
+        ctx.db.communityObjectTimer.scheduledId.delete(pending.scheduledId);
+      ctx.db.communityObject.id.update({
+        ...o,
+        lastError:
+          "Timer budget exceeded (8 callbacks/second); timers cancelled.",
+      });
+      return;
+    }
+    if (budget)
+      ctx.db.objectTimerBudget.objectId.update({
+        objectId: o.id,
+        window,
+        count,
+      });
+    else ctx.db.objectTimerBudget.insert({ objectId: o.id, window, count });
     try {
       applyCommunityScript(ctx, o, `on_${timer.event}`);
     } catch (e) {
@@ -1522,7 +1550,14 @@ export const testCommunityObject = db.procedure(
       if (p.common ? !m.admin : !p.owner.equals(m.identity))
         fail("You cannot edit this property.");
       if (a.state.length > 8192) fail("State budget exceeded.");
-      const initial = JSON.parse(a.state);
+      if (!/^on_[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(a.handler))
+        fail("Handler must be on_NAME (for example on_start).");
+      let initial;
+      try {
+        initial = JSON.parse(a.state);
+      } catch {
+        fail("State must be valid JSON.");
+      }
       if (
         !initial ||
         Array.isArray(initial) ||
@@ -1534,17 +1569,21 @@ export const testCommunityObject = db.procedure(
         )
       )
         fail("State must contain scalar values.");
-      return JSON.stringify(
-        evaluateObject(
-          a.source,
-          a.handler,
-          a.state,
-          m.identity.toHexString(),
-          tx.db.communityCharacter.key.find(
-            communityKey(r.communityId, m.identity),
-          )?.name ?? "Builder",
-        ),
-      );
+      try {
+        return JSON.stringify(
+          evaluateObject(
+            a.source,
+            a.handler,
+            a.state,
+            m.identity.toHexString(),
+            tx.db.communityCharacter.key.find(
+              communityKey(r.communityId, m.identity),
+            )?.name ?? "Builder",
+          ),
+        );
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error));
+      }
     }),
 );
 const CommunityObjectInfo = t.object("CommunityObjectInfo", {
@@ -3505,5 +3544,17 @@ export const agentJobs = db.view(
           j.owner.equals(g.owner),
         )
       : [];
+  },
+);
+
+export const expireSpatialReservation = db.reducer(
+  { onSchedule: spatialReservation },
+  { reservation: spatialReservation.rowType },
+  (ctx, { reservation }) => {
+    if (!ctx.sender.equals(ctx.identity) || ctx.connectionId)
+      fail("Scheduler only.");
+    const row = ctx.db.spatialReservation.key.find(reservation.key);
+    if (row && row.expires <= Number(ctx.timestamp.microsSinceUnixEpoch) / 1e6)
+      ctx.db.spatialReservation.key.delete(row.key);
   },
 );
