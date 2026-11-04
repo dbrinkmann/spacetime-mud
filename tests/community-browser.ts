@@ -165,6 +165,32 @@ try {
   await expect(
     page.locator(".community-entrance").filter({ hasText: "Outside: Welcome" }),
   ).toBeHidden();
+  const canvasRect = await page.locator(".poc-viewport").boundingBox();
+  const panX = canvasRect!.x + canvasRect!.width * 0.25;
+  const panY = canvasRect!.y + canvasRect!.height * 0.5;
+  await page.mouse.move(panX, panY);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.move(panX + canvasRect!.width * 0.3, panY, { steps: 12 });
+  await page.mouse.up({ button: "right" });
+  await page.waitForTimeout(1800);
+  const manual = await page.evaluate(
+    () =>
+      (
+        window.boxWorld!.inspect() as {
+          camera: { manualPan: boolean; target: number[] };
+        }
+      ).camera,
+  );
+  expect(manual.manualPan).toBe(true);
+  await page.waitForTimeout(400);
+  const held = await page.evaluate(
+    () =>
+      (window.boxWorld!.inspect() as { camera: { target: number[] } }).camera
+        .target,
+  );
+  expect(Math.hypot(...held.map((v, i) => v - manual.target[i]))).toBeLessThan(
+    0.1,
+  );
   const target = await page.evaluate(() =>
     window.boxWorld!.project([2, 0.02, 2]),
   );

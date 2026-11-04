@@ -105,15 +105,21 @@ export function Viewport(props: Props) {
     );
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.enablePan = false;
+    controls.enablePan = true;
+    controls.screenSpacePanning = false;
+    let manualPan = false,
+      returningToPlayer = false,
+      wasMoving = false;
     controls.minPolarAngle = 0.35;
     controls.maxPolarAngle = 1.35;
     controls.mouseButtons = {
       LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.PAN,
     };
     const reset = () => {
+      manualPan = false;
+      returningToPlayer = false;
       const live = callbacks.current.live;
       const me = live?.travelers.find((t) => t.id === live.identity);
       const origin = live
@@ -345,7 +351,8 @@ export function Viewport(props: Props) {
       path: Vec3[] = [],
       elapsed = 0,
       previous = 0,
-      lastMessage = "Click the floor to walk. Drag to orbit. Scroll to zoom.";
+      lastMessage =
+        "Click the floor to walk. Drag to orbit. Right-drag to pan. Scroll to zoom.";
     const entranceLabels = room.objects
       .filter((o) => (o.homeEntrance || o.exit) && props.entrances?.[o.id])
       .map((o) => {
@@ -450,11 +457,21 @@ export function Viewport(props: Props) {
     let down = [0, 0];
     const pointerDown = (e: PointerEvent) => {
       hoverPointer = undefined;
+      if (
+        e.button === 2 ||
+        (e.button === 0 && (e.shiftKey || e.ctrlKey || e.metaKey))
+      ) {
+        manualPan = true;
+        returningToPlayer = false;
+      }
       down = [e.clientX, e.clientY];
     };
     const pointerUp = (e: PointerEvent) => {
       if (
         e.button !== 0 ||
+        e.shiftKey ||
+        e.ctrlKey ||
+        e.metaKey ||
         Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5
       )
         return;
@@ -603,6 +620,8 @@ export function Viewport(props: Props) {
           span: camera.top,
           zoom: camera.zoom,
           target: controls.target.toArray(),
+          manualPan,
+          returningToPlayer,
         },
         position: player.root.position.toArray(),
         animation: mode,
@@ -781,10 +800,29 @@ export function Viewport(props: Props) {
           0.65,
           player.root.position.z,
         );
-        const shift = deadZoneShift(camera, destination);
-        camera.position.add(shift);
-        controls.target.add(shift);
-        camera.updateMatrixWorld();
+        const moving = mode === "walk";
+        const outside = deadZoneShift(camera, destination);
+        if (manualPan && moving && !wasMoving) {
+          manualPan = false;
+          returningToPlayer = outside.lengthSq() > 0.0001;
+        }
+        wasMoving = moving;
+        if (!manualPan) {
+          const shift = returningToPlayer
+            ? destination
+                .clone()
+                .sub(controls.target)
+                .multiplyScalar(1 - Math.exp(-8 * dt))
+            : outside;
+          camera.position.add(shift);
+          controls.target.add(shift);
+          camera.updateMatrixWorld();
+          if (
+            returningToPlayer &&
+            controls.target.distanceToSquared(destination) < 0.0025
+          )
+            returningToPlayer = false;
+        }
       }
       // Fade walls on the camera side of the current focus, including when
       // following a character far from the room origin.
