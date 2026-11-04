@@ -73,6 +73,8 @@ export type Placement = {
   exit?: { id: string; approach: Vec3 };
 };
 export type Sign = {
+  attachTo?: string;
+  doubleSided?: boolean;
   binding?: { kind: "homeName"; entranceSpot: string };
   id: string;
   text: string;
@@ -420,8 +422,21 @@ export function validate(
           "background",
           "emissive",
           "binding",
+          "attachTo",
+          "doubleSided",
         ]);
       str(sign.id, `${p}.id`, 40);
+      if (sign.attachTo !== undefined) {
+        str(sign.attachTo, `${p}.attachTo`, 40);
+        if (!ids.has(String(sign.attachTo)))
+          issue(`${p}.attachTo`, "placement does not exist");
+      }
+      if (
+        sign.doubleSided !== undefined &&
+        typeof sign.doubleSided !== "boolean"
+      )
+        issue(`${p}.doubleSided`, "expected boolean");
+
       str(sign.text, `${p}.text`, 120);
       if (sign.binding !== undefined) {
         const binding = object(sign.binding, `${p}.binding`, [

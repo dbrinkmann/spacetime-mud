@@ -20,6 +20,8 @@ try {
   );
   await page.waitForFunction(() => !!window.renderLanternPreview);
   const neon = builderRoom();
+  neon.signs![0].attachTo = "back-wall";
+  neon.signs![0].position = [0, 3.2, 1];
   neon.floorColor = "#263039";
   neon.lights = [
     { position: [-2, 2, 0], color: "#dc37ab", intensity: 3 },
@@ -120,6 +122,32 @@ try {
     });
     assert.ok(colors > 64, `${name}: scene did not render (${colors} colors)`);
     await page.screenshot({ path: `test-results/art-style-${name}.png` });
+    if (name === "neon" || name === "cutaway") {
+      const surface = await page.evaluate(
+        () =>
+          (
+            window.boxWorld!.inspect() as {
+              signSurfaces: Array<{
+                opacity: number;
+                position: number[];
+                side: number;
+              }>;
+            }
+          ).signSurfaces[0],
+      );
+      assert.equal(
+        surface.side,
+        0,
+        "signs should not render mirrored backfaces",
+      );
+      assert.deepEqual(surface.position, [0, 3.2, -3]);
+      if (name === "cutaway")
+        assert.ok(
+          surface.opacity < 0.2,
+          "attached sign must fade with its wall",
+        );
+      else assert.ok(surface.opacity > 0.9);
+    }
     if (name === "neon") {
       const position = () =>
         page.evaluate(

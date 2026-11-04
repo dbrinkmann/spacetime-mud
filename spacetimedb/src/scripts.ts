@@ -96,7 +96,11 @@ export function executeScript(source: string, handler: string, api: ScriptApi) {
   for (const key of Object.keys(vm.globalObject.properties)) {
     if (
       !["undefined", "NaN", "Infinity"].includes(key) &&
-      !vm.globalObject.properties[key]?.node
+      !vm.globalObject.properties[key]?.node &&
+      // Hoisted top-level var bindings are non-configurable. Their initializer
+      // runs later under the same budgets; native entry points were sealed above.
+      Object.getOwnPropertyDescriptor(vm.globalObject.properties, key)
+        ?.configurable !== false
     )
       delete vm.globalObject.properties[key];
   }

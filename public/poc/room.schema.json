@@ -429,6 +429,14 @@
                 "maxLength": 40
               }
             }
+          },
+          "attachTo": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "doubleSided": {
+            "type": "boolean"
           }
         },
         "required": [

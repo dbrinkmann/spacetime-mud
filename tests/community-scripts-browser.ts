@@ -42,7 +42,8 @@ try {
   await c.reducers.createCommunityObject({
     roomId,
     name: "Receptionist",
-    source: 'function on_hello(ctx){ctx.tell("Welcome to the station!");}',
+    source:
+      'var RUMORS = ["Welcome to the station!"]; function on_hello(ctx){ctx.tell(RUMORS[0]);}',
     actions: [{ id: "hello", label: "Ask receptionist" }],
   });
   await until(() => c.db.communityObjects.count() === 1n);

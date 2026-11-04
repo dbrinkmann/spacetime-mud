@@ -291,7 +291,10 @@ export function Viewport(props: Props) {
       return { root, body, joints, cosmetics };
     }
     const signs = (room.signs ?? []).map(signMesh);
-    signs.forEach((s) => scene.add(s.mesh));
+    signs.forEach((s, i) => {
+      const parent = room.signs![i].attachTo;
+      (parent ? objects.get(parent)! : scene).add(s.mesh);
+    });
     let disposed = false;
     if (signs.length)
       void loadSignFont()
@@ -687,6 +690,11 @@ export function Viewport(props: Props) {
           head: n.actor.joints.head.rotation.toArray(),
         })),
         signs: signs.map((s) => s.getText()),
+        signSurfaces: signs.map((s) => ({
+          opacity: s.mesh.material.opacity,
+          position: s.mesh.getWorldPosition(new THREE.Vector3()).toArray(),
+          side: s.mesh.material.side,
+        })),
         props: [...objects].map(([id, g]) => ({
           id,
           position: g.position.toArray(),

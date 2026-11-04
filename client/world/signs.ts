@@ -50,18 +50,20 @@ export function signMesh(sign: Sign) {
     ? new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
-        side: THREE.DoubleSide,
+        side: sign.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
         toneMapped: false,
       })
     : new THREE.MeshStandardMaterial({
         map: texture,
         transparent: true,
-        side: THREE.DoubleSide,
+        side: sign.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
       });
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(sign.width, sign.height),
     material,
   );
+  // Attached signs remain decoration, not a new hit target for their parent.
+  mesh.raycast = () => {};
   mesh.position.fromArray(sign.position);
   mesh.rotation.y = THREE.MathUtils.degToRad(sign.yaw);
   return {

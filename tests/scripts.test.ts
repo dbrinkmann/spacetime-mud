@@ -52,3 +52,21 @@ test("computed constructor names and dangerous native aliases are rejected", () 
       source,
     );
 });
+
+test("top-level var declarations initialize under the sandbox and reset per event", () => {
+  const source =
+    'var RUMORS = ["Rain tonight", "Market tomorrow"]; var counter = 0; function on_use(ctx){ counter++; ctx.say(RUMORS[1]); ctx.say(counter); }';
+  for (let i = 0; i < 2; i++) {
+    const out: unknown[] = [];
+    executeScript(source, "on_use", {
+      say: (v) => {
+        out.push(v);
+      },
+    });
+    assert.deepEqual(out, ["Market tomorrow", 1]);
+  }
+  assert.throws(
+    () => executeScript("var RUMORS = []; while(true){}", "on_use", {}),
+    /budget/,
+  );
+});

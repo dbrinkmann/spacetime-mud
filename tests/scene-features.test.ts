@@ -110,3 +110,25 @@ test("bound signs follow home names and revert to fallback after unlinking", () 
     "Available",
   );
 });
+
+test("sign attachments reference actual placements", () => {
+  const room = entranceRoom();
+  room.signs = [
+    {
+      id: "sign",
+      text: "Welcome",
+      attachTo: "door-0",
+      position: [0, 2.5, 0.2],
+      yaw: 0,
+      width: 2,
+      height: 0.4,
+      color: "#ffffff",
+    },
+  ];
+  assert.doesNotThrow(() => parseDefinition(JSON.stringify(room), "room"));
+  room.signs[0].attachTo = "missing";
+  assert.throws(
+    () => parseDefinition(JSON.stringify(room), "room"),
+    /placement does not exist/,
+  );
+});

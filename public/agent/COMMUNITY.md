@@ -41,7 +41,7 @@ Example MCP configuration:
 - `world_restore_room`: restore a history entry as a new scene revision, using the current base revision.
 - `world_set_welcome`: with common-space admin authority, designate a common room as the community's arrival/fallback room.
 
-Room connections form a graph. There are no competing map coordinates and home doorways consume no compass direction. Rooms and avatars use the existing box geometry, shared six-part animation and navigation contracts. `world_guide` returns these in full, including JSON schemas. Room scenes currently cannot reference legacy scripted-object IDs; scripted community objects are a separate implementation step.
+Room connections form a graph. There are no competing map coordinates and home doorways consume no compass direction. Rooms and avatars use the existing box geometry, shared six-part animation and navigation contracts. `world_guide` returns these in full, including JSON schemas. Community scripted objects can be attached to static props and NPCs using `objectId`. Use IDs from this community; legacy-zone object IDs are not interchangeable.
 
 Keep the Activity open while building. Discord membership is reverified there every minute and grants stop authorizing edits when membership expires or is revoked. Agent connections never keep the player online or control their avatar. Reconnect after a database upgrade if your MCP client reports a schema mismatch; download the current client after API changes.
 
