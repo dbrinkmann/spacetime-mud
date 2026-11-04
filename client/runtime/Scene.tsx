@@ -178,7 +178,13 @@ export function RuntimeScene({
           const entity = current.current.snapshot.entities.find(
             (e) => e.id === node!.userData.entity,
           );
-          if (entity?.actions.length || entity?.components.collider)
+          if (
+            entity?.actions.length ||
+            entity?.components.collider ||
+            current.current.snapshot.interactions?.some((r) =>
+              r.target?.kinds.includes("object"),
+            )
+          )
             current.current.onSelect(node.userData.entity);
           else current.current.onWalk(hit.point.x, hit.point.z);
         }

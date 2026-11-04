@@ -97,24 +97,75 @@ export class WorldRuntime {
   }
   destroy(id: string) {
     const entity = this.requiredEntity(id);
-    for (const slot of this.store.slots(id)) {
-      this.cancelTimers(slot);
-      this.store.putSlot({
-        ...slot,
-        enabled: false,
-        generation: slot.generation + 1,
-      });
-    }
+    this.store.validateDestroy(entity);
+    for (const slot of this.store.slots(id)) this.closeSlot(slot, true);
     for (const d of this.store.pending(id))
       this.store.removeDelivery(d.event.id);
     for (const r of this.store.interactions(id))
       this.store.removeInteraction(r.id);
     this.store.putEntity({
-      ...entity,
+      ...this.store.entity(id)!,
       enabled: false,
       generation: entity.generation + 1,
       revision: entity.revision + 1,
     });
+  }
+  /** Terminal callbacks are bounded, best-effort notifications in the closing transaction.
+   * Their failure cannot prevent cleanup or resurrect the slot. */
+  private closeSlot(original: Slot, destroying: boolean) {
+    const slot = {
+      ...original,
+      enabled: false,
+      generation: original.generation + 1,
+    };
+    this.store.putSlot(slot);
+    this.cancelTimers(slot);
+    for (const name of [
+      ...(original.enabled ? ["deactivated"] : []),
+      ...(original.bound ? ["unbound"] : []),
+      ...(destroying ? ["destroying"] : []),
+    ]) {
+      const current = this.store.slot(slot.id)!;
+      if (current.lastError) break;
+      const sequence = this.store.nextSequence(),
+        entity = this.store.entity(slot.entity)!;
+      const event: Event = {
+        id: `terminal:${sequence}`,
+        sequence,
+        entity: entity.id,
+        generation: entity.generation,
+        type: "lifecycle",
+        name,
+        payload: null,
+        source: { kind: "engine", id: "terminal" },
+        occurredAt: this.now,
+        correlation: `terminal:${sequence}`,
+        depth: 0,
+        slot: slot.id,
+        slotGeneration: slot.generation,
+      };
+      this.dispatch({
+        event,
+        recipients: [{ id: slot.id, generation: slot.generation }],
+        cursor: 0,
+        started: true,
+      });
+      // A budget-delayed terminal notification is not replayed after removal.
+      this.store.removeDelivery(event.id);
+    }
+    this.cancelTimers(slot);
+    for (const r of this.store.interactions(slot.entity))
+      if (r.slot === slot.id) this.store.removeInteraction(r.id);
+    this.store.putSlot({
+      ...this.store.slot(slot.id)!,
+      enabled: false,
+      bound: false,
+      detached: true,
+      completedOperations: [],
+    });
+  }
+  detach(id: string) {
+    this.closeSlot(this.requiredSlot(id), false);
   }
   attach(
     entityId: string,
@@ -130,7 +181,8 @@ export class WorldRuntime {
       throw Error("Slot names cannot contain colons.");
     const id = `${entityId}:${slotName}`;
     const slots = this.store.slots(entityId);
-    if (slots.length >= BUDGETS.slots || this.store.slot(id))
+    const previous = this.store.slot(id);
+    if (slots.length >= BUDGETS.slots || (previous && !previous.detached))
       throw Error("Slot limit or duplicate slot.");
     assertSchema(pkg.manifest.config, copyValue(config));
     for (const [key, schema] of Object.entries(pkg.manifest.variables ?? {}))
@@ -153,11 +205,12 @@ export class WorldRuntime {
         throw Error("Required component unavailable.");
     if (this.store.pending(entityId).length + 3 > BUDGETS.inbox)
       throw Error("Inbox full.");
+    if (previous?.detached) this.store.clearPlayerState(id);
     this.store.putSlot({
       id,
       entity: entityId,
       packageHash: hash,
-      generation: 1,
+      generation: (previous?.generation ?? 0) + 1,
       enabled: false,
       config: copyValue(config) as RecordValue,
       state: copyValue(pkg.manifest.initialState) as RecordValue,
@@ -173,13 +226,13 @@ export class WorldRuntime {
         null,
         { kind: "engine", id: "lifecycle" },
         id,
-        1,
+        (previous?.generation ?? 0) + 1,
       );
     return id;
   }
   private requiredSlot(id: string) {
     const slot = this.store.slot(id);
-    if (!slot) throw Error("Slot unavailable.");
+    if (!slot || slot.detached) throw Error("Slot unavailable.");
     this.requiredEntity(slot.entity);
     return slot;
   }
@@ -349,6 +402,64 @@ export class WorldRuntime {
       id: player,
     });
   }
+  notifyRoom(
+    property: string,
+    room: string,
+    name: "entered" | "exited",
+    player: string,
+    displayName: string,
+  ) {
+    for (const entity of this.store.roomEntities(property, room)) {
+      if (this.store.pending(entity.id).length >= BUDGETS.inbox) continue;
+      if (
+        this.store
+          .slots(entity.id)
+          .some(
+            (s) =>
+              s.enabled &&
+              this.store.package(s.packageHash)?.manifest.handlers[
+                `room:${name}`
+              ],
+          )
+      )
+        this.enqueue(
+          entity.id,
+          "room",
+          name,
+          { player: `player:${player}`, name: displayName },
+          { kind: "player", id: player },
+        );
+    }
+  }
+  notifyInteraction(
+    id: string,
+    name: "sat" | "stood" | "traversed",
+    player: string,
+  ) {
+    if (
+      !this.store.entity(id)?.enabled ||
+      this.store.pending(id).length >= BUDGETS.inbox
+    )
+      return;
+    if (
+      this.store
+        .slots(id)
+        .some(
+          (s) =>
+            s.enabled &&
+            this.store.package(s.packageHash)?.manifest.handlers[
+              `interaction:${name}`
+            ],
+        )
+    )
+      this.enqueue(
+        id,
+        "interaction",
+        name,
+        { player: `player:${player}` },
+        { kind: "player", id: player },
+      );
+  }
   inspect(caller: Entity, id: string): Value {
     if (id.startsWith("player:")) {
       const player = this.store
@@ -358,6 +469,7 @@ export class WorldRuntime {
         ? {
             id,
             kind: "player",
+            name: player.name ?? "Traveler",
             room: caller.room,
             position: player.trajectory.position,
             velocity: player.trajectory.velocity,
@@ -467,6 +579,17 @@ export class WorldRuntime {
     const counts = new Map<string, number>(),
       timers = new Map(this.store.timers(slot.id).map((t) => [t.name, t]));
     for (const effect of result.effects) {
+      if (effect.type === "destroy") this.store.validateDestroy(entity);
+      if (
+        event.source.kind === "engine" &&
+        event.source.id === "terminal" &&
+        !["message", "component", "variable", "public", "playerState"].includes(
+          effect.type,
+        )
+      )
+        throw Error(
+          "Terminal callbacks may update state/components or send messages, but cannot start new work.",
+        );
       if (
         effect.type === "transfer" &&
         !this.store
@@ -547,6 +670,7 @@ export class WorldRuntime {
       entity,
       { ...entity, components: operations.components },
       this.now,
+      operations.operations,
     );
     const views = new Map(
       this.store
@@ -623,8 +747,11 @@ export class WorldRuntime {
     const delivery = this.store.pending(entityId)[0];
     if (!delivery) return false;
     if ((delivery.notBefore ?? 0) > this.now) return false;
+    return this.dispatch(delivery);
+  }
+  private dispatch(delivery: Delivery): boolean {
     const event = delivery.event,
-      entity = this.store.entity(entityId);
+      entity = this.store.entity(event.entity);
     if (!entity || !entity.enabled || entity.generation !== event.generation) {
       this.store.removeDelivery(event.id);
       return true;
@@ -693,10 +820,20 @@ export class WorldRuntime {
       const sender = senderSlot
         ? this.store.entity(senderSlot.entity)
         : undefined;
+      const terminal = event.source.terminalReceipt
+        ? this.store.receipt(event.source.terminalReceipt)
+        : undefined;
+      const terminalAuthorized =
+        terminal?.outcome === "handled" &&
+        terminal.slot === senderSlot?.id &&
+        terminal.trace?.eventType === "lifecycle" &&
+        ["deactivated", "unbound", "destroying"].includes(terminal.trace.name);
       if (
-        !senderSlot?.enabled ||
+        (!senderSlot?.enabled && !terminalAuthorized) ||
+        !senderSlot ||
         senderSlot.generation !== event.source.generation ||
-        !sender?.enabled ||
+        !sender ||
+        (!sender.enabled && !terminalAuthorized) ||
         !this.store.canRun(senderSlot, sender) ||
         sender.community !== entity.community ||
         sender.property !== entity.property
@@ -865,6 +1002,7 @@ export class WorldRuntime {
                 name: effect.name,
                 choices: effect.choices,
                 ...(effect.maxLength ? { maxLength: effect.maxLength } : {}),
+                ...(effect.target ? { target: effect.target } : {}),
               }
             : {}),
           expires: this.now + (effect.type === "dialog" ? 120 : 8),
@@ -878,7 +1016,14 @@ export class WorldRuntime {
           "message",
           effect.name,
           effect.payload,
-          { kind: "behavior", id: slot.id, generation: slot.generation },
+          {
+            kind: "behavior",
+            id: slot.id,
+            generation: slot.generation,
+            ...(event.source.kind === "engine" && event.source.id === "terminal"
+              ? { terminalReceipt: receiptId }
+              : {}),
+          },
           effect.slot,
           undefined,
           event.correlation,

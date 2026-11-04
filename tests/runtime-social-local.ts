@@ -9,8 +9,14 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { walkerPosition } from "../shared/runtime/walking";
 import type { RoomPresentation } from "../shared/runtime/presentation";
-const host = "http://127.0.0.1:3030",
-  database = "lantern-runtime-refactor";
+const host = process.env.LANTERN_RUNTIME_HOST ?? "http://127.0.0.1:3030",
+  database = process.env.LANTERN_RUNTIME_DATABASE ?? "lantern-runtime-refactor";
+if (
+  !["lantern-runtime-refactor", "dbrinkmann-lantern-runtime-v2"].includes(
+    database,
+  )
+)
+  throw Error("Use an isolated replacement database.");
 const cli =
   process.env.SPACETIME_CLI ??
   "D:\\dev\\personal\\scratch\\tools\\spacetimedb\\spacetimedb-cli.exe";
@@ -271,6 +277,35 @@ try {
   assert.equal(restored.location?.away, false);
   const position = walkerPosition(restored.location!, restored.serverTime);
   assert.ok(Math.hypot(position[0], position[2]) <= 1.01);
+  await resumed.c.reducers.createRoom({
+    property: home,
+    room: "annex",
+    name: "Annex",
+    width: 8,
+    depth: 8,
+  });
+  await resumed.c.reducers.enterWalkRoom({ property: home, room: "annex" });
+  await resumed.c.reducers.deleteRoom({
+    property: home,
+    room: "annex",
+    destination: "home",
+  });
+  assert.equal((await preview(resumed.c, home, "home")).location?.room, "home");
+  await resumed.c.reducers.createRoom({
+    property: home,
+    room: "annex",
+    name: "New annex",
+    width: 8,
+    depth: 8,
+  });
+  await resumed.c.reducers.deleteHome({ property: home });
+  assert.equal((await preview(resumed.c)).location?.property, property);
+  assert.equal(
+    JSON.parse(await resumed.c.procedures.listWorld({ community: guild })).homes
+      .length,
+    0,
+  );
+  await resumed.c.reducers.claimHome({ entrance, name: "Rebuilt home" });
   console.log(
     JSON.stringify({
       guild,

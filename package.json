@@ -15,6 +15,8 @@
     "test:runtime:social": "tsx tests/runtime-social-local.ts",
     "test:runtime:preview": "tsx tests/runtime-preview.ts",
     "build:runtime:agent": "tsx scripts/build-runtime-agent.ts",
+    "build:runtime:staging": "tsx scripts/build-runtime-staging.ts",
+    "test:runtime:release": "tsx tests/runtime-release.ts",
     "bridge": "tsx bridge/index.ts",
     "discord:gateway": "tsx gateway/index.ts",
     "build:staging": "tsx scripts/build-discord-staging.ts",

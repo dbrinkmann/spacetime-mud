@@ -61,14 +61,16 @@ export class WorldSimulation {
             property,
             room,
             this.time,
-            [],
+            this.store.players(property, room, this.time),
             (entity, slot, generation, name, payload) =>
               runtime.enqueue(
                 entity,
                 "spatial",
                 name,
                 payload,
-                { kind: "engine", id: "spatial" },
+                payload.entity.kind === "player"
+                  ? { kind: "player", id: payload.entity.id.slice(7) }
+                  : { kind: "engine", id: "spatial" },
                 slot,
                 generation,
               ),

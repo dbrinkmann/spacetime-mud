@@ -41,7 +41,10 @@ import ClaimHomeReducer from "./claim_home_reducer";
 import CreateEntityReducer from "./create_entity_reducer";
 import CreatePropertyReducer from "./create_property_reducer";
 import CreateRoomReducer from "./create_room_reducer";
+import DeleteHomeReducer from "./delete_home_reducer";
+import DeleteRoomReducer from "./delete_room_reducer";
 import DestroyEntityReducer from "./destroy_entity_reducer";
+import DetachBehaviorReducer from "./detach_behavior_reducer";
 import EmoteReducer from "./emote_reducer";
 import EnterWalkRoomReducer from "./enter_walk_room_reducer";
 import InvokeActionReducer from "./invoke_action_reducer";
@@ -74,6 +77,7 @@ import * as ListWorldProcedure from "./list_world_procedure";
 import * as PreviewPrincipalProcedure from "./preview_principal_procedure";
 import * as PreviewRoomProcedure from "./preview_room_procedure";
 import * as RuntimeInfoProcedure from "./runtime_info_procedure";
+import * as SearchPackagesProcedure from "./search_packages_procedure";
 
 // Import all table schema definitions
 import LiveRoomStampRow from "./live_room_stamp_table";
@@ -100,7 +104,10 @@ const reducersSchema = __reducers(
   __reducerSchema("create_entity", CreateEntityReducer),
   __reducerSchema("create_property", CreatePropertyReducer),
   __reducerSchema("create_room", CreateRoomReducer),
+  __reducerSchema("delete_home", DeleteHomeReducer),
+  __reducerSchema("delete_room", DeleteRoomReducer),
   __reducerSchema("destroy_entity", DestroyEntityReducer),
+  __reducerSchema("detach_behavior", DetachBehaviorReducer),
   __reducerSchema("emote", EmoteReducer),
   __reducerSchema("enter_walk_room", EnterWalkRoomReducer),
   __reducerSchema("invoke_action", InvokeActionReducer),
@@ -135,6 +142,7 @@ const proceduresSchema = __procedures(
   __procedureSchema("preview_principal", PreviewPrincipalProcedure.params, PreviewPrincipalProcedure.returnType),
   __procedureSchema("preview_room", PreviewRoomProcedure.params, PreviewRoomProcedure.returnType),
   __procedureSchema("runtime_info", RuntimeInfoProcedure.params, RuntimeInfoProcedure.returnType),
+  __procedureSchema("search_packages", SearchPackagesProcedure.params, SearchPackagesProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */

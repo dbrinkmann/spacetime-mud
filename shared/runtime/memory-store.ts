@@ -11,10 +11,19 @@ import type { Entity, Slot, Package } from "./contracts";
 import type { WorkMeter } from "./budgets";
 import type { EntityTemplate } from "./templates";
 import { operationDeadline, type Operation } from "./operations";
+import { walkerTrajectory, type Walker } from "./walking";
 const clone = <T>(v: T): T =>
   v === undefined ? v : JSON.parse(JSON.stringify(v));
 /** Deterministic simulation store. Production uses table-backed storage. */
 export class MemoryStore implements RuntimeStore {
+  validateDestroy(_entity: Entity) {}
+  private playerRows = new Map<string, Walker>();
+  putPlayer(walker: Walker) {
+    this.playerRows.set(walker.id, clone(walker));
+  }
+  removePlayer(id: string) {
+    this.playerRows.delete(id);
+  }
   private reservationRows = new Map<
     string,
     import("./reservations").Reservation
@@ -31,11 +40,19 @@ export class MemoryStore implements RuntimeStore {
     this.reservationRows.delete(id);
   }
   players(
-    _property: string,
-    _room: string,
-    _now: number,
+    property: string,
+    room: string,
+    now: number,
   ): import("../intelligent-objects").SensedEntity[] {
-    return [];
+    return [...this.playerRows.values()]
+      .filter((w) => w.property === property && w.room === room)
+      .map((w) => ({
+        id: `player:${w.id}`,
+        kind: "player",
+        name: w.name ?? "Traveler",
+        tags: [],
+        trajectory: walkerTrajectory(w, now),
+      }));
   }
   private viewRows = new Map<string, ObjectView>();
   views(entity: string) {
@@ -62,6 +79,10 @@ export class MemoryStore implements RuntimeStore {
     this.revoked.delete(slot.id);
   }
   private playerStates = new Map<string, RecordValue>();
+  clearPlayerState(slot: string) {
+    for (const key of this.playerStates.keys())
+      if (JSON.parse(key)[0] === slot) this.playerStates.delete(key);
+  }
   private interactionRows = new Map<string, InteractionRecord>();
   playerState(slot: string, player: string) {
     return clone(this.playerStates.get(JSON.stringify([slot, player])) ?? {});
@@ -142,7 +163,7 @@ export class MemoryStore implements RuntimeStore {
   }
   slots(entity: string) {
     return [...this.instances.values()]
-      .filter((s) => s.entity === entity)
+      .filter((s) => s.entity === entity && !s.detached)
       .sort((a, b) => a.id.localeCompare(b.id))
       .map(clone);
   }
@@ -213,6 +234,7 @@ export class MemoryStore implements RuntimeStore {
   export() {
     return JSON.stringify({
       entities: [...this.entities],
+      playerRows: [...this.playerRows],
       reservationRows: [...this.reservationRows],
       instances: [...this.instances],
       packages: [...this.packages],
@@ -234,6 +256,7 @@ export class MemoryStore implements RuntimeStore {
     const data = JSON.parse(source),
       store = new MemoryStore();
     store.entities = new Map(data.entities);
+    store.playerRows = new Map(data.playerRows ?? []);
     store.reservationRows = new Map(data.reservationRows ?? []);
     store.instances = new Map(data.instances);
     store.packages = new Map(data.packages);

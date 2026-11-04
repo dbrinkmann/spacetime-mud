@@ -421,3 +421,112 @@ test("upgrades migrate copies atomically and reject queued work from the old gen
   assert.deepEqual(store.slot(before.id)!.state, { record: { items: [1] } });
   assert.equal(store.slot(before.id)!.enabled, true);
 });
+
+test("detach delivers bounded terminal callbacks, releases resources and permits fresh attachment", () => {
+  const store = new MemoryStore(),
+    world = new WorldRuntime(store, 0);
+  world.create(entity("source"));
+  world.create(entity("sink"));
+  world.register(
+    packageOf(
+      "sink",
+      'function on_receive(ctx){ctx.state.set("count",(ctx.state.get("count")||0)+1);}',
+      { "message:gone": { handler: "on_receive", input: nil } },
+    ),
+  );
+  world.register(
+    packageOf(
+      "source",
+      'function on_stop(ctx){ctx.state.set("count",1);} function on_unbind(ctx){ctx.state.set("count",2);ctx.messages.send("sink","gone",null);}',
+      {
+        "lifecycle:deactivated": { handler: "on_stop", input: nil },
+        "lifecycle:unbound": { handler: "on_unbind", input: nil },
+      },
+      ["light"],
+    ),
+  );
+  world.attach("source", "main", "source", {});
+  world.attach("sink", "main", "sink", {});
+  world.drain("source");
+  world.drain("sink");
+  store.putPlayerState("source:main", "alice", { visits: 3 });
+  world.detach("source:main");
+  assert.equal(store.slots("source").length, 0);
+  assert.equal(store.slot("source:main")!.state.count, 2);
+  assert.throws(() => world.resume("source:main"), /unavailable/);
+  world.drain("sink");
+  assert.equal(store.slot("sink:main")!.state.count, 1);
+  const generation = store.slot("source:main")!.generation;
+  world.attach("source", "main", "source", {});
+  world.drain("source");
+  assert.ok(store.slot("source:main")!.generation > generation);
+  assert.deepEqual(store.slot("source:main")!.state, {});
+  assert.deepEqual(store.playerState("source:main", "alice"), {});
+});
+
+test("destruction sends a final notification; failed cleanup cannot retain a running slot", () => {
+  const store = new MemoryStore(),
+    world = new WorldRuntime(store, 0);
+  world.create(entity("source"));
+  world.create(entity("sink"));
+  world.register(
+    packageOf("sink", 'function on_receive(ctx){ctx.state.set("count",1);}', {
+      "message:gone": { handler: "on_receive", input: nil },
+    }),
+  );
+  world.register(
+    packageOf(
+      "good",
+      'function on_destroy(ctx){ctx.messages.send("sink","gone",null);}',
+      { "lifecycle:destroying": { handler: "on_destroy", input: nil } },
+    ),
+  );
+  world.register(
+    packageOf("bad", "function on_destroy(ctx){while(true){}}", {
+      "lifecycle:destroying": { handler: "on_destroy", input: nil },
+    }),
+  );
+  world.attach("source", "good", "good", {});
+  world.attach("source", "bad", "bad", {});
+  world.attach("sink", "main", "sink", {});
+  world.drain("source");
+  world.drain("sink");
+  world.destroy("source");
+  world.drain("sink");
+  assert.equal(store.entity("source")!.enabled, false);
+  assert.equal(store.slot("source:bad")!.detached, true);
+  assert.ok(store.slot("source:bad")!.lastError);
+  assert.equal(store.slot("sink:main")!.state.count, 1);
+  assert.equal(store.pending("source").length, 0);
+});
+
+test("room arrival is a player-context event with name and private persistent state", () => {
+  const store = new MemoryStore(),
+    world = new WorldRuntime(store, 0);
+  world.create(entity("guide"));
+  world.register(
+    packageOf(
+      "guide",
+      'function on_entered(ctx,p){ctx.player.set("visits",(ctx.player.get("visits")||0)+1);ctx.tell("Hello "+p.name);}',
+      {
+        "room:entered": {
+          handler: "on_entered",
+          input: {
+            type: "object",
+            properties: {
+              player: { type: "string" },
+              name: { type: "string" },
+            },
+          },
+        },
+      },
+    ),
+  );
+  world.attach("guide", "guide", "guide", {});
+  world.drain("guide");
+  world.notifyRoom("home", "room", "entered", "alice", "Alice");
+  world.drain("guide");
+  assert.equal(store.playerState("guide:guide", "alice").visits, 1);
+  assert.equal(store.interactions("guide")[0].player, "alice");
+  assert.equal(store.interactions("guide")[0].text, "Hello Alice");
+});

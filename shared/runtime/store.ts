@@ -13,6 +13,7 @@ export type InteractionRecord = {
   name?: string;
   choices?: string[];
   maxLength?: number;
+  target?: { kinds: Array<"object" | "player">; range: number };
   expires: number;
 };
 import type { Operation } from "./operations";
@@ -87,12 +88,14 @@ export interface RuntimeStore {
   installGrant(slot: Slot, entity: Entity): void;
   playerState(slot: string, player: string): RecordValue;
   putPlayerState(slot: string, player: string, value: RecordValue): void;
+  clearPlayerState(slot: string): void;
   interactions(entity: string): InteractionRecord[];
   putInteraction(value: InteractionRecord): void;
   removeInteraction(id: string): void;
   workMeter(key: string): WorkMeter | undefined;
   putWorkMeter(meter: WorkMeter): void;
   entity(id: string): Entity | undefined;
+  validateDestroy(entity: Entity): void;
   roomEntities(property: string, room: string): Entity[];
   putEntity(entity: Entity): void;
   slots(entity: string): Slot[];

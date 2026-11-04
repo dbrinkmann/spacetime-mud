@@ -56,6 +56,7 @@ export class TableStore implements RuntimeStore {
       .map((r) => ({
         id: `player:${r.id}`,
         kind: "player",
+        name: JSON.parse(r.data).name ?? "Traveler",
         tags: [],
         trajectory: walkerTrajectory(JSON.parse(r.data), time),
       }));
@@ -92,6 +93,10 @@ export class TableStore implements RuntimeStore {
   playerState(slot: string, player: string): RecordValue {
     const row = this.ctx.db.playerState.id.find(JSON.stringify([slot, player]));
     return row ? JSON.parse(row.data) : {};
+  }
+  clearPlayerState(slot: string) {
+    for (const row of this.ctx.db.playerState.slot.filter(slot))
+      this.ctx.db.playerState.id.delete(row.id);
   }
   putPlayerState(slot: string, player: string, value: RecordValue) {
     const row = {
@@ -151,6 +156,11 @@ export class TableStore implements RuntimeStore {
       (r) => JSON.parse(r.data) as Operation,
     );
   }
+  private operationNavigation(entityId: string) {
+    const e = this.entity(entityId);
+    if (e?.components.collider)
+      reconcileNavigation(this.ctx, e.property, e.room);
+  }
   putOperation(op: Operation) {
     const deadline = operationDeadline(op),
       row = {
@@ -163,11 +173,13 @@ export class TableStore implements RuntimeStore {
       this.ctx.db.operation.id.update(row);
     else this.ctx.db.operation.insert(row);
     this.touched.add(op.entity);
+    this.operationNavigation(op.entity);
   }
   removeOperation(id: string) {
     const row = this.ctx.db.operation.id.find(id);
     if (row) this.touched.add(row.entity);
     this.ctx.db.operation.id.delete(id);
+    if (row) this.operationNavigation(row.entity);
   }
   dueOperations(_now: number, _limit: number): Operation[] {
     throw Error("Use entity-scoped scheduler.");
@@ -175,6 +187,17 @@ export class TableStore implements RuntimeStore {
   entity(id: string) {
     const row = this.ctx.db.entity.id.find(id);
     return row ? (JSON.parse(row.data) as Entity) : undefined;
+  }
+  validateDestroy(entity: Entity) {
+    if (this.ctx.db.homeLink.entrance.find(entity.id))
+      throw Error("Remove the attached home before destroying its entrance.");
+    if (entity.components.walkSurface) {
+      const occupied = [
+        ...this.ctx.db.walker.property.filter(entity.property),
+      ].some((w) => w.room === entity.room);
+      if (occupied)
+        throw Error("Delete the room with an explicit relocation destination.");
+    }
   }
   roomEntities(property: string, room: string): Entity[] {
     return [...this.ctx.db.entity.property.filter(property)]
@@ -195,6 +218,29 @@ export class TableStore implements RuntimeStore {
     };
     if (this.ctx.db.entity.id.find(e.id)) this.ctx.db.entity.id.update(row);
     else this.ctx.db.entity.insert(row);
+    if (old?.enabled && !e.enabled) {
+      for (const r of this.ctx.db.walker.property.filter(e.property)) {
+        const w = JSON.parse(
+          r.data,
+        ) as import("../../shared/runtime/walking").Walker;
+        if (w.seat !== e.id) continue;
+        const position = walkerTrajectory(w, now(this.ctx)).position;
+        this.ctx.db.walker.id.update({
+          ...r,
+          data: JSON.stringify({
+            ...w,
+            seat: undefined,
+            action: undefined,
+            walk: {
+              start: [position[0], 0, position[2]],
+              points: [],
+              started: now(this.ctx),
+              speed: 2.5,
+            },
+          }),
+        });
+      }
+    }
     if (
       (old?.components.collider ||
         e.components.collider ||
@@ -218,6 +264,7 @@ export class TableStore implements RuntimeStore {
   slots(id: string) {
     return [...this.ctx.db.slot.entity.filter(id)]
       .map((r) => JSON.parse(r.data) as Slot)
+      .filter((s) => !s.detached)
       .sort((a, b) => a.id.localeCompare(b.id));
   }
   slot(id: string) {

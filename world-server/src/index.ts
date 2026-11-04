@@ -40,7 +40,14 @@ export {
 } from "./walking";
 import { roomFloor } from "./rooms";
 import { validate as validateGeometry } from "../../shared/geometry";
-export { createRoom, claimHome, renameHome, listWorld } from "./rooms";
+export {
+  createRoom,
+  claimHome,
+  renameHome,
+  listWorld,
+  deleteRoom,
+  deleteHome,
+} from "./rooms";
 export { evaluateSpatial } from "./spatial";
 export const runtimeInfo = db.procedure({}, t.string(), () =>
   JSON.stringify({ apiVersion: 2, status: "development" }),
@@ -94,6 +101,12 @@ export const liveRoomStamp = db.view(
     const data = [
       walker.data,
       entities.map((e) => [e.id, JSON.parse(e.data).revision]),
+      entities.flatMap((e) =>
+        [...ctx.db.slot.entity.filter(e.id)].map((row) => {
+          const s = JSON.parse(row.data);
+          return [row.id, s.enabled, s.detached, s.packageHash, s.generation];
+        }),
+      ),
       entities.flatMap((e) =>
         [...ctx.db.operation.entity.filter(e.id)].map((o) => o.data),
       ),
@@ -348,6 +361,7 @@ export const destroyEntity = db.reducer({ id: t.string() }, (ctx, a) => {
   new WorldRuntime(store, now(ctx)).destroy(a.id);
   store.schedule();
 });
+import { resolveTarget } from "../../shared/runtime/targeting";
 export const answerDialog = db.reducer(
   { id: t.string(), choice: t.string() },
   (ctx, a) => {
@@ -363,9 +377,10 @@ export const answerDialog = db.reducer(
       record.kind !== "dialog" ||
       record.player !== ctx.sender.toHexString() ||
       record.expires <= now(ctx) ||
-      (record.maxLength
-        ? !a.choice.trim() || a.choice.length > record.maxLength
-        : !record.choices?.includes(a.choice)) ||
+      (!record.target &&
+        (record.maxLength
+          ? !a.choice.trim() || a.choice.length > record.maxLength
+          : !record.choices?.includes(a.choice))) ||
       !slot?.enabled ||
       slot.generation !== record.generation ||
       walkerRow?.property !== record.property ||
@@ -373,11 +388,18 @@ export const answerDialog = db.reducer(
     )
       throw new SenderError("Dialogue is no longer available.");
     requirePropertyVisit(ctx, record.property);
+    const payload = checked(() =>
+      record.target
+        ? resolveTarget(store, record, a.choice, now(ctx))
+        : record.maxLength
+          ? { text: a.choice }
+          : { choice: a.choice },
+    );
     new WorldRuntime(store, now(ctx)).enqueue(
       record.entity,
       "dialog",
       record.name!,
-      record.maxLength ? { text: a.choice } : { choice: a.choice },
+      payload as import("../../shared/runtime/values").Value,
       { kind: "player", id: ctx.sender.toHexString() },
       slot.id,
       slot.generation,
@@ -782,6 +804,14 @@ export const previewRoom = db.procedure(
       });
     }),
 );
+export const detachBehavior = db.reducer({ slot: t.string() }, (ctx, a) => {
+  requireSlotEdit(ctx, a.slot);
+  checked(() => {
+    const store = new TableStore(ctx);
+    new WorldRuntime(store, now(ctx)).detach(a.slot);
+    store.schedule();
+  });
+});
 export const suspendBehavior = db.reducer({ slot: t.string() }, (ctx, a) => {
   requireSlotEdit(ctx, a.slot);
   checked(() => {
@@ -905,5 +935,50 @@ export const getPackage = db.procedure(
           a.version,
         ),
       );
+    }),
+);
+
+export const searchPackages = db.procedure(
+  { community: t.string(), query: t.string(), after: t.string() },
+  t.string(),
+  (ctx, a) =>
+    ctx.withTx((tx) => {
+      const principal = requireBuilder(tx, a.community),
+        actor = { id: principal.identity, community: a.community };
+      if (a.query.length > 80 || a.after.length > 160)
+        throw new SenderError("Invalid package search.");
+      const accessible = new Set(
+        [...tx.db.packageListing.iter()]
+          .map((r) => JSON.parse(r.data) as RegistryEntry)
+          .filter((entry) => entry.listed && registry(tx).canRead(actor, entry))
+          .map((entry) => entry.id),
+      );
+      const matches = [...tx.db.packageRevision.iter()]
+        .map(
+          (row) =>
+            JSON.parse(
+              row.data,
+            ) as import("../../shared/runtime/registry").Revision,
+        )
+        .filter(
+          (r) =>
+            accessible.has(r.id) &&
+            r.key > a.after &&
+            (r.id + " " + r.documentation)
+              .toLowerCase()
+              .includes(a.query.toLowerCase()),
+        )
+        .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+      const items = matches.slice(0, 50).map((r) => ({
+        id: r.id,
+        version: r.version,
+        hash: r.hash,
+        license: r.license,
+        summary: r.documentation.slice(0, 300),
+      }));
+      return JSON.stringify({
+        items,
+        next: matches.length > 50 ? matches[49].key : null,
+      });
     }),
 );

@@ -1,0 +1,12 @@
+{
+  "name": "lantern-runtime-v2",
+  "main": "gateway/worker.ts",
+  "compatibility_date": "2026-11-03",
+  "account_id": "33d1b59774fcefc842cf3d6fbf79b792",
+  "workers_dev": true,
+  "compatibility_flags": ["nodejs_compat"],
+  "browser": { "binding": "BROWSER" },
+  "assets": { "directory": "./dist-runtime-v2", "binding": "ASSETS", "run_worker_first": ["/api/*", "/health"], "not_found_handling": "single-page-application" },
+  "d1_databases": [{ "binding": "SESSIONS", "database_name": "lantern-runtime-v2", "database_id": "3115d80d-d5b5-40c1-9930-ed8727394575" }],
+  "vars": { "SPACETIME_HOST": "https://maincloud.spacetimedb.com", "SPACETIME_DATABASE": "dbrinkmann-lantern-runtime-v2" }
+}

@@ -29,3 +29,42 @@ test("walk routes around authored colliders and replaces a route from its sample
     [-2, 0, 2],
   );
 });
+
+test("solid motion reserves its swept region and releases it on pause or completion", () => {
+  const entities = cooperationEntities("fixture", "home", "guild", "owner");
+  const door = entities.find((e) => e.components.collider)!;
+  for (const e of entities) if (e !== door) delete e.components.collider;
+  door.components.transform = { position: [-2, 0, 0], rotation: [0, 0, 0] };
+  door.components.collider = { enabled: true, center: [0, 0, 0], size: [1, 1] };
+  const op: import("../shared/runtime/operations").Operation = {
+    id: "op",
+    entity: door.id,
+    slot: "slot",
+    generation: 1,
+    resource: "transform",
+    from: { position: [-2, 0, 0], rotation: [0, 0, 0] },
+    to: { position: [2, 0, 0], rotation: [0, 90, 0] },
+    started: 0,
+    duration: 4,
+    progress: 0,
+    paused: false,
+    correlation: "event",
+    depth: 0,
+  };
+  assert.equal(
+    clearSegment(navigationScene(entities, [op], 0), [0, 0, -2], [0, 0, 2]),
+    false,
+  );
+  assert.equal(
+    clearSegment(
+      navigationScene(entities, [{ ...op, paused: true }], 0),
+      [0, 0, -2],
+      [0, 0, 2],
+    ),
+    true,
+  );
+  assert.equal(
+    clearSegment(navigationScene(entities), [0, 0, -2], [0, 0, 2]),
+    true,
+  );
+});

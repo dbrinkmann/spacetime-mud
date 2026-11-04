@@ -18,12 +18,15 @@ export function reconcileNavigation(ctx: Ctx, property: string, room: string) {
     entities.filter((e) => e.enabled && e.components.walkSurface).length !== 1
   )
     return;
-  const nav = navigationScene(entities),
-    time = now(ctx);
+  const time = now(ctx),
+    operations = entities.flatMap((e) =>
+      [...ctx.db.operation.entity.filter(e.id)].map((r) => JSON.parse(r.data)),
+    );
+  const nav = navigationScene(entities, operations, time);
   for (const row of ctx.db.walker.property.filter(property)) {
     if (row.room !== room) continue;
     const walker = JSON.parse(row.data) as Walker;
-    if (walker.seat || walker.away || !walker.walk.points.length) continue;
+    if (walker.seat || !walker.walk.points.length) continue;
     const start = walkerPosition(walker, time),
       end = walker.walk.points.at(-1)!;
     const old = ctx.db.walkArrival.walker.find(row.id);

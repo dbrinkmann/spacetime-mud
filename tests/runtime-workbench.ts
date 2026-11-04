@@ -9,6 +9,16 @@ import {
   cooperationPackages,
   cooperationEntities,
 } from "../shared/runtime/cooperation";
+const host = process.env.LANTERN_RUNTIME_HOST ?? "http://127.0.0.1:3030";
+const database =
+  process.env.LANTERN_RUNTIME_DATABASE ?? "lantern-runtime-refactor";
+const site = process.env.LANTERN_RUNTIME_SITE ?? "http://127.0.0.1:5179";
+if (
+  !["lantern-runtime-refactor", "dbrinkmann-lantern-runtime-v2"].includes(
+    database,
+  )
+)
+  throw Error("Use an isolated database.");
 const cli =
   process.env.SPACETIME_CLI ??
   "D:\\dev\\personal\\scratch\\tools\\spacetimedb\\spacetimedb-cli.exe";
@@ -17,11 +27,11 @@ function call(name: string, ...args: unknown[]) {
     cli,
     [
       "call",
-      "lantern-runtime-refactor",
+      database,
       name,
       ...args.map((a) => JSON.stringify(a)),
       "--server",
-      "http://127.0.0.1:3030",
+      host,
       "--no-config",
     ],
     { stdio: "pipe" },
@@ -34,7 +44,7 @@ try {
   });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("http://127.0.0.1:5179/?runtime");
+  await page.goto(`${site}/?runtime`);
   await page
     .getByTestId("identity")
     .filter({ hasText: /^[0-9a-f]{64}$/ })
@@ -119,6 +129,52 @@ try {
   await page
     .getByRole("option", { name: `${prefix}.switch`, exact: true })
     .waitFor({ state: "attached" });
+  const nativeManifest = {
+    ...guideManifest,
+    id: `${prefix}.native`,
+    state: {
+      type: "object",
+      properties: {
+        sat: { type: "number" },
+        stood: { type: "number" },
+        traversed: { type: "number" },
+      },
+    },
+    initialState: { sat: 0, stood: 0, traversed: 0 },
+    handlers: Object.fromEntries(
+      ["sat", "stood", "traversed"].map((name) => [
+        `interaction:${name}`,
+        {
+          handler: `on_${name}`,
+          input: { type: "object", properties: { player: { type: "string" } } },
+        },
+      ]),
+    ),
+  };
+  const nativeSource = ["sat", "stood", "traversed"]
+    .map(
+      (name) =>
+        `function on_${name}(ctx){ctx.state.set("${name}",ctx.state.get("${name}")+1);}`,
+    )
+    .join("\n");
+  const nativeHash = sha256(
+    canonical({ manifest: nativeManifest, source: nativeSource }),
+  );
+  call(
+    "publish_package",
+    JSON.stringify({
+      format: 2,
+      manifest: nativeManifest,
+      source: nativeSource,
+      hash: nativeHash,
+      license: "MIT",
+      documentation: "Native interaction events",
+    }),
+    "community",
+    guild,
+  );
+  call("attach_behavior", `${prefix}.bench`, "native", nativeHash, "{}");
+  call("attach_behavior", `${prefix}.entrance`, "native", nativeHash, "{}");
   const rect = (await page.locator("canvas").boundingBox())!;
   const camera = new PerspectiveCamera(40, rect.width / rect.height, 0.01, 500);
   camera.position.set(9, 8, 12);
@@ -232,6 +288,11 @@ try {
   await page.getByLabel("Your answer", { exact: true }).fill("Builder");
   await page.getByRole("button", { name: "Reply", exact: true }).click();
   await page.getByText("Welcome, Builder", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "inspect", exact: true }).click();
+  await page
+    .getByRole("button", { name: `${prefix}.lamp`, exact: true })
+    .click();
+  await page.getByText(`Selected: ${prefix}.lamp`, { exact: true }).waitFor();
   await page
     .getByLabel("Object", { exact: true })
     .selectOption(`${prefix}.entrance`);
@@ -282,7 +343,7 @@ try {
     ),
   );
   assert.deepEqual(errors, []);
-  await page.goto(`http://127.0.0.1:5179/?runtime&community=${guild}`);
+  await page.goto(`${site}/?runtime&community=${guild}`);
   await page.getByText("Room: home", { exact: true }).waitFor();
   const homeProperty = await page
     .getByLabel("Property", { exact: true })
@@ -305,24 +366,51 @@ try {
       cli,
       [
         "sql",
-        "lantern-runtime-refactor",
+        database,
         `SELECT data FROM slot WHERE id = '${prefix}.switch:guide'`,
         "--format",
         "json",
         "--server",
-        "http://127.0.0.1:3030",
+        host,
         "--no-config",
       ],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     ),
   );
+  for (const [id, event] of [
+    ["bench", "sat"],
+    ["bench", "stood"],
+    ["entrance", "traversed"],
+  ]) {
+    const rows = JSON.parse(
+      execFileSync(
+        cli,
+        [
+          "sql",
+          database,
+          `SELECT data FROM slot WHERE id = '${prefix}.${id}:native'`,
+          "--format",
+          "json",
+          "--server",
+          host,
+          "--no-config",
+        ],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      ),
+    );
+    assert.equal(
+      JSON.parse(rows[0].rows[0][0]).state[event],
+      1,
+      `${event} notification`,
+    );
+  }
   assert.ok(
     JSON.parse(sensed[0].rows[0][0]).state.arrivals > 0,
     "scheduled view events must see the walking player",
   );
   console.log(
     JSON.stringify({
-      url: `http://127.0.0.1:5179/?runtime&property=${encodeURIComponent(property)}`,
+      url: `${site}/?runtime&property=${encodeURIComponent(property)}`,
       result:
         "live click, server messaging, door operation, light state, reload persistence and narrow layout passed",
     }),

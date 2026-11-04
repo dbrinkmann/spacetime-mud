@@ -286,6 +286,39 @@ export function executeBehavior(
         sha256(`${event.id}:${slot.id}:${randomCounter++}`).slice(0, 13),
         16,
       ) / 0x10000000000000,
+    target: (name: string, prompt: string, options: Value) => {
+      identifier(name);
+      const target = copyValue(options) as {
+        kinds: Array<"object" | "player">;
+        range: number;
+      };
+      if (
+        event.source.kind !== "player" ||
+        typeof prompt !== "string" ||
+        !prompt.trim() ||
+        prompt.length > 1000 ||
+        !target ||
+        !Array.isArray(target.kinds) ||
+        !target.kinds.length ||
+        target.kinds.length > 2 ||
+        target.kinds.some((k) => k !== "object" && k !== "player") ||
+        typeof target.range !== "number" ||
+        target.range <= 0 ||
+        target.range > 100
+      )
+        throw Error("Invalid target request.");
+      const id = `dialog:${sha256(`${event.id}:${slot.id}:${effects.length}`).slice(0, 40)}`;
+      record({
+        type: "dialog",
+        name,
+        prompt,
+        choices: [],
+        target,
+        player: event.source.id,
+        id,
+      });
+      return id;
+    },
     prompt: (name: string, prompt: string, maxLength: number) => {
       identifier(name);
       if (event.source.kind !== "player")
@@ -535,6 +568,7 @@ export function executeBehavior(
       "world.transfer",
       "player.set",
       "dialog",
+      "target",
       "variables.set",
       "messages.send",
       "messages.sendToSlot",

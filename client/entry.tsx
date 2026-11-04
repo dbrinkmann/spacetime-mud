@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 const root = createRoot(document.getElementById("root")!);
 if (
-  import.meta.env.DEV &&
+  (import.meta.env.DEV || import.meta.env.VITE_RUNTIME_DATABASE) &&
   new URLSearchParams(location.search).has("runtime")
 ) {
   import("./runtime/Workbench").then(({ RuntimeWorkbench }) =>

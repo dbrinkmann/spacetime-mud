@@ -47,10 +47,12 @@ function destination(store: TableStore, id: string) {
 }
 
 function scene(ctx: Ctx, property: string, room: string) {
+  const store = new TableStore(ctx),
+    entities = store.roomEntities(property, room);
   return navigationScene(
-    [...ctx.db.entity.property.filter(property)]
-      .filter((e) => e.room === room)
-      .map((e) => JSON.parse(e.data)),
+    entities,
+    entities.flatMap((e) => store.operations(e.id)),
+    now(ctx),
   );
 }
 function save(ctx: Ctx, walker: Walker) {
@@ -66,6 +68,35 @@ function save(ctx: Ctx, walker: Walker) {
   };
   if (ctx.db.walker.id.find(walker.id)) ctx.db.walker.id.update(row);
   else ctx.db.walker.insert(row);
+  const previousSeat = old ? (JSON.parse(old.data) as Walker).seat : undefined;
+  if (previousSeat !== walker.seat) {
+    const store = new TableStore(ctx),
+      runtime = new WorldRuntime(store, now(ctx));
+    if (previousSeat)
+      runtime.notifyInteraction(previousSeat, "stood", walker.id);
+    if (walker.seat) runtime.notifyInteraction(walker.seat, "sat", walker.id);
+    store.schedule();
+  }
+  if (!old || old.property !== walker.property || old.room !== walker.room) {
+    const store = new TableStore(ctx),
+      runtime = new WorldRuntime(store, now(ctx));
+    if (old)
+      runtime.notifyRoom(
+        old.property,
+        old.room,
+        "exited",
+        walker.id,
+        walker.name ?? "Traveler",
+      );
+    runtime.notifyRoom(
+      walker.property,
+      walker.room,
+      "entered",
+      walker.id,
+      walker.name ?? "Traveler",
+    );
+    store.schedule();
+  }
 }
 function cancel(ctx: Ctx, id: string) {
   const arrival = ctx.db.walkArrival.walker.find(id);
@@ -164,6 +195,7 @@ function enterRoom(ctx: Ctx, a: { property: string; room: string }) {
     throw new SenderError("Spawn is blocked.");
   cancel(ctx, id);
   save(ctx, {
+    ...(old ? { name: (JSON.parse(old.data) as Walker).name } : {}),
     id,
     ...a,
     walk: { start: nav.spawn, points: [], started: now(ctx), speed: 2.5 },
@@ -322,6 +354,12 @@ export const arriveWalk = db.reducer(
       if (!to || authority?.community !== target.community) return;
       const next = scene(ctx, to.property, to.room);
       if (!walkable(next, next.spawn[0], next.spawn[2])) return;
+      new WorldRuntime(store, now(ctx)).notifyInteraction(
+        target.id,
+        "traversed",
+        walker.id,
+      );
+      store.schedule();
       save(ctx, {
         ...walker,
         property: to.property,

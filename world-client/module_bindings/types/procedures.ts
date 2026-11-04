@@ -14,6 +14,7 @@ import * as ListWorldProcedure from "../list_world_procedure";
 import * as PreviewPrincipalProcedure from "../preview_principal_procedure";
 import * as PreviewRoomProcedure from "../preview_room_procedure";
 import * as RuntimeInfoProcedure from "../runtime_info_procedure";
+import * as SearchPackagesProcedure from "../search_packages_procedure";
 
 export type EntityHistoryArgs = __Infer<typeof EntityHistoryProcedure.params>;
 export type EntityHistoryResult = __Infer<typeof EntityHistoryProcedure.returnType>;
@@ -31,3 +32,5 @@ export type PreviewRoomArgs = __Infer<typeof PreviewRoomProcedure.params>;
 export type PreviewRoomResult = __Infer<typeof PreviewRoomProcedure.returnType>;
 export type RuntimeInfoArgs = __Infer<typeof RuntimeInfoProcedure.params>;
 export type RuntimeInfoResult = __Infer<typeof RuntimeInfoProcedure.returnType>;
+export type SearchPackagesArgs = __Infer<typeof SearchPackagesProcedure.params>;
+export type SearchPackagesResult = __Infer<typeof SearchPackagesProcedure.returnType>;

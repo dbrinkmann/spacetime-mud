@@ -1,11 +1,11 @@
 # Lantern programmable world refactor
 
-Status: implementation in progress on `refactor/programmable-world`. The isolated runtime foundation is running locally; the replacement application and release gates are not complete. Nothing in this document is implemented merely by being listed here.
+Status: core implementation deployed on the isolated replacement, on `refactor/programmable-world`. Production cutover and the full release gates remain separate. See `runtime-verification.md` for capability-by-capability evidence and explicit remaining launch work.
 Date: 2026-11-04.
 
 ## Implementation evidence
 
-The replacement module is `world-server`, deployed only to local database `lantern-runtime-refactor`. The production Activity is unchanged. This checkpoint is functional progress, not a claim that the release parity matrix below is complete.
+The replacement module is `world-server`, deployed to local database `lantern-runtime-refactor` and Maincloud `dbrinkmann-lantern-runtime-v2`. Its client, downloadable MCP server, and hosted PNG preview run at `https://lantern-runtime-v2.dbrinkmann.workers.dev`. The production Activity is unchanged; this is not a claim that the release parity matrix below is complete.
 
 Implemented on the replacement branch:
 
@@ -16,7 +16,7 @@ Implemented on the replacement branch:
 - Persisted once/loop/pingpong paths, heading, pause/resume/restart, speed multipliers, progress, completion/cancellation and deterministic event-seeded random draws.
 - Predicted spatial crossings, self/room views, height/tags/hysteresis, player context, current membership, public player/entity inspection and bounded spatial queries. Leased 3D regions arbitrate hidden as well as visible objects. The virtual-time simulator processes object-view crossings between requested timeline endpoints.
 - Player walking and approach-before-action, occupancy-checked seats, authored exits, rooms and claimable home entrances, home expansion, rename, avatar publication, private choices/text prompts, world-anchored speech and player speech events.
-- Authoring/navigation state changes replan active player routes. Edits that newly enclose a player are rejected. Continuously moving obstacle avoidance and swept collision remain distinct unfinished work.
+- Authoring/navigation state changes replan active player routes. Edits that newly enclose a player are rejected. Solid motion reserves a conservative swept footprint until paused/completed; this implements the initial navigation policy without a continuous physics solver.
 - Multi-session presence, offline home routines and reconnect at the NPC's position. The social integration test covers these with real local connections.
 - Opt-in Discord Activity entry, welcome-room bootstrap, session renewal, builder pairing and room-change subscriptions. The player UI fetches its authorized projection when the subscription changes rather than polling idle rooms. The local developer workshop retains polling for arbitrary author previews.
 - Hover-only object labels, character names, manual camera panning and movement-triggered deadzone following, speech composer, emotes, common/home graph maps, responsive viewport layout and a preview renderer with focus/zoom/yaw/frozen time.
@@ -24,7 +24,9 @@ Implemented on the replacement branch:
 
 Verification commands: `npm test`, `npm run build`, `npm run check:runtime`, `npm run test:runtime:local`, `npm run test:runtime:access`, `npm run test:runtime:mcp`, `npm run test:runtime:browser`, `npm run test:runtime:social`, and `npm run test:runtime:preview`. Current local suites exercise the actual module, generated client, browser and MCP rather than substituting a browser-only simulation. Preview images are written under `.bridge` for inspection. Do not interpret these as a hosted Discord launch test.
 
-Remaining release/core verification work: larger station/street parity fixture and repeated moving-object cycles; complete lifecycle/room cleanup semantics; continuously moving collider policy; player trajectories in offline simulation; subscription/performance measurements; independent hosted replacement deployment and preview endpoint verification; actual Discord launch; full P01-P22 evidence, soak and rollback rehearsal. Advanced moderation and additional permissions hardening are not being prioritized over these functional tasks. No GitHub Actions are used.
+Additional implemented core capabilities: behavior discovery/detach/reattach and bounded terminal lifecycle callbacks; room/home deletion with relocation and incoming-link cleanup; offline player trajectories; player-target selection with current-position validation; room entry/exit and native seat/portal notifications; renewal retry and copyable provider-neutral builder instructions.
+
+Hosted verification now includes a downloaded MCP client creating 20x14 and 60x16 rooms with geometry, seats, eight home entrances/signs, a multi-surface receptionist and six reusable moving instances. Hosted PNG previews and standalone browser interactions are exercised against Maincloud. Remaining release work: actual Discord launch with the replacement URL mapping, full P01-P22 manual/visual/performance sign-off, the specified 30-minute release soak and rollback rehearsal. Core feature verification does not waive these production cutover gates. No GitHub Actions are used.
 
 Static baseline evidence remains in `docs/baselines/runtime-render-2026-11-04.json`; comparable headless thresholds are at most 25% regression in scene preparation/p95 frame interval and one pixel of document overflow. Embedded Activity performance is not yet verified.
 
@@ -376,7 +378,7 @@ Rehearse rollback before cutover. Rollback restores the prior release unit and i
 
 Publish a builder handoff explaining the new contracts and how to rebuild content. The completion criterion is the independent-agent fixture plus all parity gates, not merely a successful deployment or a hand-authored demo. No capability already provided by the current world or community platform may be silently moved into the deferred list.
 
-## Final review disposition
+## Original design review disposition (before implementation)
 
 Reviewed for implementability, parity and scope. The architecture is ready to start phase 0; this is not a claim that the implementation or cutover is ready. Phase 0 must deliver the frozen event/effect/value contracts, lifecycle transition tests, structured-value sandbox spike, numeric resource/performance budgets and baseline evidence. These are implementation prerequisites, not unanswered product questions.
 

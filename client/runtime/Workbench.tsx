@@ -1,3 +1,4 @@
+import { startRenewal } from "../session-renewal";
 import { useEffect, useState, useRef } from "react";
 import { DbConnection } from "../../world-client/module_bindings";
 import type { RoomPresentation } from "../../shared/runtime/presentation";
@@ -25,6 +26,7 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
   });
   const [selected, setSelected] = useState("");
   const [error, setError] = useState("");
+  const [renewalError, setRenewalError] = useState("");
   const [pending, setPending] = useState(false);
   const [room, setRoom] = useState(
     community
@@ -36,6 +38,10 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
   const [agent, setAgent] = useState("");
   const [world, setWorld] = useState<WorldMap>();
   const [commonSpace, setCommonSpace] = useState(false);
+  const [builderStatus, setBuilderStatus] = useState("");
+  const instructionsRef = useRef<HTMLTextAreaElement>(null);
+  const builderSite = import.meta.env.VITE_RUNTIME_SITE ?? location.origin;
+  const instructions = `Build in Lantern using the runtime v2 MCP server. Read ${builderSite}/agent/RUNTIME.md. Download ${builderSite}/agent/lantern-runtime.mjs to your tools directory and configure a stdio MCP server: command node, args [the downloaded file path]. Set LANTERN_RUNTIME_HOST=${import.meta.env.VITE_RUNTIME_HOST ?? "http://127.0.0.1:3030"}, LANTERN_RUNTIME_DATABASE=${import.meta.env.VITE_RUNTIME_DATABASE ?? "lantern-runtime-refactor"}, LANTERN_RUNTIME_SITE=${builderSite}. No repository clone is needed. Call world_connect and give me agent_id to pair below. After pairing, call world_guide, then inspect community ${community ?? ""}, property ${property}, room ${room}. Build live using the published contracts and inspect after queued initialization. Preview before making visual changes.`;
   useEffect(() => {
     let active = true;
     const c = DbConnection.builder()
@@ -83,27 +89,20 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
   }, []);
   useEffect(() => {
     if (!activity) return;
-    let active = true,
-      timer: ReturnType<typeof setTimeout>;
-    const renew = async () => {
-      try {
-        const session = await activity.renew();
-        if (active)
-          timer = setTimeout(
-            renew,
-            Math.max(10, session.renewAfterSeconds) * 1000,
-          );
-      } catch (e) {
-        if (active) setError(`Session renewal failed: ${String(e)}`);
-      }
-    };
-    timer = setTimeout(
-      renew,
-      Math.max(10, activity.session.renewAfterSeconds) * 1000,
+    const renewal = startRenewal(
+      () => activity.renew(),
+      setRenewalError,
+      activity.session.renewAfterSeconds,
     );
+    const retry = () => {
+      if (document.visibilityState === "visible") void renewal.retry();
+    };
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", retry);
     return () => {
-      active = false;
-      clearTimeout(timer);
+      renewal.stop();
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", retry);
     };
   }, [activity]);
   useEffect(() => {
@@ -217,12 +216,25 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
     <main className="runtime-workbench">
       <header>
         <h1>{activity ? "Lantern" : "Runtime workshop"}</h1>
-        <span>Local development · live server behaviors</span>
+        <span>
+          {activity
+            ? "Your community · live world"
+            : "Builder workspace · live server behaviors"}
+        </span>
       </header>
       <section className="runtime-stage">
         <RuntimeScene
           snapshot={snapshot}
           onSelect={(id) => {
+            const request = snapshot.interactions?.find(
+              (r) => r.kind === "dialog" && r.target?.kinds.includes("object"),
+            );
+            if (request) {
+              void connection?.reducers
+                .answerDialog({ id: request.id, choice: id })
+                .catch((e) => setError(String(e)));
+              return;
+            }
             setSelected(id);
             const target = snapshot.entities.find((e) => e.id === id);
             if (target?.actions.length === 1) void act(target.actions[0], id);
@@ -303,6 +315,37 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
           .map((dialog) => (
             <section key={dialog.id} aria-label="Object dialogue">
               <p>{dialog.text}</p>
+              {dialog.target && (
+                <div aria-label="Choose a target">
+                  {[
+                    ...(dialog.target.kinds.includes("object")
+                      ? snapshot.entities
+                          .filter((e) => e.components.visibility !== false)
+                          .map((e) => ({
+                            id: e.id,
+                            name: String(e.components.label ?? e.id),
+                          }))
+                      : []),
+                    ...(dialog.target.kinds.includes("player")
+                      ? (snapshot.walkers ?? []).map((w) => ({
+                          id: `player:${w.id}`,
+                          name: w.name ?? "Traveler",
+                        }))
+                      : []),
+                  ].map((target) => (
+                    <button
+                      key={target.id}
+                      onClick={() =>
+                        void connection?.reducers
+                          .answerDialog({ id: dialog.id, choice: target.id })
+                          .catch((e) => setError(String(e)))
+                      }
+                    >
+                      {target.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               {dialog.maxLength && (
                 <form
                   onSubmit={(e) => {
@@ -352,7 +395,7 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
             {JSON.stringify(entity.components, null, 2)}
           </pre>
         )}
-        {error && <p role="alert">{error}</p>}
+        {(error || renewalError) && <p role="alert">{error || renewalError}</p>}
         <p data-testid="walking-state">
           {snapshot.walkers?.find((w) => w.id === identity)?.action
             ? "Approaching object"
@@ -368,6 +411,31 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
               Start the Lantern runtime MCP client with this database, then
               paste its agent identity here.
             </p>
+            <textarea
+              ref={instructionsRef}
+              aria-label="Builder instructions"
+              readOnly
+              value={instructions}
+              rows={5}
+              style={{ width: "100%", boxSizing: "border-box" }}
+            />
+            <button
+              onClick={() =>
+                void Promise.resolve()
+                  .then(() => navigator.clipboard.writeText(instructions))
+                  .then(() => setBuilderStatus("Instructions copied."))
+                  .catch(() => {
+                    instructionsRef.current?.focus();
+                    instructionsRef.current?.select();
+                    setBuilderStatus(
+                      "Copy is unavailable here. The instructions are selected; press Ctrl+C.",
+                    );
+                  })
+              }
+            >
+              Copy instructions
+            </button>
+            {builderStatus && <p role="status">{builderStatus}</p>}
             <label>
               Agent identity
               <input value={agent} onChange={(e) => setAgent(e.target.value)} />
@@ -389,7 +457,11 @@ export function RuntimeWorkbench({ activity }: { activity?: ActivityAccess }) {
                       agent: Identity.fromString(agent.trim()),
                       commonSpace,
                     })
-                    .then(() => setAgent(""))
+                    .then(() =>
+                      setBuilderStatus(
+                        "Agent connected. It can now inspect and build in its authorized spaces.",
+                      ),
+                    )
                     .catch((e) => setError(String(e)));
                 } catch (e) {
                   setError(String(e));

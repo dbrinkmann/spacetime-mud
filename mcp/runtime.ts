@@ -18,6 +18,17 @@ import { WorldRuntime } from "../spacetimedb/src/runtime/engine";
 import { copyComponentData } from "../shared/runtime/components";
 const key = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/);
 const slotRef = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.:-]{1,160}$/);
+const pointInput = z.tuple([
+  z.number().min(-100).max(100),
+  z.number().min(-100).max(100),
+  z.number().min(-100).max(100),
+]);
+const playerPathInput = z.object({
+  id: key,
+  start: pointInput,
+  points: z.array(pointInput).max(32),
+  speed: z.number().positive().max(20),
+});
 const packageInput = z.object({
   manifest: z.unknown(),
   source: z.string().max(BUDGETS.source),
@@ -166,12 +177,16 @@ export function createRuntimeMcp(
       operations:
         "ctx.operations.animate(resource,{position:[x,y,z],rotation:[x,y,z]},seconds), follow(resource,points,speed,mode), pause/resume/restart/cancel(resource), setSpeed(resource,multiplier), progress(resource). Restart preserves paused state; progress reads event-start state. Path modes once/loop/pingpong; base speed meters/second. Named parts share NAME across visual, transform, light, sign, text, wall and visibility. operation:completed/cancelled payload {id,resource,outcome}.",
       interaction:
-        "ctx.say(text) speaks publicly; ctx.tell(text) privately; ctx.dialog(name,prompt,choices) emits dialog:name with {choice}; ctx.prompt(name,prompt,maxLength) emits {text}. ctx.player.get/set stores private per-player memory. Player actions/speech/spatial arrivals carry context; messages do not inherit it. speech:said carries {speaker,text}; script speech does not trigger recursion.",
+        "ctx.say(text) speaks publicly; ctx.tell(text) privately; ctx.dialog(name,prompt,choices) emits dialog:name with {choice}; ctx.prompt(name,prompt,maxLength) emits {text}. ctx.player.get/set stores private per-player memory. Player actions/speech/spatial/room events carry context; messages do not inherit it. room:entered/exited carries {player,name}; speech:said carries {speaker,text}; script speech does not trigger recursion.",
+      targeting:
+        "ctx.target(name,prompt,{kinds:['object','player'],range:12}) requests a current in-room target, producing dialog:name with {target}. Kind, visibility and current distance are checked on response. interaction:sat/stood/traversed notify seats/portals with {player} and authenticated player context.",
+      removal:
+        "world_detach_behavior runs bounded deactivated/unbound notifications and frees resources. Destruction also notifies destroying. Terminal callbacks can update state/components or send final messages but cannot start new work. Cleanup is unconditional; exhausted budgets can skip callbacks. Reattachment initializes fresh state. Search/get tools discover readable pinned packages; template exports include dependency source and licenses.",
       lifecycle:
-        "world_publish_template stores components and pinned behavior bindings. ctx.world.spawn(hash,position) returns a new entity ID; ctx.world.destroy() removes self from the world; ctx.world.transfer(room,position) moves self within its property, cancels timers/operations and emits bound. Declare world.spawn/world.destroy/world.transfer in writes. Transfer requires an authored destination walk surface. Template/spawn tools support configured behavior reuse; dependency discovery is not implemented.",
+        "world_publish_template stores components and pinned behavior bindings. ctx.world.spawn(hash,position) returns a new entity ID; ctx.world.destroy() removes self from the world; ctx.world.transfer(room,position) moves self within its property, cancels timers/operations and emits bound. Declare world.spawn/world.destroy/world.transfer in writes. Transfer requires an authored destination walk surface. Template/spawn tools support configured behavior reuse; exported templates include pinned dependency bundles.",
       limitations: [
-        "The local authorized workshop (?runtime) supports floor walking, static collider routing and approach-before-action. Each room needs one origin-centered walkSurface; collider footprints and interaction approach offsets use the entity yaw. Only null-payload actions are exposed by this UI. Moving obstacle avoidance and Activity integration remain incomplete.",
-        "Spatial views, seating, away avatars, character/sign/light parts and home graphs are implemented locally. Replacement Discord deployment and launch verification remain outstanding.",
+        "The authorized workshop (?runtime) supports floor walking and approach-before-action. Each room needs one origin-centered walkSurface. Moving solid objects reserve their swept footprint; routes replan on changes. Full physics is outside this version. Buttons expose null-payload actions; dialogues accept input.",
+        "Spatial views, seating, away avatars, character/sign/light parts and home graphs are deployed on the isolated replacement. Actual Discord launch verification is separate from standalone browser tests.",
         "Simulation does not impersonate live memberships or authorize live actions",
       ],
     })),
@@ -224,6 +239,21 @@ export function createRuntimeMcp(
         version: bundle.manifest.version,
       };
     }),
+  );
+  server.registerTool(
+    "world_search_packages",
+    {
+      description:
+        "Find readable shared behavior revisions by name or documentation. Results include pinned hashes, versions and licenses; use world_get_package to read source before installation.",
+      inputSchema: {
+        community: z.string().max(80),
+        query: z.string().max(80).default(""),
+        after: z.string().max(160).default(""),
+      },
+    },
+    guard(async (a) =>
+      JSON.parse(await (await connect()).procedures.searchPackages(a)),
+    ),
   );
   server.registerTool(
     "world_get_package",
@@ -316,6 +346,18 @@ export function createRuntimeMcp(
       const c = await connect();
       if (a.enabled) await c.reducers.resumeBehavior({ slot: a.slot });
       else await c.reducers.suspendBehavior({ slot: a.slot });
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
+    "world_detach_behavior",
+    {
+      description:
+        "Remove an installed behavior, run bounded deactivated/unbound callbacks and release its timers, operations, views and resource ownership. Reattaching starts fresh state.",
+      inputSchema: { slot: slotRef },
+    },
+    guard(async (a) => {
+      await (await connect()).reducers.detachBehavior({ slot: a.slot });
       return { accepted: true };
     }),
   );
@@ -478,6 +520,30 @@ export function createRuntimeMcp(
     ),
   );
   server.registerTool(
+    "world_delete_room",
+    {
+      description:
+        "Remove an interior room and its runtime entities, relocate occupants to another room in the property, and unlink incoming exits. Entry rooms and rooms with claimed home entrances cannot be removed this way.",
+      inputSchema: { property: key, room: key, destination: key },
+    },
+    guard(async (a) => {
+      await (await connect()).reducers.deleteRoom(a);
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
+    "world_delete_home",
+    {
+      description:
+        "Remove the member's entire home, release its common-space entrance and relocate occupants to the entrance's common room.",
+      inputSchema: { property: key },
+    },
+    guard(async (a) => {
+      await (await connect()).reducers.deleteHome(a);
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
     "world_export_template",
     {
       description:
@@ -637,6 +703,8 @@ export function createRuntimeMcp(
           .array(
             z.object({
               advance: z.number().min(0).max(86400),
+              playerPath: playerPathInput.optional(),
+              leavePlayer: key.optional(),
               action: z
                 .object({ entity: key, name: key, payload: z.unknown() })
                 .optional(),
@@ -681,6 +749,21 @@ export function createRuntimeMcp(
         remaining -= outcome.steps;
         if (!outcome.complete)
           throw Error("Simulation work budget exhausted before target time.");
+        if (step.playerPath) {
+          const p = step.playerPath;
+          sim.store.putPlayer({
+            id: p.id,
+            property: "fixture",
+            room: "room",
+            walk: {
+              start: p.start,
+              points: p.points,
+              speed: p.speed,
+              started: sim.time,
+            },
+          });
+        }
+        if (step.leavePlayer) sim.store.removePlayer(step.leavePlayer);
         if (step.action) {
           sim.action(
             step.action.entity,

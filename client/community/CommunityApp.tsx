@@ -1,4 +1,4 @@
-import { startRenewal } from "./renewal";
+import { startRenewal } from "../session-renewal";
 import type { MotionState } from "../../shared/intelligent-objects";
 import { homeSignText } from "../../shared/scene-features";
 import React, { useEffect, useMemo, useState } from "react";

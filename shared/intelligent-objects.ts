@@ -23,6 +23,7 @@ export type ViewDefinition = {
   include: string[];
 };
 export type SensedEntity = {
+  name?: string;
   id: string;
   kind: "player" | "object";
   tags: string[];

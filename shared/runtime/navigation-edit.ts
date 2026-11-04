@@ -1,3 +1,4 @@
+import type { Operation } from "./operations";
 import type { RuntimeStore } from "./store";
 import type { Entity } from "./contracts";
 import { navigationScene, walkable } from "./walking";
@@ -6,6 +7,7 @@ export function validateNavigationEdit(
   before: Entity,
   after: Entity,
   time: number,
+  nextOperations?: Operation[],
 ) {
   if (
     !before.components.collider &&
@@ -16,9 +18,17 @@ export function validateNavigationEdit(
     return;
   const entities = store.roomEntities(after.property, after.room);
   if (entities.filter((e) => e.components.walkSurface).length !== 1) return;
-  const oldNav = navigationScene(entities),
+  const operations = entities.flatMap((e) => store.operations(e.id));
+  const oldNav = navigationScene(entities, operations, time),
     newNav = navigationScene(
       entities.map((e) => (e.id === after.id ? after : e)),
+      nextOperations
+        ? [
+            ...operations.filter((o) => o.entity !== after.id),
+            ...nextOperations,
+          ]
+        : operations,
+      time,
     );
   for (const player of store.players(after.property, after.room, time)) {
     const [x, , z] = player.trajectory.position;

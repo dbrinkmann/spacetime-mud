@@ -9,6 +9,126 @@ import { WorldRuntime } from "../../spacetimedb/src/runtime/engine";
 import { TableStore } from "./store";
 import { sha256 } from "../../shared/runtime/digest";
 import { identifier } from "../../shared/runtime/values";
+import { navigationScene, type Walker } from "../../shared/runtime/walking";
+import { scheduleSpatial } from "./schedule-spatial";
+function moveOccupants(
+  ctx: Ctx,
+  property: string,
+  room: string,
+  destination: { property: string; room: string },
+) {
+  const store = new TableStore(ctx),
+    nav = navigationScene(
+      store.roomEntities(destination.property, destination.room),
+    );
+  for (const row of ctx.db.walker.property.filter(property))
+    if (row.room === room) {
+      const w = JSON.parse(row.data) as Walker,
+        arrival = ctx.db.walkArrival.walker.find(row.id);
+      if (arrival) ctx.db.walkArrival.scheduledId.delete(arrival.scheduledId);
+      ctx.db.walker.id.update({
+        ...row,
+        ...destination,
+        data: JSON.stringify({
+          ...w,
+          ...destination,
+          seat: undefined,
+          action: undefined,
+          walk: { start: nav.spawn, points: [], started: now(ctx), speed: 2.5 },
+        }),
+      });
+    }
+  scheduleSpatial(ctx, property, room);
+  scheduleSpatial(ctx, destination.property, destination.room);
+}
+/** Remove incoming native links across the community, including links from other homes. */
+function unlinkDestination(
+  ctx: Ctx,
+  store: TableStore,
+  community: string,
+  property: string,
+  room?: string,
+) {
+  for (const authority of ctx.db.propertyAuthority.community.filter(community))
+    for (const row of ctx.db.entity.property.filter(authority.id)) {
+      const entity = store.entity(row.id)!;
+      const exit = entity.components.exit as
+        { property: string; room: string } | undefined;
+      if (
+        entity.enabled &&
+        exit?.property === property &&
+        (room === undefined || exit.room === room)
+      ) {
+        delete entity.components.exit;
+        store.putEntity({ ...entity, revision: entity.revision + 1 });
+      }
+    }
+}
+export const deleteRoom = db.reducer(
+  { property: t.string(), room: t.string(), destination: t.string() },
+  (ctx, a) => {
+    const { property } = requirePropertyEdit(ctx, a.property);
+    if (
+      a.room === a.destination ||
+      (property.common && a.room === "welcome") ||
+      (!property.common && a.room === "home")
+    )
+      throw new SenderError(
+        "Keep the property's entry room; choose a different destination.",
+      );
+    const store = new TableStore(ctx),
+      entities = store.roomEntities(a.property, a.room);
+    if (!entities.some((e) => e.components.walkSurface))
+      throw new SenderError("Room unavailable.");
+    if (entities.some((e) => ctx.db.homeLink.entrance.find(e.id)))
+      throw new SenderError("Move or remove the attached homes first.");
+    moveOccupants(ctx, a.property, a.room, {
+      property: a.property,
+      room: a.destination,
+    });
+    const runtime = new WorldRuntime(store, now(ctx));
+    for (const row of ctx.db.entity.property.filter(a.property)) {
+      const e = store.entity(row.id)!,
+        exit = e.components.exit as
+          { property: string; room: string } | undefined;
+      if (e.enabled && e.room === a.room) runtime.destroy(e.id);
+      else if (
+        e.enabled &&
+        exit?.property === a.property &&
+        exit.room === a.room
+      ) {
+        delete e.components.exit;
+        store.putEntity({ ...e, revision: e.revision + 1 });
+      }
+    }
+    unlinkDestination(ctx, store, property.community, a.property, a.room);
+    store.schedule();
+  },
+);
+export const deleteHome = db.reducer({ property: t.string() }, (ctx, a) => {
+  const { property } = requirePropertyEdit(ctx, a.property);
+  const link = ctx.db.homeLink.property.find(a.property);
+  if (!link) throw new SenderError("Home unavailable.");
+  const store = new TableStore(ctx),
+    entrance = store.entity(link.entrance);
+  if (!entrance?.enabled) throw new SenderError("Home entrance unavailable.");
+  const entities = [...ctx.db.entity.property.filter(a.property)].map((r) =>
+    store.entity(r.id)!,
+  );
+  for (const room of new Set(
+    entities.filter((e) => e.enabled).map((e) => e.room),
+  ))
+    moveOccupants(ctx, a.property, room, {
+      property: entrance.property,
+      room: entrance.room,
+    });
+  const runtime = new WorldRuntime(store, now(ctx));
+  for (const e of entities) if (e.enabled) runtime.destroy(e.id);
+  unlinkDestination(ctx, store, property.community, a.property);
+  ctx.db.homeLink.entrance.delete(link.entrance);
+  ctx.db.propertyAuthority.id.delete(a.property);
+  store.schedule();
+});
 
 export function roomFloor(
   ctx: Ctx,
@@ -35,7 +155,7 @@ export function roomFloor(
   if (store.roomEntities(property, room).some((e) => e.components.walkSurface))
     throw new SenderError("Room already exists.");
   new WorldRuntime(store, now(ctx)).create({
-    id: `floor${sha256(`${property}:${room}`).slice(0, 40)}`,
+    id: `floor${sha256(`${property}:${room}:${store.nextSequence()}`).slice(0, 40)}`,
     property,
     room,
     community: authority.community,
@@ -102,7 +222,7 @@ export const claimHome = db.reducer(
       )
     )
       throw new SenderError("You already have a home.");
-    const property = `home${sha256(`${common.community}:${ctx.sender.toHexString()}`).slice(0, 40)}`;
+    const property = `home${sha256(`${common.community}:${ctx.sender.toHexString()}:${store.nextSequence()}`).slice(0, 40)}`;
     ctx.db.propertyAuthority.insert({
       id: property,
       community: common.community,

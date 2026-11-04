@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { startRenewal } from "../client/community/renewal.ts";
+import { startRenewal } from "../client/session-renewal.ts";
 test("renewal retries transient failures, recovers and stops without overlapping", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let calls = 0;

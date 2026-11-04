@@ -25,6 +25,7 @@ export type Source = {
   kind: "engine" | "player" | "behavior";
   id: string;
   generation?: number;
+  terminalReceipt?: string;
 };
 export type Lifecycle =
   | "created"
@@ -43,7 +44,9 @@ export type EventType =
   | "spatial"
   | "variable"
   | "dialog"
-  | "speech";
+  | "speech"
+  | "room"
+  | "interaction";
 export type Event = {
   id: string;
   entity: string;
@@ -93,6 +96,7 @@ export type Package = {
   source: string;
 };
 export type Slot = {
+  detached?: boolean;
   completedOperations?: import("./operations").Operation[];
   id: string;
   entity: string;
@@ -127,6 +131,7 @@ export type Effect =
       prompt: string;
       choices: string[];
       maxLength?: number;
+      target?: { kinds: Array<"object" | "player">; range: number };
       player: string;
       id: string;
     }
@@ -221,7 +226,7 @@ export function validateManifest(input: unknown): PackageManifest {
     )
       throw Error("Invalid handler declaration.");
     if (
-      !/^(lifecycle|message|action|timer|operation|spatial|variable|dialog|speech):[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/.test(
+      !/^(lifecycle|message|action|timer|operation|spatial|variable|dialog|speech|room|interaction):[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/.test(
         name,
       )
     )
