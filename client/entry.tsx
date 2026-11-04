@@ -1,6 +1,13 @@
 import { createRoot } from "react-dom/client";
 const root = createRoot(document.getElementById("root")!);
-if (new URLSearchParams(location.search).has("preview")) {
+if (
+  import.meta.env.DEV &&
+  new URLSearchParams(location.search).has("runtime")
+) {
+  import("./runtime/Workbench").then(({ RuntimeWorkbench }) =>
+    root.render(<RuntimeWorkbench />),
+  );
+} else if (new URLSearchParams(location.search).has("preview")) {
   import("./world/HostedPreview").then(({ mountPreview }) =>
     mountPreview(root),
   );

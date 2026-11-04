@@ -46,11 +46,13 @@ import RevokeCommunityAgentReducer from "./revoke_community_agent_reducer";
 import SetCommunityGatewayReducer from "./set_community_gateway_reducer";
 import SetCommunityMemberReducer from "./set_community_member_reducer";
 import SuspendBehaviorReducer from "./suspend_behavior_reducer";
+import TestEntityActionReducer from "./test_entity_action_reducer";
 import UpgradeBehaviorReducer from "./upgrade_behavior_reducer";
 
 // Import all procedure arg schemas
 import * as GetPackageProcedure from "./get_package_procedure";
 import * as InspectEntityProcedure from "./inspect_entity_procedure";
+import * as PreviewRoomProcedure from "./preview_room_procedure";
 import * as RuntimeInfoProcedure from "./runtime_info_procedure";
 
 // Import all table schema definitions
@@ -75,6 +77,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_community_gateway", SetCommunityGatewayReducer),
   __reducerSchema("set_community_member", SetCommunityMemberReducer),
   __reducerSchema("suspend_behavior", SuspendBehaviorReducer),
+  __reducerSchema("test_entity_action", TestEntityActionReducer),
   __reducerSchema("upgrade_behavior", UpgradeBehaviorReducer),
 );
 
@@ -82,6 +85,7 @@ const reducersSchema = __reducers(
 const proceduresSchema = __procedures(
   __procedureSchema("get_package", GetPackageProcedure.params, GetPackageProcedure.returnType),
   __procedureSchema("inspect_entity", InspectEntityProcedure.params, InspectEntityProcedure.returnType),
+  __procedureSchema("preview_room", PreviewRoomProcedure.params, PreviewRoomProcedure.returnType),
   __procedureSchema("runtime_info", RuntimeInfoProcedure.params, RuntimeInfoProcedure.returnType),
 );
 

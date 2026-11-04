@@ -18,6 +18,7 @@ import RevokeCommunityAgentReducer from "../revoke_community_agent_reducer";
 import SetCommunityGatewayReducer from "../set_community_gateway_reducer";
 import SetCommunityMemberReducer from "../set_community_member_reducer";
 import SuspendBehaviorReducer from "../suspend_behavior_reducer";
+import TestEntityActionReducer from "../test_entity_action_reducer";
 import UpgradeBehaviorReducer from "../upgrade_behavior_reducer";
 
 export type AttachBehaviorParams = __Infer<typeof AttachBehaviorReducer>;
@@ -32,4 +33,5 @@ export type RevokeCommunityAgentParams = __Infer<typeof RevokeCommunityAgentRedu
 export type SetCommunityGatewayParams = __Infer<typeof SetCommunityGatewayReducer>;
 export type SetCommunityMemberParams = __Infer<typeof SetCommunityMemberReducer>;
 export type SuspendBehaviorParams = __Infer<typeof SuspendBehaviorReducer>;
+export type TestEntityActionParams = __Infer<typeof TestEntityActionReducer>;
 export type UpgradeBehaviorParams = __Infer<typeof UpgradeBehaviorReducer>;

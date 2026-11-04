@@ -1,0 +1,64 @@
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+.runtime-workbench {
+  height: 100dvh;
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) 300px;
+  background: #10161c;
+  color: #d6e3eb;
+  font: 14px system-ui;
+}
+.runtime-workbench header {
+  grid-column: 1 / -1;
+  padding: 12px 18px;
+  border-bottom: 1px solid #33404c;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+}
+.runtime-workbench h1 {
+  margin: 0;
+  font-size: 20px;
+}
+.runtime-stage {
+  min-height: 0;
+  min-width: 0;
+}
+.runtime-stage canvas {
+  display: block;
+}
+.runtime-workbench aside {
+  padding: 16px;
+  overflow: auto;
+  background: #1b242d;
+}
+.runtime-workbench input,
+.runtime-workbench select,
+.runtime-workbench button {
+  padding: 8px;
+  background: #293744;
+  color: white;
+  border: 1px solid #617182;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.runtime-workbench code {
+  overflow-wrap: anywhere;
+}
+.runtime-workbench pre {
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+@media (max-width: 650px) {
+  .runtime-workbench {
+    grid-template: auto minmax(0, 1fr) 180px / 1fr;
+  }
+  .runtime-workbench header {
+    display: block;
+  }
+}

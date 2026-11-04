@@ -9,6 +9,8 @@ The replacement module is `world-server`, deployed only to local database `lante
 
 Implemented and tested so far:
 
+- First visible cooperation slice: cuboid `visual` components retain existing materials, and a reusable client renderer samples persisted transform operations and light state. Three ordinary packages implement a configurable switch, hinged visual door and indicator. The local authorized workshop (`?runtime`, development only) reads the live replacement database; clicking geometry and invoking its action drives server scripts, not a browser simulation. `tests/runtime-workbench.ts` verifies picking, switch-to-door-to-lamp messaging, operation completion, reload persistence and narrow layout. The author preview polls a permission-checked projection; it is not the final player subscription or interaction system. Door collision, walking/proximity and Activity integration are still pending.
+
 - Extracted one interpreter adapter into `spacetimedb/src/runtime/sandbox.ts`; the old `scripts.ts` forwards to it while the old release still exists. The replacement imports the adapter directly.
 - Bounded structured values and schemas; private slot state, public properties, declared exclusive component writers, copied API arguments/results, and data-only buffered effects.
 - Shared entity Object Variables with declared readers, exclusive schema-owning writers, staged get/set/delete/has semantics and coalesced post-commit change events. Private player-scoped variables remain outstanding.
@@ -275,6 +277,8 @@ Keep tables private and expose filtered views. Query by community/property/room/
 Start with conservative configurable quotas; increase them using measured load fixtures. Replace the fixed 16-script room limit with separate budgets for resident instances, active execution, sensing, geometry, queued work and replication. Do not remove limits before accounting and fault isolation exist.
 
 ## Delivery sequence and gates
+
+Implementation priority update: deliver visible, usable slices through the renderer and creator tools before expanding advanced delivery diagnostics or package discovery. Keep property authorization, bounded execution and transactional updates. Remaining release/parity gates still apply before replacing production; they do not block development previews. Next is authoritative navigation/collision and player interaction, followed by world lifecycle and existing social/home functionality.
 
 | Phase | Deliverables | Required gate |
 | --- | --- | --- |

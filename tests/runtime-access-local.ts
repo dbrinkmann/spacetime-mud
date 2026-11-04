@@ -77,6 +77,10 @@ try {
   };
   await assert.rejects(member.reducers.createEntity(command), /denied/i);
   await assert.rejects(
+    member.procedures.previewRoom({ property, room: "room" }),
+    /denied/i,
+  );
+  await assert.rejects(
     agent.reducers.createEntity(command),
     /membership|grant/i,
   );
@@ -92,6 +96,19 @@ try {
     commonSpace: true,
   });
   await agent.reducers.createEntity(command);
+  const projection = JSON.parse(
+    await agent.procedures.previewRoom({ property, room: "room" }),
+  );
+  assert.equal(projection.entities[0].id, id);
+  assert.equal("variables" in projection.entities[0], false);
+  await assert.rejects(
+    member.reducers.testEntityAction({
+      entity: id,
+      name: "use",
+      payload: "null",
+    }),
+    /denied/i,
+  );
   const manifest = {
     id: `package${guild}`,
     version: "1.0.0",

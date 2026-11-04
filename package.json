@@ -11,6 +11,7 @@
     "test:runtime:local": "tsx tests/runtime-local.ts",
     "test:runtime:access": "tsx tests/runtime-access-local.ts",
     "test:runtime:mcp": "tsx tests/runtime-mcp-local.ts",
+    "test:runtime:browser": "tsx tests/runtime-workbench.ts",
     "bridge": "tsx bridge/index.ts",
     "discord:gateway": "tsx gateway/index.ts",
     "build:staging": "tsx scripts/build-discord-staging.ts",

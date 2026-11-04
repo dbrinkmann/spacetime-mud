@@ -10,6 +10,7 @@ import {
 import { canonical, sha256 } from "../shared/runtime/digest";
 import { WORK_LIMITS } from "../shared/runtime/budgets";
 import { counterExample } from "../shared/runtime/examples";
+import { cooperationPackages } from "../shared/runtime/cooperation";
 import { validateSource } from "../spacetimedb/src/runtime/sandbox";
 import { WorldSimulation } from "../spacetimedb/src/runtime/simulation";
 import { WorldRuntime } from "../spacetimedb/src/runtime/engine";
@@ -69,7 +70,18 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
       budgets: BUDGETS,
       workLimits: WORK_LIMITS,
       packageExample: counterExample,
+      cooperationExamples: cooperationPackages("examples"),
       componentExamples: {
+        visual: {
+          boxes: [
+            {
+              position: [0, 0.5, 0],
+              size: [1, 1, 1],
+              color: "#667788",
+              material: "metal",
+            },
+          ],
+        },
         visibility: true,
         text: "A sign",
         light: { color: "#ffaa00", intensity: 2 },
@@ -91,7 +103,7 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
       operations:
         "ctx.operations.animate('transform',{position:[x,y,z],rotation:[x,y,z]},seconds), pause/resume/cancel(resource). operation:completed/cancelled payload is {id,resource,outcome}. Rotation is linear authored degrees.",
       limitations: [
-        "No room geometry/Activity integration through v2 yet",
+        "Cuboid visual components render in the local authorized workshop (?runtime); room navigation, collision and Activity integration are not connected yet",
         "No player dialogs, spawning, spatial views or path operations yet",
         "Simulation does not impersonate live memberships or authorize live actions",
       ],
@@ -250,6 +262,34 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
     guard(async (a) =>
       JSON.parse(await (await connect()).procedures.inspectEntity(a)),
     ),
+  );
+  server.registerTool(
+    "world_preview_room",
+    {
+      description:
+        "Get an authorized room's render projection and motion anchors (JSON, not PNG). Private script state is omitted. The local runtime workshop renders this same projection.",
+      inputSchema: { property: key, room: key },
+    },
+    guard(async (a) =>
+      JSON.parse(await (await connect()).procedures.previewRoom(a)),
+    ),
+  );
+  server.registerTool(
+    "world_test_action",
+    {
+      description:
+        "Run an action on an editable live entity as a builder test. Effects are real and initialization must have completed. This does not impersonate a player or test proximity.",
+      inputSchema: { entity: key, name: key, payload: z.unknown() },
+    },
+    guard(async (a) => {
+      await (
+        await connect()
+      ).reducers.testEntityAction({
+        ...a,
+        payload: JSON.stringify(copyValue(a.payload)),
+      });
+      return { accepted: true };
+    }),
   );
   server.registerTool(
     "world_simulate",

@@ -16,6 +16,7 @@ import {
 } from "../../shared/runtime/registry";
 import { operationDeadline } from "../../shared/runtime/operations";
 import type { Timer } from "../../shared/runtime/store";
+import { presentEntity } from "../../shared/runtime/presentation";
 export default db;
 export const runtimeInfo = db.procedure({}, t.string(), () =>
   JSON.stringify({ apiVersion: 2, status: "development" }),
@@ -317,6 +318,58 @@ export const invokeAction = db.reducer(
       store.schedule();
     });
   },
+);
+/** Builder testing, not a substitute for player proximity/interaction checks. */
+export const testEntityAction = db.reducer(
+  { entity: t.string(), name: t.string(), payload: t.string() },
+  (ctx, a) => {
+    requireEntityEdit(ctx, a.entity);
+    checked(() => {
+      const store = new TableStore(ctx);
+      new WorldRuntime(store, now(ctx)).action(
+        a.entity,
+        a.name,
+        copyValue(input(a.payload)),
+        ctx.sender.toHexString(),
+      );
+      store.schedule();
+    });
+  },
+);
+export const previewRoom = db.procedure(
+  { property: t.string(), room: t.string() },
+  t.string(),
+  (ctx, a) =>
+    ctx.withTx((tx) => {
+      requirePropertyEdit(tx, a.property);
+      const store = new TableStore(tx);
+      const entities = [...tx.db.entity.property.filter(a.property)]
+        .filter((row) => row.room === a.room)
+        .map((row) => store.entity(row.id)!)
+        .filter((e) => e.enabled);
+      if (entities.length > 256)
+        throw new SenderError("Preview supports up to 256 entities.");
+      return JSON.stringify({
+        serverTime: now(tx),
+        entities: entities.map((e) =>
+          presentEntity(
+            e,
+            store.operations(e.id),
+            store
+              .slots(e.id)
+              .filter((s) => s.enabled && !s.lastError)
+              .flatMap((s) =>
+                Object.entries(store.package(s.packageHash)!.manifest.handlers)
+                  .filter(
+                    ([key, h]) =>
+                      key.startsWith("action:") && h.input.type === "null",
+                  )
+                  .map(([key]) => key.slice(7)),
+              ),
+          ),
+        ),
+      });
+    }),
 );
 export const suspendBehavior = db.reducer({ slot: t.string() }, (ctx, a) => {
   requireSlotEdit(ctx, a.slot);
