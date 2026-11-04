@@ -232,6 +232,10 @@ try {
     window.boxWorld!.project([-2, 1, -3]),
   );
   await page.mouse.click(outsideDoor.x, outsideDoor.y);
+  // Do not teleport on click: remain inside while approaching the exit.
+  await expect(
+    page.getByRole("heading", { name: "Home map", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();

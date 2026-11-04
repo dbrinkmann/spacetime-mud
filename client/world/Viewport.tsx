@@ -447,6 +447,11 @@ export function Viewport(props: Props) {
         callbacks.current.onObject(o.objectId);
         return;
       }
+      if (o.seat && callbacks.current.live) {
+        const p = worldPoint(o, o.seat.approach);
+        callbacks.current.live.onMove(p[0], p[2], o.id, "idle");
+        return;
+      }
       selected = o;
       selection.box.setFromObject(objects.get(o.id)!);
       selection.visible = true;

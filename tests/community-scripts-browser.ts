@@ -84,9 +84,30 @@ try {
     window.boxWorld!.project([0, 1.2, 0]),
   );
   await page.mouse.click(point.x, point.y);
+  // Actions stay closed during approach; a floor click cancels the queued action.
+  await expect(
+    page.getByRole("button", { name: "Ask receptionist", exact: true }),
+  ).toHaveCount(0);
+  const floor = await page.evaluate(() => window.boxWorld!.project([2, 0, 3]));
+  await page.mouse.click(floor.x, floor.y);
+  await page.waitForTimeout(2200);
+  await expect(
+    page.getByRole("button", { name: "Ask receptionist", exact: true }),
+  ).toHaveCount(0);
+  const npc = await page.evaluate(() => window.boxWorld!.project([0, 1.2, 0]));
+  await page.mouse.click(npc.x, npc.y);
+
   await expect(
     page.getByRole("button", { name: "Ask receptionist", exact: true }),
   ).toBeVisible();
+  const arrived = await page.evaluate(() => {
+    const state = window.boxWorld!.inspect() as {
+      travelers: Array<{ name: string; position: number[]; animation: string }>;
+    };
+    return state.travelers.find((t) => t.name === "Visitor")!;
+  });
+  assert.notEqual(arrived.animation, "walk");
+  assert.ok(Math.hypot(arrived.position[0], arrived.position[2]) < 0.9);
   await page
     .getByRole("button", { name: "Ask receptionist", exact: true })
     .click();

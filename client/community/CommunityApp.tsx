@@ -19,7 +19,11 @@ import {
   type ViewStatus,
   type LiveTraveler,
 } from "../world/Viewport";
-import { syncClock } from "../world/clock";
+import { useApproach, characterMotion } from "./useApproach";
+import { interactionApproach } from "./interactionApproach";
+import { sampleMotion } from "../../shared/world";
+import { worldPoint, type Vec3 } from "../../shared/geometry";
+import { syncClock, serverNow } from "../world/clock";
 import "../world/world.css";
 import "./community.css";
 import type { ActivityAccess } from "./discord";
@@ -253,6 +257,48 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
   const chosenSpot =
     availableSpots.find((o) => o.id === spotId) ?? availableSpots[0];
   const mapRooms = data.rooms.filter((r) => r.propertyId === property?.id);
+  const { approach, cancel: cancelApproach } = useApproach(
+    me,
+    scene,
+    async (target) => {
+      await conn!.reducers.moveCommunityCharacter({
+        communityId: community!.id,
+        x: target[0],
+        z: target[2],
+        seat: "",
+        pose: "idle",
+      });
+    },
+    setError,
+  );
+  const objectApproach = (id: string): Vec3 | undefined => {
+    if (!scene || !me) return;
+    const target =
+      scene.objects.find((o) => o.objectId === id) ??
+      scene.npcs?.find((n) => n.objectId === id);
+    if (!target) return;
+    const seat = scene.objects.find((o) => o.id === me.seat && o.seat);
+    const start = seat
+      ? worldPoint(seat, seat.seat!.approach)
+      : sampleMotion(characterMotion(me), scene, serverNow()).position;
+    return interactionApproach(scene, start, target);
+  };
+  const travel = async (exit: CommunityExit) => {
+    const placement = scene?.objects.find(
+      (o) =>
+        o.exit?.id === String(exit.id) ||
+        (!!exit.entranceSpot && o.id === exit.entranceSpot),
+    );
+    const point = placement
+      ? worldPoint(
+          placement,
+          (placement.homeEntrance ?? placement.exit)!.approach,
+        )
+      : scene?.spawn;
+    await approach(point, () =>
+      conn!.reducers.travelCommunity({ exitId: exit.id }),
+    );
+  };
   const act = async (fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -416,9 +462,13 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                         ),
                       }))}
                     onObject={(id) => {
-                      setSelectedObject(id);
-                      setToolTab("objects");
-                      setToolsOpen(true);
+                      void act(() =>
+                        approach(objectApproach(id), async () => {
+                          setSelectedObject(id);
+                          setToolTab("objects");
+                          setToolsOpen(true);
+                        }),
+                      );
                     }}
                     entrances={Object.fromEntries(
                       interactive.map((o) => {
@@ -436,22 +486,24 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                                 ? `${o.name} · Unavailable`
                                 : `${o.name} · Available`,
                             onClick: () => {
-                              if (exit)
-                                void act(() =>
-                                  conn!.reducers.travelCommunity({
-                                    exitId: exit.id,
-                                  }),
-                                );
+                              if (exit) void act(() => travel(exit));
                               else if (o.exit)
                                 setError("This exit is no longer available.");
                               else if (!me.homeProperty) {
-                                setSpotId(o.id);
-                                setToolTab("home");
-                                setToolsOpen(true);
-                                requestAnimationFrame(() =>
-                                  document
-                                    .getElementById("home-name")
-                                    ?.focus({ preventScroll: true }),
+                                void act(() =>
+                                  approach(
+                                    worldPoint(o, o.homeEntrance!.approach),
+                                    async () => {
+                                      setSpotId(o.id);
+                                      setToolTab("home");
+                                      setToolsOpen(true);
+                                      requestAnimationFrame(() =>
+                                        document
+                                          .getElementById("home-name")
+                                          ?.focus({ preventScroll: true }),
+                                      );
+                                    },
+                                  ),
                                 );
                               } else
                                 setError(
@@ -469,6 +521,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                       identity,
                       travelers,
                       onMove: (x, z, seat, pose) => {
+                        cancelApproach();
                         void act(() =>
                           conn!.reducers.moveCommunityCharacter({
                             communityId: community.id,
@@ -580,7 +633,16 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                             <div key={String(o.id)}>
                               <button
                                 aria-pressed={selectedObject === String(o.id)}
-                                onClick={() => setSelectedObject(String(o.id))}
+                                onClick={() =>
+                                  void act(() =>
+                                    approach(
+                                      objectApproach(String(o.id)),
+                                      async () => {
+                                        setSelectedObject(String(o.id));
+                                      },
+                                    ),
+                                  )
+                                }
                               >
                                 {o.name}
                               </button>
@@ -596,10 +658,13 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                                     disabled={busy}
                                     onClick={() =>
                                       void act(() =>
-                                        conn!.reducers.interactCommunityObject({
-                                          objectId: o.id,
-                                          action: a.id,
-                                        }),
+                                        approach(
+                                          objectApproach(String(o.id)),
+                                          () =>
+                                            conn!.reducers.interactCommunityObject(
+                                              { objectId: o.id, action: a.id },
+                                            ),
+                                        ),
                                       )
                                     }
                                   >
@@ -632,13 +697,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                               {link ? (
                                 <button
                                   disabled={busy}
-                                  onClick={() =>
-                                    void act(() =>
-                                      conn!.reducers.travelCommunity({
-                                        exitId: link.id,
-                                      }),
-                                    )
-                                  }
+                                  onClick={() => void act(() => travel(link))}
                                 >
                                   {r.name}
                                 </button>
@@ -661,13 +720,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                             className="doorway"
                             key={String(e.id)}
                             disabled={busy}
-                            onClick={() =>
-                              void act(() =>
-                                conn!.reducers.travelCommunity({
-                                  exitId: e.id,
-                                }),
-                              )
-                            }
+                            onClick={() => void act(() => travel(e))}
                           >
                             {e.label} <span>→</span>
                           </button>
