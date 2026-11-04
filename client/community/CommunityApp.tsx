@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DbConnection } from "../module_bindings";
 import type {
   Community,
@@ -62,6 +62,7 @@ const empty: Snapshot = {
 const silhouette = neutralCharacter("Traveler");
 const command = { id: 0, action: "idle" as const };
 export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
+  const chatLog = useRef<HTMLDivElement>(null);
   const [conn, setConn] = useState<DbConnection>();
   const [identity, setIdentity] = useState("");
   const [data, setData] = useState(empty);
@@ -77,8 +78,14 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
   const [selectedObject, setSelectedObject] = useState("");
   const [spotId, setSpotId] = useState("");
   const [tab, setTab] = useState("world");
+  const [toolTab, setToolTab] = useState("room");
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [viewStatus, setViewStatus] = useState<ViewStatus>();
   const [connectionEpoch, setConnectionEpoch] = useState(0);
+  useEffect(() => {
+    const log = chatLog.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [data.speech.at(-1)?.id, tab]);
   useEffect(() => {
     let disposed = false;
     const tokenKey = `community-world:${HOST}:${DATABASE}`;
@@ -184,6 +191,10 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
   }, [conn, me?.key, connectionEpoch]);
   const room = data.rooms.find((r) => r.id === me?.roomId);
   const property = data.properties.find((p) => p.id === room?.propertyId);
+  useEffect(() => {
+    setToolTab("room");
+    setToolsOpen(false);
+  }, [room?.id]);
   const scene = useMemo(
     () => (room ? parseDefinition(room.source, "room") : undefined),
     [room?.source],
@@ -358,13 +369,24 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                   </span>
                   <h2>{room.name}</h2>
                 </div>
-                <span>Revision {room.revision}</span>
+                <button
+                  className="room-tools-toggle"
+                  aria-expanded={toolsOpen}
+                  aria-controls="room-tools"
+                  onClick={() => setToolsOpen(!toolsOpen)}
+                >
+                  Room tools
+                </button>
               </div>
               <div className="community-layout">
                 <section className="community-scene">
                   <Viewport
                     room={scene}
-                    onObject={setSelectedObject}
+                    onObject={(id) => {
+                      setSelectedObject(id);
+                      setToolTab("objects");
+                      setToolsOpen(true);
+                    }}
                     entrances={Object.fromEntries(
                       interactive.map((o) => {
                         const exit = exits.find((e) =>
@@ -391,13 +413,13 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                                 setError("This exit is no longer available.");
                               else if (!me.homeProperty) {
                                 setSpotId(o.id);
-                                document
-                                  .getElementById("home-claim")
-                                  ?.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                document.getElementById("home-name")?.focus();
+                                setToolTab("home");
+                                setToolsOpen(true);
+                                requestAnimationFrame(() =>
+                                  document
+                                    .getElementById("home-name")
+                                    ?.focus({ preventScroll: true }),
+                                );
                               } else
                                 setError(
                                   "You already have a home. Expand it from inside your property.",
@@ -430,9 +452,13 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                     onStatus={setViewStatus}
                   />
                   <p>{viewStatus?.message || "Drag to look around."}</p>
-                  <section aria-label="Room conversation">
+                  <section
+                    className="community-chat"
+                    aria-label="Room conversation"
+                  >
                     <h3>Here in {room.name}</h3>
                     <div
+                      ref={chatLog}
                       className="room-conversation"
                       role="log"
                       aria-live="polite"
@@ -474,7 +500,6 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                       }}
                     >
                       <label>
-                        Say something here
                         <input
                           aria-label="Room message"
                           value={message}
@@ -487,179 +512,225 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                     </form>
                   </section>
                 </section>
-                <aside>
-                  {data.objects.some((o) => o.roomId === room.id) && (
+                <aside
+                  id="room-tools"
+                  className={toolsOpen ? "tools-open" : ""}
+                  aria-label="Room tools"
+                >
+                  <nav aria-label="Room tool panels">
+                    <button
+                      aria-pressed={toolTab === "room"}
+                      onClick={() => setToolTab("room")}
+                    >
+                      Room
+                    </button>
+                    <button
+                      aria-pressed={toolTab === "home"}
+                      onClick={() => setToolTab("home")}
+                    >
+                      Home
+                    </button>
+                    <button
+                      aria-pressed={toolTab === "objects"}
+                      onClick={() => setToolTab("objects")}
+                    >
+                      Interact
+                    </button>
+                    <button
+                      className="room-tools-close"
+                      aria-label="Close room tools"
+                      onClick={() => setToolsOpen(false)}
+                    >
+                      Close
+                    </button>
+                  </nav>
+                  <div className="tool-panel" hidden={toolTab !== "objects"}>
+                    {!data.objects.some((o) => o.roomId === room.id) && (
+                      <p>No interactive objects here yet.</p>
+                    )}
+                    {data.objects.some((o) => o.roomId === room.id) && (
+                      <section>
+                        <h3>Interact</h3>
+                        {data.objects
+                          .filter((o) => o.roomId === room.id)
+                          .map((o) => (
+                            <div key={String(o.id)}>
+                              <button
+                                aria-pressed={selectedObject === String(o.id)}
+                                onClick={() => setSelectedObject(String(o.id))}
+                              >
+                                {o.name}
+                              </button>
+                              {selectedObject === String(o.id) &&
+                                (
+                                  JSON.parse(o.actions) as {
+                                    id: string;
+                                    label: string;
+                                  }[]
+                                ).map((a) => (
+                                  <button
+                                    key={a.id}
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void act(() =>
+                                        conn!.reducers.interactCommunityObject({
+                                          objectId: o.id,
+                                          action: a.id,
+                                        }),
+                                      )
+                                    }
+                                  >
+                                    {a.label}
+                                  </button>
+                                ))}
+                            </div>
+                          ))}
+                      </section>
+                    )}
+                  </div>
+                  <div className="tool-panel" hidden={toolTab !== "room"}>
                     <section>
-                      <h3>Interact</h3>
-                      {data.objects
-                        .filter((o) => o.roomId === room.id)
-                        .map((o) => (
-                          <div key={String(o.id)}>
-                            <button
-                              aria-pressed={selectedObject === String(o.id)}
-                              onClick={() => setSelectedObject(String(o.id))}
+                      <h3>{property?.common ? "Common map" : "Home map"}</h3>
+                      <p className="muted">
+                        {property?.common
+                          ? "Named doorways lead to members' home maps."
+                          : "These rooms are shared with every visitor."}
+                      </p>
+                      <ul className="community-map">
+                        {mapRooms.map((r) => {
+                          const link = exits.find((e) => e.toRoom === r.id);
+                          return (
+                            <li
+                              key={String(r.id)}
+                              aria-current={
+                                r.id === room.id ? "location" : undefined
+                              }
                             >
-                              {o.name}
-                            </button>
-                            {selectedObject === String(o.id) &&
-                              (
-                                JSON.parse(o.actions) as {
-                                  id: string;
-                                  label: string;
-                                }[]
-                              ).map((a) => (
+                              {link ? (
                                 <button
-                                  key={a.id}
                                   disabled={busy}
                                   onClick={() =>
                                     void act(() =>
-                                      conn!.reducers.interactCommunityObject({
-                                        objectId: o.id,
-                                        action: a.id,
+                                      conn!.reducers.travelCommunity({
+                                        exitId: link.id,
                                       }),
                                     )
                                   }
                                 >
-                                  {a.label}
+                                  {r.name}
                                 </button>
-                              ))}
-                          </div>
-                        ))}
+                              ) : (
+                                <span>
+                                  {r.id === room.id ? "◆ " : "◇ "}
+                                  {r.name}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </section>
-                  )}
-                  <section>
-                    <h3>{property?.common ? "Common map" : "Home map"}</h3>
-                    <p className="muted">
-                      {property?.common
-                        ? "Named doorways lead to members' home maps."
-                        : "These rooms are shared with every visitor."}
-                    </p>
-                    <ul className="community-map">
-                      {mapRooms.map((r) => {
-                        const link = exits.find((e) => e.toRoom === r.id);
-                        return (
-                          <li
-                            key={String(r.id)}
-                            aria-current={
-                              r.id === room.id ? "location" : undefined
+                    <section>
+                      <h3>Doorways</h3>
+                      {exits.length ? (
+                        exits.map((e) => (
+                          <button
+                            className="doorway"
+                            key={String(e.id)}
+                            disabled={busy}
+                            onClick={() =>
+                              void act(() =>
+                                conn!.reducers.travelCommunity({
+                                  exitId: e.id,
+                                }),
+                              )
                             }
                           >
-                            {link ? (
-                              <button
-                                disabled={busy}
-                                onClick={() =>
-                                  void act(() =>
-                                    conn!.reducers.travelCommunity({
-                                      exitId: link.id,
-                                    }),
-                                  )
-                                }
-                              >
-                                {r.name}
-                              </button>
-                            ) : (
-                              <span>
-                                {r.id === room.id ? "◆ " : "◇ "}
-                                {r.name}
-                              </span>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </section>
-                  <section>
-                    <h3>Doorways</h3>
-                    {exits.length ? (
-                      exits.map((e) => (
-                        <button
-                          className="doorway"
-                          key={String(e.id)}
-                          disabled={busy}
-                          onClick={() =>
+                            {e.label} <span>→</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p>No doorways yet.</p>
+                      )}
+                    </section>
+                  </div>
+                  <div className="tool-panel" hidden={toolTab !== "home"}>
+                    {!!me.homeProperty && (
+                      <p>
+                        Your home is already claimed. Use Create to connect an
+                        agent and expand it.
+                      </p>
+                    )}
+                    {!property?.common && !me.homeProperty && (
+                      <p>
+                        Visit a common room to find an available home entrance.
+                      </p>
+                    )}
+                    {!!property?.common &&
+                      !me.homeProperty &&
+                      !availableSpots.length && (
+                        <section>
+                          <h3>No available home entrances</h3>
+                          <p>
+                            Look in another common room, or ask a server admin
+                            to add an entrance here.
+                          </p>
+                        </section>
+                      )}
+                    {!!property?.common &&
+                      !me.homeProperty &&
+                      !!availableSpots.length && (
+                        <form
+                          id="home-claim"
+                          onSubmit={(e) => {
+                            e.preventDefault();
                             void act(() =>
-                              conn!.reducers.travelCommunity({ exitId: e.id }),
-                            )
-                          }
+                              conn!.reducers.claimHome({
+                                commonRoomId: room.id,
+                                spotId: chosenSpot!.id,
+                                name: homeName,
+                              }),
+                            );
+                          }}
                         >
-                          {e.label} <span>→</span>
-                        </button>
-                      ))
-                    ) : (
-                      <p>No doorways yet.</p>
-                    )}
-                  </section>
-                  {!!property?.common &&
-                    !me.homeProperty &&
-                    !availableSpots.length && (
-                      <section>
-                        <h3>No available home entrances</h3>
-                        <p>
-                          Look in another common room, or ask a server admin to
-                          add an entrance here.
-                        </p>
-                      </section>
-                    )}
-                  {!!property?.common &&
-                    !me.homeProperty &&
-                    !!availableSpots.length && (
-                      <form
-                        id="home-claim"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void act(() =>
-                            conn!.reducers.claimHome({
-                              commonRoomId: room.id,
-                              spotId: chosenSpot!.id,
-                              name: homeName,
-                            }),
-                          );
-                        }}
-                      >
-                        <h3>Make your home here</h3>
-                        <p>Choose an available entrance in {room.name}.</p>
-                        <label>
-                          Entrance
-                          <select
-                            aria-label="Home entrance"
-                            value={chosenSpot?.id ?? ""}
-                            onChange={(e) => setSpotId(e.target.value)}
-                          >
-                            {availableSpots.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Home name
-                          <input
-                            required
-                            maxLength={80}
-                            value={homeName}
-                            onChange={(e) => setHomeName(e.target.value)}
-                            id="home-name"
-                            placeholder="The Cloudglass Study"
-                          />
-                        </label>
-                        <button disabled={busy}>Create home</button>
-                      </form>
-                    )}
+                          <h3>Make your home here</h3>
+                          <p>Choose an available entrance in {room.name}.</p>
+                          <label>
+                            Entrance
+                            <select
+                              aria-label="Home entrance"
+                              value={chosenSpot?.id ?? ""}
+                              onChange={(e) => setSpotId(e.target.value)}
+                            >
+                              {availableSpots.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Home name
+                            <input
+                              required
+                              maxLength={80}
+                              value={homeName}
+                              onChange={(e) => setHomeName(e.target.value)}
+                              id="home-name"
+                              placeholder="The Cloudglass Study"
+                            />
+                          </label>
+                          <button disabled={busy}>Create home</button>
+                        </form>
+                      )}
+                  </div>
                 </aside>
               </div>
             </>
           )}
         </>
       )}
-      <footer
-        style={{
-          display: "flex",
-          gap: "1rem",
-          padding: "1rem 0",
-          flexWrap: "wrap",
-        }}
-      >
+      <footer>
         <a
           href="https://lantern-staging.dbrinkmann.workers.dev/privacy/"
           target="_blank"

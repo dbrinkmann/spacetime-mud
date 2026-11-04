@@ -73,8 +73,12 @@ try {
     .getByRole("button", { name: "Enter community", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Receptionist", exact: true }),
-  ).toBeVisible();
+    page.getByRole("button", {
+      name: "Receptionist",
+      exact: true,
+      includeHidden: true,
+    }),
+  ).toHaveCount(1);
   await page.waitForFunction(() => !!window.boxWorld);
   const point = await page.evaluate(() =>
     window.boxWorld!.project([0, 1.2, 0]),

@@ -46,6 +46,7 @@ try {
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Home", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "No available home entrances" }),
   ).toBeVisible();
@@ -182,6 +183,49 @@ try {
     path: "test-results/community-desktop.png",
     fullPage: true,
   });
+  for (const [width, height] of [
+    [1200, 650],
+    [900, 500],
+    [390, 844],
+    [640, 360],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const canvas = document
+            .querySelector(".poc-viewport canvas")!
+            .getBoundingClientRect();
+          const input = document
+            .querySelector('[aria-label="Room message"]')!
+            .getBoundingClientRect();
+          return (
+            document.documentElement.scrollHeight <= innerHeight &&
+            document.documentElement.scrollWidth <= innerWidth &&
+            canvas.height > 100 &&
+            canvas.bottom <= innerHeight &&
+            input.bottom <= innerHeight &&
+            input.top >= 0
+          );
+        }),
+      )
+      .toBe(true);
+    if (width <= 700) {
+      await page
+        .getByRole("button", { name: "Room tools", exact: true })
+        .click();
+      await expect(
+        page.getByRole("button", { name: "Room", exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Close room tools", exact: true })
+        .click();
+    }
+    await page.screenshot({
+      path: `test-results/community-layout-${width}x${height}.png`,
+      fullPage: true,
+    });
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({
     path: "test-results/community-mobile.png",

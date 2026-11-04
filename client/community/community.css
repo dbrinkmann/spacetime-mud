@@ -190,3 +190,282 @@ body {
 .room-conversation p {
   margin: 0.45rem 0;
 }
+
+/* Activity shell: the viewport owns the available iframe, not document flow. */
+.community-app,
+.community-app * {
+  box-sizing: border-box;
+}
+.community-app {
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  padding: 10px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  min-height: 0;
+}
+.community-app > header {
+  flex: 0 0 auto;
+  gap: 12px;
+}
+.community-app > header .eyebrow {
+  display: none;
+}
+.community-app h1 {
+  margin: 0;
+  font-size: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.community-app > header > div {
+  min-width: 0;
+}
+.community-app > header > span {
+  font-size: 12px;
+}
+.community-app > nav {
+  flex-shrink: 0;
+  margin: 0;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.community-app > nav label {
+  margin: 0;
+}
+.community-app button,
+.community-app input,
+.community-app select {
+  padding: 7px 10px;
+  font-size: 14px;
+}
+.community-app button[aria-pressed="true"] {
+  border-color: #d9b875;
+  background: #35382e;
+}
+.community-heading {
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 8px;
+}
+.community-heading > div {
+  min-width: 0;
+}
+.community-heading h2 {
+  margin: 0;
+  font-size: 21px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.community-heading .eyebrow {
+  display: none;
+}
+.community-layout {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+.community-app .community-scene {
+  align-self: stretch;
+  min-height: 0;
+  margin: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto clamp(100px, 23vh, 170px);
+}
+.community-scene .poc-viewport {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.community-scene > p {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.community-app .community-chat {
+  margin: 0;
+  padding: 8px;
+  border-radius: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  gap: 6px;
+}
+.community-chat h3 {
+  display: none;
+}
+.community-chat .room-conversation {
+  max-height: none;
+  min-height: 0;
+  font-size: 13px;
+}
+.community-chat form {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  display: flex;
+  gap: 6px;
+}
+.community-chat label {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.community-chat input {
+  width: 100%;
+}
+.community-layout > aside {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #1b2224;
+  border: 1px solid #343b39;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.community-layout > aside > nav {
+  margin: 0;
+  padding: 8px;
+  gap: 4px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  border-bottom: 1px solid #343b39;
+}
+.tool-panel {
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.tool-panel[hidden] {
+  display: none;
+}
+.community-app .tool-panel section,
+.community-app .tool-panel form {
+  padding: 0;
+  margin: 0 0 16px;
+  border: 0;
+}
+.tool-panel h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+.tool-panel p {
+  margin: 8px 0;
+}
+.tool-panel .muted {
+  display: none;
+}
+.tool-panel label {
+  margin-bottom: 10px;
+  gap: 4px;
+}
+.tool-panel select {
+  width: 100%;
+  min-width: 0;
+}
+.community-map {
+  margin: 8px 0 18px;
+}
+.community-app > footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 16px;
+}
+.community-app > footer a {
+  color: #aaad9d;
+}
+.community-app > .community-create,
+.community-app > section,
+.community-app > form {
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+}
+.community-app > .community-create {
+  flex: 1;
+}
+.community-error {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 6px 10px;
+  max-height: 64px;
+  overflow: auto;
+  font-size: 13px;
+}
+.room-tools-toggle,
+.room-tools-close {
+  display: none;
+}
+@media (max-width: 700px) {
+  .community-app {
+    padding: 8px;
+    gap: 6px;
+  }
+  .community-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .community-layout > aside {
+    display: none;
+  }
+  .community-layout > aside.tools-open {
+    display: flex;
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(340px, 100%);
+    box-shadow: -12px 0 24px #0006;
+  }
+  .room-tools-toggle,
+  .room-tools-close {
+    display: block;
+  }
+  .community-app h1 {
+    font-size: 17px;
+  }
+  .community-heading h2 {
+    font-size: 18px;
+  }
+  .community-app > nav button {
+    flex: 1;
+    padding: 7px 6px;
+  }
+  .community-app > nav {
+    font-size: 12px;
+  }
+  .community-app .community-scene {
+    grid-template-rows: minmax(0, 1fr) auto clamp(90px, 22vh, 150px);
+  }
+}
+@media (max-height: 480px) {
+  .community-app {
+    gap: 4px;
+    padding: 5px 8px;
+  }
+  .community-app > header,
+  .community-app > footer {
+    display: none;
+  }
+  .community-heading h2 {
+    font-size: 17px;
+  }
+  .community-app .community-scene {
+    grid-template-rows: minmax(0, 1fr) auto 80px;
+  }
+}
