@@ -12,3 +12,5 @@ playwright-report/
 spacetimedb/target/
 spacetime.local.json
 spacetimedb/spacetime.local.json
+
+.wrangler/

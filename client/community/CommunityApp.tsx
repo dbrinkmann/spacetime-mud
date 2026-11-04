@@ -652,6 +652,36 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
           )}
         </>
       )}
+      <footer
+        style={{
+          display: "flex",
+          gap: "1rem",
+          padding: "1rem 0",
+          flexWrap: "wrap",
+        }}
+      >
+        <a
+          href="https://lantern-staging.dbrinkmann.workers.dev/privacy/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Privacy
+        </a>
+        <a
+          href="https://lantern-staging.dbrinkmann.workers.dev/terms/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Terms
+        </a>
+        <a
+          href="https://lantern-staging.dbrinkmann.workers.dev/support/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Support
+        </a>
+      </footer>
     </main>
   );
 }

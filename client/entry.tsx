@@ -38,6 +38,19 @@ if (new URLSearchParams(location.search).has("preview")) {
       <h1>Lantern</h1>
       <p>A place for your Discord community.</p>
       <p>Open Lantern from your server's App Launcher to enter your world.</p>
+      <p>
+        <a style={{ color: "#f4c46b" }} href="/privacy/">
+          Privacy
+        </a>{" "}
+        &middot;{" "}
+        <a style={{ color: "#f4c46b" }} href="/terms/">
+          Terms
+        </a>{" "}
+        &middot;{" "}
+        <a style={{ color: "#f4c46b" }} href="/support/">
+          Support
+        </a>
+      </p>
     </main>,
   );
 } else if (new URLSearchParams(location.search).has("community")) {
