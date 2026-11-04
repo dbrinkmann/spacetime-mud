@@ -5,6 +5,69 @@ import { WorldRuntime } from "../spacetimedb/src/runtime/engine.ts";
 import type { Entity, Package } from "../shared/runtime/contracts.ts";
 const empty = { type: "object" as const, properties: {} };
 const nil = { type: "null" as const };
+test("shared variables declare readers and writers, coalesce changes, and keep private state out of inspection", () => {
+  const store = new MemoryStore(),
+    world = new WorldRuntime(store, 0);
+  world.create(entity("machine"));
+  const writer = packageOf(
+    "writer",
+    'function on_use(ctx){ctx.variables.set("level",1);ctx.variables.set("level",2);ctx.state.set("count",ctx.variables.get("level"));} function on_bad(ctx){ctx.variables.set("level",99);}',
+    {
+      "action:use": { handler: "on_use", input: nil },
+      "action:bad": { handler: "on_bad", input: nil },
+    },
+    ["variables.level"],
+  );
+  writer.manifest.variables = { level: { type: "number", min: 0, max: 3 } };
+  const reader = packageOf(
+    "reader",
+    'function on_change(ctx){ctx.state.set("count",(ctx.state.get("count")||0)+ctx.variables.get("level"));}',
+    {
+      "variable:level": {
+        handler: "on_change",
+        input: {
+          type: "object",
+          properties: { key: { type: "string" }, exists: { type: "boolean" } },
+        },
+      },
+    },
+  );
+  reader.manifest.reads = ["variables.level"];
+  world.register(writer);
+  world.register(reader);
+  world.attach("machine", "writer", "writer", {});
+  world.attach("machine", "reader", "reader", {});
+  world.drain("machine");
+  world.action("machine", "use", null, "alice");
+  world.drain("machine");
+  assert.equal(store.entity("machine")!.variables!.level, 2);
+  assert.equal(store.slot("machine:reader")!.state.count, 2);
+  assert.equal(store.slot("machine:writer")!.state.count, 2);
+  world.action("machine", "use", null, "alice");
+  world.drain("machine");
+  assert.equal(
+    store.slot("machine:reader")!.state.count,
+    2,
+    "equal final value must not retrigger observers",
+  );
+  world.action("machine", "bad", null, "alice");
+  world.drain("machine");
+  assert.equal(store.entity("machine")!.variables!.level, 2);
+  assert.equal(store.slot("machine:reader")!.enabled, true);
+  assert.equal(
+    (world.inspect(store.entity("machine")!, "machine") as any).variables,
+    undefined,
+  );
+  assert.throws(
+    () =>
+      world.register({
+        ...reader,
+        hash: "unreadable",
+        manifest: { ...reader.manifest, reads: [] },
+      }),
+    /read authority/,
+  );
+});
 function entity(id: string, property = "home"): Entity {
   return {
     id,
@@ -76,7 +139,7 @@ test("revoked sender rejects queued messages without faulting the receiver", () 
   world.action("sender", "use", null, "alice");
   world.drain("sender");
   const event = store.pending("receiver")[0].event;
-  store.putSlot({ ...store.slot("sender:s")!, enabled: false });
+  store.setRuntimeGrant("sender:s", false);
   world.drain("receiver");
   assert.equal(store.slot("receiver:r")!.enabled, true);
   assert.equal(store.slot("receiver:r")!.lastError, "");

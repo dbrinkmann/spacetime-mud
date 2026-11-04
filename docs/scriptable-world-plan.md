@@ -5,12 +5,13 @@ Date: 2026-11-04.
 
 ## Implementation evidence
 
-The replacement module is `world-server`, deployed only to local database `lantern-runtime-refactor` at `http://127.0.0.1:3030`. Its endpoints are operator-only development scaffolding, not a substitute for verified community/player/agent authorization. The existing application remains the live release until parity is established.
+The replacement module is `world-server`, deployed only to local database `lantern-runtime-refactor` at `http://127.0.0.1:3030`. Authoring now checks gateway-provisioned memberships, property authority and delegated builder grants. Player action injection and root property provisioning remain operator-only development entry points pending the interaction/home services. The existing application remains the live release until parity is established.
 
 Implemented and tested so far:
 
 - Extracted one interpreter adapter into `spacetimedb/src/runtime/sandbox.ts`; the old `scripts.ts` forwards to it while the old release still exists. The replacement imports the adapter directly.
 - Bounded structured values and schemas; private slot state, public properties, declared exclusive component writers, copied API arguments/results, and data-only buffered effects.
+- Shared entity Object Variables with declared readers, exclusive schema-owning writers, staged get/set/delete/has semantics and coalesced post-commit change events. Private player-scoped variables remain outstanding.
 - Durable entity inboxes, deterministic recipient ordering, per-slot receipts, bounded dispatch batches, scheduled timers, failed-invocation isolation, and generation invalidation.
 - Same-property asynchronous messages and filtered inspection; sender authority is checked again at delivery. Rejection does not fault an innocent receiving slot. Action payloads are checked before enqueueing.
 - Created/bound/activated lifecycle, suspension/resumption, pinned package upgrades and bounded state-only migrations. Failed migrations preserve the old slot. Pending old-generation actions cannot invoke upgraded code.
@@ -18,12 +19,13 @@ Implemented and tested so far:
 - A virtual-clock simulation using the same interpreter, dispatcher and effect validation with transactional memory snapshots.
 - Timed whole-entity transform operations with persisted interpolation anchors, pause/resume, replacement/cancellation, sampled inspection and completion events. Suspension settles and removes active operations. Named parts, navigation/colliders and client operation rendering are still outstanding; this does not yet satisfy P15-P18.
 - Bounded per-entity diagnostic receipts with package/event/source metadata, interpreter work counts and effect-type summaries. Payloads and state are omitted from these summaries; public trace authorization/tools remain outstanding.
+- Separate gateway/operator provisioning, expiring membership authorization, delegated common-space authoring, property-scoped installation grants and source/recipient grant rechecks during execution. `tests/runtime-access-local.ts` verifies an admin, ordinary member and builder using three real local connections. Agent publications belong to the paired player. Admin downgrade and pairing revocation stop edits without revoking approved installed scripts. The Activity/gateway deployment has not been switched; confirmed membership removal, property transfer and bulk cleanup still need their complete lifecycle policy.
 
 Evidence: `tests/runtime-*.test.ts` and `npm run test:runtime:local`. The local integration fixture exercises actual scheduled reducers, package publication/attachment, switch-to-lamp messaging, state/component updates, a subsecond timer followed by a transform operation and completion event, suspend/resume, invalid payload rejection and anonymous denial. This is not a Discord end-to-end test.
 
 Static renderer evidence is recorded in `docs/baselines/runtime-render-2026-11-04.json`, collected by `tests/runtime-render-baseline.ts` at 1280x720, 800x600 and 390x700. Comparative thresholds were set to at most 25% regression in scene preparation and p95 frame interval on the same environment, and at most one pixel of document overflow. The headless software-rendering measurements are comparative, not a hardware GPU frame-rate target. Script bindings were omitted from the preview input without changing geometry. Live subscription/server-work measurements and embedded Activity performance remain outstanding.
 
-Still required before release: complete phase-0 performance evidence; community/property authority integration and persisted runtime grants; aggregate work quotas and delivery-status reporting; remaining variable namespaces; dependency composition/templates and MCP tools; named parts/operations/navigation/spatial integration; dialogs/speech/character/home services; client rendering/subscriptions; full P01-P22 evidence, soak and rollback rehearsal. The old runtime and its wrapper are removed from the released application only at that cutover.
+Still required before release: complete phase-0 performance evidence; finish authority integration with the Activity and lifecycle cleanup; aggregate work quotas and delivery-status reporting; remaining variable namespaces; dependency composition/templates and MCP tools; named parts/path operations/navigation/spatial integration; dialogs/speech/character/home services; client rendering/subscriptions; full P01-P22 evidence, soak and rollback rehearsal. The old runtime and its wrapper are removed from the released application only at that cutover.
 
 ## Objective and decisions
 

@@ -35,7 +35,13 @@ export type Lifecycle =
   | "unbound"
   | "destroying";
 export type EventType =
-  "lifecycle" | "message" | "action" | "timer" | "operation" | "spatial";
+  | "lifecycle"
+  | "message"
+  | "action"
+  | "timer"
+  | "operation"
+  | "spatial"
+  | "variable";
 export type Event = {
   id: string;
   entity: string;
@@ -62,6 +68,7 @@ export type Entity = {
   enabled: boolean;
   components: Record<string, Value>;
   publicState: RecordValue;
+  variables?: RecordValue;
 };
 export type Handler = { handler: string; input: DataSchema };
 export type PackageManifest = {
@@ -75,6 +82,8 @@ export type PackageManifest = {
   handlers: Record<string, Handler>;
   writes: string[];
   migrations?: Record<string, string>;
+  reads?: string[];
+  variables?: Record<string, DataSchema>;
 };
 export type Package = {
   hash: string;
@@ -94,6 +103,7 @@ export type Slot = {
   bound: boolean;
 };
 export type Effect =
+  | { type: "variable"; key: string; value: Value; deleted: boolean }
   | {
       type: "operation";
       command: "animate";
@@ -141,6 +151,8 @@ export function validateManifest(input: unknown): PackageManifest {
           "handlers",
           "writes",
           "migrations",
+          "reads",
+          "variables",
         ].includes(k),
     )
   )
@@ -173,7 +185,7 @@ export function validateManifest(input: unknown): PackageManifest {
     )
       throw Error("Invalid handler declaration.");
     if (
-      !/^(lifecycle|message|action|timer|operation|spatial):[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/.test(
+      !/^(lifecycle|message|action|timer|operation|spatial|variable):[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/.test(
         name,
       )
     )
@@ -202,6 +214,40 @@ export function validateManifest(input: unknown): PackageManifest {
         !/^on_[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(handler)
       )
         throw Error("Invalid migration handler.");
+  }
+  if (m.reads !== undefined) {
+    if (
+      !Array.isArray(m.reads) ||
+      m.reads.length > 32 ||
+      new Set(m.reads).size !== m.reads.length
+    )
+      throw Error("Invalid read declarations.");
+    m.reads.forEach((r) => identifier(r, "read resource"));
+  }
+  if (m.variables !== undefined) {
+    if (
+      !m.variables ||
+      typeof m.variables !== "object" ||
+      Array.isArray(m.variables) ||
+      Object.keys(m.variables).length > 16
+    )
+      throw Error("Invalid variable schemas.");
+    for (const [key, schema] of Object.entries(m.variables)) {
+      identifier(key);
+      validateSchema(schema);
+      if (!m.writes.includes(`variables.${key}`))
+        throw Error("Variable schema requires exclusive writer declaration.");
+    }
+  }
+  for (const key of m.writes.filter((r) => r.startsWith("variables.")))
+    if (!m.variables?.[key.slice(10)])
+      throw Error("Variable write requires schema.");
+  for (const key of Object.keys(m.handlers).filter((k) =>
+    k.startsWith("variable:"),
+  )) {
+    const read = `variables.${key.slice(9)}`;
+    if (!m.writes.includes(read) && !m.reads?.includes(read))
+      throw Error("Variable subscription requires read authority.");
   }
   return m;
 }

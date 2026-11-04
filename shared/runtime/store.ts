@@ -57,6 +57,7 @@ export interface RuntimeStore {
   putTimer(timer: Timer): void;
   removeTimer(id: string): void;
   nextSequence(): number;
+  canRun(slot: Slot, entity: Entity): boolean;
   operations(entity: string): Operation[];
   putOperation(operation: Operation): void;
   removeOperation(id: string): void;

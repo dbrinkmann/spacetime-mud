@@ -22,6 +22,7 @@ import type {
 import { validateComponent } from "../../../shared/runtime/components";
 import { executeBehavior, migrateBehavior } from "./execution";
 import { validateSource } from "./sandbox";
+import { canonical } from "../../../shared/runtime/digest";
 import { prepareOperations } from "./operations";
 import {
   sampleOperation,
@@ -56,6 +57,7 @@ export class WorldRuntime {
       ...entity,
       components: copyValue(entity.components) as RecordValue,
       publicState: copyValue(entity.publicState) as RecordValue,
+      variables: copyValue(entity.variables ?? {}) as RecordValue,
     });
   }
   attach(
@@ -75,6 +77,9 @@ export class WorldRuntime {
     if (slots.length >= BUDGETS.slots || this.store.slot(id))
       throw Error("Slot limit or duplicate slot.");
     assertSchema(pkg.manifest.config, copyValue(config));
+    for (const [key, schema] of Object.entries(pkg.manifest.variables ?? {}))
+      if (Object.prototype.hasOwnProperty.call(e.variables ?? {}, key))
+        assertSchema(schema, e.variables![key]);
     for (const other of slots) {
       const installed = this.store.package(other.packageHash)!;
       if (
@@ -85,6 +90,7 @@ export class WorldRuntime {
     for (const resource of pkg.manifest.writes)
       if (
         !resource.startsWith("public.") &&
+        !resource.startsWith("variables.") &&
         !Object.prototype.hasOwnProperty.call(e.components, resource)
       )
         throw Error("Required component unavailable.");
@@ -210,12 +216,16 @@ export class WorldRuntime {
     for (const resource of pkg.manifest.writes)
       if (
         !resource.startsWith("public.") &&
+        !resource.startsWith("variables.") &&
         !Object.prototype.hasOwnProperty.call(entity.components, resource)
       )
         throw Error("Required component unavailable.");
     if (this.store.pending(slot.entity).length + 2 > BUDGETS.inbox)
       throw Error("Inbox full.");
     const state = migrateBehavior(pkg, slot, old.manifest.stateVersion, config);
+    for (const [key, schema] of Object.entries(pkg.manifest.variables ?? {}))
+      if (Object.prototype.hasOwnProperty.call(entity.variables ?? {}, key))
+        assertSchema(schema, entity.variables![key]);
     this.store.putSlot({
       ...slot,
       packageHash: hash,
@@ -410,7 +420,7 @@ export class WorldRuntime {
         if (effect.delay === null) timers.delete(effect.name);
         else
           timers.set(effect.name, {
-            id: `${slot.id}:${effect.name}`,
+            id: `timer:${slot.id.length}:${slot.id}:${effect.name}`,
             entity: entity.id,
             slot: slot.id,
             generation: slot.generation,
@@ -431,12 +441,35 @@ export class WorldRuntime {
       this.store.operations(entity.id),
       this.now,
     );
+    const variables = copyValue(entity.variables ?? {}) as RecordValue,
+      changed = new Set<string>();
+    for (const effect of result.effects)
+      if (effect.type === "variable") {
+        changed.add(effect.key);
+        if (effect.deleted) delete variables[effect.key];
+        else variables[effect.key] = effect.value;
+      }
+    copyValue(variables);
+    for (const key of changed)
+      if (Object.prototype.hasOwnProperty.call(variables, key))
+        assertSchema(
+          this.store.package(slot.packageHash)!.manifest.variables![key],
+          variables[key],
+        );
+    const variableChanges = [...changed].filter(
+      (key) =>
+        canonical(entity.variables?.[key] ?? null) !==
+          canonical(variables[key] ?? null) ||
+        Object.prototype.hasOwnProperty.call(entity.variables ?? {}, key) !==
+          Object.prototype.hasOwnProperty.call(variables, key),
+    );
     if (
-      operations.notices.length &&
+      operations.notices.length + variableChanges.length &&
       (event.depth >= BUDGETS.chain ||
         this.store.pending(entity.id).length +
           (counts.get(entity.id) ?? 0) +
-          operations.notices.length >
+          operations.notices.length +
+          variableChanges.length >
           BUDGETS.inbox)
     )
       throw Error("Operation event budget exceeded.");
@@ -444,7 +477,7 @@ export class WorldRuntime {
     for (const effect of result.effects)
       if (effect.type === "public") publicState[effect.key] = effect.value;
     copyValue(publicState);
-    return { timers, operations };
+    return { timers, operations, variables, variableChanges };
   }
   /** One recipient per invocation; later events cannot overtake the current dispatch. */
   step(entityId: string): boolean {
@@ -493,6 +526,23 @@ export class WorldRuntime {
       return true;
     }
     const pkg = this.store.package(slot.packageHash)!;
+    if (!this.store.canRun(slot, entity)) {
+      this.store.putSlot({
+        ...slot,
+        enabled: false,
+        lastError: "Runtime grant revoked.",
+      });
+      this.cancelTimers(slot);
+      this.store.putReceipt({
+        id: receiptId,
+        event: event.id,
+        slot: slot.id,
+        outcome: "rejected",
+        error: "Runtime grant revoked.",
+      });
+      this.advance(delivery);
+      return true;
+    }
     // Authorization is delivery admission, not a receiver script failure. A revoked
     // sender must never be able to suspend an otherwise healthy recipient.
     if (event.type === "message") {
@@ -507,6 +557,7 @@ export class WorldRuntime {
         !senderSlot?.enabled ||
         senderSlot.generation !== event.source.generation ||
         !sender?.enabled ||
+        !this.store.canRun(senderSlot, sender) ||
         sender.community !== entity.community ||
         sender.property !== entity.property
       ) {
@@ -569,8 +620,21 @@ export class WorldRuntime {
       bound:
         slot.bound || (event.type === "lifecycle" && event.name === "bound"),
     });
-    const { timers, operations } = prepared;
+    const { timers, operations, variables, variableChanges } = prepared;
     entity.components = operations.components;
+    entity.variables = variables;
+    for (const key of variableChanges)
+      this.enqueue(
+        entity.id,
+        "variable",
+        key,
+        { key, exists: Object.prototype.hasOwnProperty.call(variables, key) },
+        { kind: "engine", id: "variables" },
+        undefined,
+        undefined,
+        event.correlation,
+        event.depth + 1,
+      );
     for (const old of this.store.operations(entity.id))
       if (!operations.operations.some((o) => o.id === old.id))
         this.store.removeOperation(old.id);
@@ -609,7 +673,8 @@ export class WorldRuntime {
         (e) =>
           e.type === "public" ||
           e.type === "component" ||
-          e.type === "operation",
+          e.type === "operation" ||
+          e.type === "variable",
       )
     ) {
       entity.revision++;

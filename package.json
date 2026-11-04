@@ -9,6 +9,7 @@
     "check:runtime": "tsc --noEmit -p world-server/tsconfig.json",
     "test:runtime": "tsx --test tests/runtime*.test.ts",
     "test:runtime:local": "tsx tests/runtime-local.ts",
+    "test:runtime:access": "tsx tests/runtime-access-local.ts",
     "bridge": "tsx bridge/index.ts",
     "discord:gateway": "tsx gateway/index.ts",
     "build:staging": "tsx scripts/build-discord-staging.ts",

@@ -47,6 +47,8 @@ async function until(check: () => boolean) {
 const suffix = Date.now().toString(36),
   lamp = `lamp${suffix}`,
   button = `switch${suffix}`;
+const property = `fixture${suffix}`;
+call("create_property", property, "development", false);
 const manifest: PackageManifest = {
   id: `fixture${suffix}`,
   version: "1.0.0",
@@ -86,11 +88,12 @@ call(
     documentation: "Integration fixture",
   }),
   "private",
+  "development",
 );
 call(
   "create_entity",
   lamp,
-  "fixture",
+  property,
   "room",
   JSON.stringify({
     light: { color: "#ffffff", intensity: 0 },
@@ -116,8 +119,9 @@ call(
     documentation: "Integration fixture",
   }),
   "private",
+  "development",
 );
-call("create_entity", button, "fixture", "room", "{}");
+call("create_entity", button, property, "room", "{}");
 call(
   "attach_behavior",
   button,

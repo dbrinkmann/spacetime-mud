@@ -13,6 +13,14 @@ export class MemoryStore implements RuntimeStore {
   private receiptOrder = new Map<string, number>();
   private scheduled = new Map<string, Timer>();
   private sequence = 0;
+  private revoked = new Set<string>();
+  canRun(slot: Slot, _entity: Entity) {
+    return !this.revoked.has(slot.id);
+  }
+  setRuntimeGrant(slot: string, active: boolean) {
+    if (active) this.revoked.delete(slot);
+    else this.revoked.add(slot);
+  }
   private animations = new Map<string, Operation>();
   operations(entity: string) {
     return [...this.animations.values()]
@@ -122,6 +130,7 @@ export class MemoryStore implements RuntimeStore {
       receiptOrder: [...this.receiptOrder],
       scheduled: [...this.scheduled],
       sequence: this.sequence,
+      revoked: [...this.revoked],
       animations: [...this.animations],
     });
   }
@@ -136,6 +145,7 @@ export class MemoryStore implements RuntimeStore {
     store.receiptOrder = new Map(data.receiptOrder ?? []);
     store.scheduled = new Map(data.scheduled);
     store.sequence = data.sequence;
+    store.revoked = new Set(data.revoked ?? []);
     store.animations = new Map(data.animations ?? []);
     return store;
   }

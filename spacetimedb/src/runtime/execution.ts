@@ -74,7 +74,48 @@ export function executeBehavior(
     if (!pkg.manifest.writes.includes(key))
       throw Error(`Undeclared resource: ${key}`);
   };
+  const variable = (key: string) => {
+    identifier(key);
+    const name = `variables.${key}`;
+    if (
+      !pkg.manifest.writes.includes(name) &&
+      !pkg.manifest.reads?.includes(name)
+    )
+      throw Error("Undeclared variable read.");
+    const staged = effects
+      .filter((e) => e.type === "variable" && e.key === key)
+      .pop();
+    return staged?.type === "variable"
+      ? { exists: !staged.deleted, value: staged.value }
+      : {
+          exists: Object.prototype.hasOwnProperty.call(
+            entity.variables ?? {},
+            key,
+          ),
+          value: entity.variables?.[key] ?? null,
+        };
+  };
   const api: ScriptApi = {
+    "variables.has": (key: string) => variable(key).exists,
+    "variables.get": (key: string) => {
+      const v = variable(key);
+      return v.exists ? v.value : null;
+    },
+    "variables.set": (key: string, value: Value) => {
+      identifier(key);
+      resource(`variables.${key}`);
+      record({
+        type: "variable",
+        key,
+        value: copyValue(value),
+        deleted: false,
+      });
+    },
+    "variables.delete": (key: string) => {
+      identifier(key);
+      resource(`variables.${key}`);
+      record({ type: "variable", key, value: null, deleted: true });
+    },
     "state.has": (key: string) =>
       Object.prototype.hasOwnProperty.call(state, identifier(key)),
     "state.get": (key: string) => state[identifier(key)] ?? null,
@@ -198,6 +239,7 @@ export function executeBehavior(
   const stats = executeSandbox(pkg.source, spec.handler, api, [event.payload], {
     arguments: [
       "state.set",
+      "variables.set",
       "messages.send",
       "components.set",
       "operations.animate",
@@ -206,6 +248,7 @@ export function executeBehavior(
     ],
     results: [
       "state.get",
+      "variables.get",
       "config.get",
       "event.source",
       "entities.inspect",

@@ -1,153 +1,32 @@
-import {
-  schema,
-  table,
-  t,
-  SenderError,
-  type ReducerCtx,
-  type InferSchema,
-} from "spacetimedb/server";
-import { ScheduleAt } from "spacetimedb";
+import { t, SenderError } from "spacetimedb/server";
+import { db, wake, now, type Ctx } from "./schema";
+import { TableStore } from "./store";
 import { WorldRuntime } from "../../spacetimedb/src/runtime/engine";
-import {
-  validateManifest,
-  BUDGETS,
-  type Entity,
-  type Slot,
-  type Package,
-} from "../../shared/runtime/contracts";
+import { BUDGETS } from "../../shared/runtime/contracts";
 import {
   copyValue,
-  type RecordValue,
-  type Value,
   identifier,
+  type RecordValue,
 } from "../../shared/runtime/values";
-import { canonical, sha256 } from "../../shared/runtime/digest";
 import {
   BehaviorRegistry,
   type RegistryEntry,
   type Revision,
   type Bundle,
 } from "../../shared/runtime/registry";
-import {
-  operationDeadline,
-  type Operation,
-} from "../../shared/runtime/operations";
-import type {
-  RuntimeStore,
-  Delivery,
-  Receipt,
-  Timer,
-} from "../../shared/runtime/store";
-
-// Isolated operator-only development module. Community authorization is deliberately
-// not approximated here; no unverified player or agent can use this endpoint.
-const authority = table(
-  {},
-  { key: t.string().primaryKey(), identity: t.identity() },
-);
-const entity = table(
-  {},
-  {
-    id: t.string().primaryKey(),
-    property: t.string().index("btree"),
-    room: t.string().index("btree"),
-    data: t.string(),
-  },
-);
-const slot = table(
-  {},
-  {
-    id: t.string().primaryKey(),
-    entity: t.string().index("btree"),
-    data: t.string(),
-  },
-);
-const behaviorPackage = table(
-  {},
-  { hash: t.string().primaryKey(), data: t.string() },
-);
-const packageListing = table(
-  {},
-  { id: t.string().primaryKey(), data: t.string() },
-);
-const packageRevision = table(
-  {},
-  {
-    key: t.string().primaryKey(),
-    hash: t.string().index("btree"),
-    data: t.string(),
-  },
-);
-const inbox = table(
-  {},
-  {
-    id: t.string().primaryKey(),
-    entity: t.string().index("btree"),
-    sequence: t.f64(),
-    data: t.string(),
-  },
-);
-const receipt = table(
-  {},
-  {
-    id: t.string().primaryKey(),
-    entity: t.string().index("btree"),
-    sequence: t.f64(),
-    data: t.string(),
-  },
-);
-const timer = table(
-  {},
-  {
-    id: t.string().primaryKey(),
-    entity: t.string().index("btree"),
-    slot: t.string().index("btree"),
-    due: t.f64(),
-    data: t.string(),
-  },
-);
-const counter = table({}, { key: t.string().primaryKey(), value: t.f64() });
-const wake = table(
-  {},
-  {
-    scheduledId: t.u64().primaryKey().autoInc(),
-    entity: t.string().unique(),
-    scheduledAt: t.scheduleAt(),
-  },
-);
-const operation = table(
-  {},
-  {
-    id: t.string().primaryKey(),
-    entity: t.string().index("btree"),
-    due: t.option(t.f64()),
-    data: t.string(),
-  },
-);
-const db = schema({
-  authority,
-  entity,
-  slot,
-  behaviorPackage,
-  packageListing,
-  packageRevision,
-  inbox,
-  receipt,
-  timer,
-  counter,
-  wake,
-  operation,
-});
+import { operationDeadline } from "../../shared/runtime/operations";
+import type { Timer } from "../../shared/runtime/store";
 export default db;
-type Ctx = ReducerCtx<InferSchema<typeof db>>;
-const now = (ctx: Ctx) => Number(ctx.timestamp.microsSinceUnixEpoch) / 1e6;
-function requireOperator(ctx: {
-  sender: Ctx["sender"];
-  db: Pick<Ctx["db"], "authority">;
-}) {
-  if (!ctx.db.authority.key.find("operator")?.identity.equals(ctx.sender))
-    throw new SenderError("Operator-only refactor environment.");
-}
+import {
+  requireOperator,
+  requireGateway,
+  requireBuilder,
+  requirePropertyEdit,
+  requireEntityEdit,
+  requireSlotEdit,
+  grantInstalled,
+  memberKey,
+} from "./access";
 function input<T>(text: string): T {
   if (text.length > 100000) throw new SenderError("Input too large.");
   try {
@@ -161,171 +40,6 @@ function checked<T>(fn: () => T): T {
     return fn();
   } catch (e) {
     throw new SenderError(e instanceof Error ? e.message : String(e));
-  }
-}
-class TableStore implements RuntimeStore {
-  touched = new Set<string>();
-  constructor(readonly ctx: Ctx) {}
-  operations(entity: string) {
-    return [...this.ctx.db.operation.entity.filter(entity)].map(
-      (r) => JSON.parse(r.data) as Operation,
-    );
-  }
-  putOperation(op: Operation) {
-    const deadline = operationDeadline(op),
-      row = {
-        id: op.id,
-        entity: op.entity,
-        due: Number.isFinite(deadline) ? deadline : undefined,
-        data: JSON.stringify(op),
-      };
-    if (this.ctx.db.operation.id.find(op.id))
-      this.ctx.db.operation.id.update(row);
-    else this.ctx.db.operation.insert(row);
-    this.touched.add(op.entity);
-  }
-  removeOperation(id: string) {
-    const row = this.ctx.db.operation.id.find(id);
-    if (row) this.touched.add(row.entity);
-    this.ctx.db.operation.id.delete(id);
-  }
-  dueOperations(_now: number, _limit: number): Operation[] {
-    throw Error("Use entity-scoped scheduler.");
-  }
-  entity(id: string) {
-    const row = this.ctx.db.entity.id.find(id);
-    return row ? (JSON.parse(row.data) as Entity) : undefined;
-  }
-  putEntity(e: Entity) {
-    const row = {
-      id: e.id,
-      property: e.property,
-      room: e.room,
-      data: JSON.stringify(e),
-    };
-    if (this.ctx.db.entity.id.find(e.id)) this.ctx.db.entity.id.update(row);
-    else this.ctx.db.entity.insert(row);
-  }
-  slots(id: string) {
-    return [...this.ctx.db.slot.entity.filter(id)]
-      .map((r) => JSON.parse(r.data) as Slot)
-      .sort((a, b) => a.id.localeCompare(b.id));
-  }
-  slot(id: string) {
-    const r = this.ctx.db.slot.id.find(id);
-    return r ? (JSON.parse(r.data) as Slot) : undefined;
-  }
-  putSlot(s: Slot) {
-    const r = { id: s.id, entity: s.entity, data: JSON.stringify(s) };
-    if (this.ctx.db.slot.id.find(s.id)) this.ctx.db.slot.id.update(r);
-    else this.ctx.db.slot.insert(r);
-  }
-  package(hash: string) {
-    const r = this.ctx.db.behaviorPackage.hash.find(hash);
-    return r ? (JSON.parse(r.data) as Package) : undefined;
-  }
-  putPackage(p: Package) {
-    this.ctx.db.behaviorPackage.insert({
-      hash: p.hash,
-      data: JSON.stringify(p),
-    });
-  }
-  pending(id: string) {
-    return [...this.ctx.db.inbox.entity.filter(id)]
-      .sort((a, b) => a.sequence - b.sequence)
-      .map((r) => JSON.parse(r.data) as Delivery);
-  }
-  putDelivery(d: Delivery) {
-    const r = {
-      id: d.event.id,
-      entity: d.event.entity,
-      sequence: d.event.sequence,
-      data: JSON.stringify(d),
-    };
-    if (this.ctx.db.inbox.id.find(r.id)) this.ctx.db.inbox.id.update(r);
-    else this.ctx.db.inbox.insert(r);
-    this.touched.add(r.entity);
-  }
-  removeDelivery(id: string) {
-    const r = this.ctx.db.inbox.id.find(id);
-    if (r) this.touched.add(r.entity);
-    this.ctx.db.inbox.id.delete(id);
-  }
-  receipt(id: string) {
-    const r = this.ctx.db.receipt.id.find(id);
-    return r ? (JSON.parse(r.data) as Receipt) : undefined;
-  }
-  putReceipt(r: Receipt) {
-    const entity = this.slot(r.slot)?.entity ?? "deleted";
-    const row = {
-      id: r.id,
-      entity,
-      sequence: this.nextSequence(),
-      data: JSON.stringify(r),
-    };
-    if (this.ctx.db.receipt.id.find(r.id)) this.ctx.db.receipt.id.update(row);
-    else this.ctx.db.receipt.insert(row);
-    // Terminal deliveries have been removed; retaining a bounded diagnostic window
-    // cannot cause them to reappear. Active receipts survive the dispatch batch.
-    const records = [...this.ctx.db.receipt.entity.filter(entity)].sort(
-      (a, b) => a.sequence - b.sequence,
-    );
-    for (const old of records.slice(0, Math.max(0, records.length - 256)))
-      this.ctx.db.receipt.id.delete(old.id);
-  }
-  timers(id: string) {
-    return [...this.ctx.db.timer.slot.filter(id)].map(
-      (r) => JSON.parse(r.data) as Timer,
-    );
-  }
-  dueTimers(_now: number, _limit: number): Timer[] {
-    throw Error("Use entity-scoped scheduler.");
-  }
-  putTimer(t: Timer) {
-    const r = {
-      id: t.id,
-      entity: t.entity,
-      slot: t.slot,
-      due: t.due,
-      data: JSON.stringify(t),
-    };
-    if (this.ctx.db.timer.id.find(r.id)) this.ctx.db.timer.id.update(r);
-    else this.ctx.db.timer.insert(r);
-    this.touched.add(t.entity);
-  }
-  removeTimer(id: string) {
-    const r = this.ctx.db.timer.id.find(id);
-    if (r) this.touched.add(r.entity);
-    this.ctx.db.timer.id.delete(id);
-  }
-  nextSequence() {
-    const row = this.ctx.db.counter.key.find("sequence")!;
-    const value = row.value + 1;
-    if (!Number.isSafeInteger(value)) throw Error("Sequence exhausted.");
-    this.ctx.db.counter.key.update({ ...row, value });
-    return value;
-  }
-  schedule() {
-    for (const id of this.touched) {
-      const pending = this.pending(id).length > 0,
-        timers = [...this.ctx.db.timer.entity.filter(id)];
-      const due = pending
-        ? now(this.ctx) + 0.01
-        : Math.min(
-            ...timers.map((t) => t.due),
-            ...this.operations(id).map(operationDeadline),
-          );
-      const old = this.ctx.db.wake.entity.find(id);
-      if (old) this.ctx.db.wake.scheduledId.delete(old.scheduledId);
-      if (Number.isFinite(due))
-        this.ctx.db.wake.insert({
-          scheduledId: 0n,
-          entity: id,
-          scheduledAt: ScheduleAt.time(
-            BigInt(Math.round(Math.max(now(this.ctx) + 0.01, due) * 1e6)),
-          ),
-        });
-    }
   }
 }
 function registry(ctx: Ctx) {
@@ -356,12 +70,12 @@ function registry(ctx: Ctx) {
     install: (pkg) => new WorldRuntime(store, now(ctx)).register(pkg),
   });
 }
-function requireInstall(ctx: Ctx, hash: string) {
+function requireInstall(ctx: Ctx, hash: string, community: string) {
   const row = [...ctx.db.packageRevision.hash.filter(hash)][0];
   if (!row) throw Error("Package unavailable.");
   const revision = JSON.parse(row.data) as Revision;
   registry(ctx).get(
-    { id: ctx.sender.toHexString(), community: "development" },
+    { id: requireBuilder(ctx, community).identity, community },
     revision.id,
     revision.version,
     true,
@@ -370,14 +84,165 @@ function requireInstall(ctx: Ctx, hash: string) {
 export const init = db.init((ctx) => {
   ctx.db.authority.insert({ key: "operator", identity: ctx.sender });
   ctx.db.counter.insert({ key: "sequence", value: 0 });
+  ctx.db.community.insert({
+    id: "development",
+    name: "Isolated runtime development",
+  });
 });
-export const publishPackage = db.reducer(
-  { bundle: t.string(), visibility: t.string() },
+export const createProperty = db.reducer(
+  { id: t.string(), community: t.string(), common: t.bool() },
   (ctx, a) => {
     requireOperator(ctx);
     checked(() => {
+      identifier(a.id);
+      if (!ctx.db.community.id.find(a.community))
+        ctx.db.community.insert({ id: a.community, name: a.community });
+      ctx.db.propertyAuthority.insert({
+        id: a.id,
+        community: a.community,
+        owner: ctx.sender,
+        common: a.common,
+        revision: 1,
+      });
+    });
+  },
+);
+export const setCommunityGateway = db.reducer(
+  { identity: t.identity() },
+  (ctx, a) => {
+    requireOperator(ctx);
+    const row = { key: "gateway", identity: a.identity };
+    if (ctx.db.authority.key.find("gateway")) ctx.db.authority.key.update(row);
+    else ctx.db.authority.insert(row);
+  },
+);
+export const provisionCommunity = db.reducer(
+  {
+    communityId: t.string(),
+    name: t.string(),
+    admin: t.identity(),
+    discordUserId: t.string(),
+  },
+  (ctx, a) => {
+    requireGateway(ctx);
+    if (
+      !/^[0-9]{1,24}$/.test(a.communityId) ||
+      !/^[0-9]{1,24}$/.test(a.discordUserId) ||
+      a.name.length > 80
+    )
+      throw new SenderError("Invalid community.");
+    if (ctx.db.community.id.find(a.communityId))
+      throw new SenderError("Community already exists.");
+    ctx.db.community.insert({ id: a.communityId, name: a.name });
+    ctx.db.propertyAuthority.insert({
+      id: `common:${a.communityId}`,
+      community: a.communityId,
+      owner: a.admin,
+      common: true,
+      revision: 1,
+    });
+    ctx.db.membership.insert({
+      key: memberKey(a.communityId, a.admin.toHexString()),
+      community: a.communityId,
+      identity: a.admin,
+      discordUserId: a.discordUserId,
+      active: true,
+      admin: true,
+      validUntil: now(ctx) + 180,
+    });
+  },
+);
+export const setCommunityMember = db.reducer(
+  {
+    communityId: t.string(),
+    identity: t.identity(),
+    discordUserId: t.string(),
+    admin: t.bool(),
+    active: t.bool(),
+  },
+  (ctx, a) => {
+    requireGateway(ctx);
+    if (
+      !ctx.db.community.id.find(a.communityId) ||
+      !/^[0-9]{1,24}$/.test(a.discordUserId)
+    )
+      throw new SenderError("Invalid membership.");
+    const key = memberKey(a.communityId, a.identity.toHexString()),
+      old = ctx.db.membership.key.find(key);
+    if (old && old.discordUserId !== a.discordUserId)
+      throw new SenderError("Identity already bound.");
+    if (
+      [...ctx.db.membership.community.filter(a.communityId)].some(
+        (m) =>
+          m.discordUserId === a.discordUserId && !m.identity.equals(a.identity),
+      )
+    )
+      throw new SenderError("Discord member already has an identity.");
+    const row = {
+      key,
+      community: a.communityId,
+      identity: a.identity,
+      discordUserId: a.discordUserId,
+      active: a.active,
+      admin: a.admin,
+      validUntil: now(ctx) + 180,
+    };
+    if (old) ctx.db.membership.key.update(row);
+    else ctx.db.membership.insert(row);
+  },
+);
+export const authorizeCommunityAgent = db.reducer(
+  { communityId: t.string(), agent: t.identity(), commonSpace: t.bool() },
+  (ctx, a) => {
+    const actor = ctx.sender.toHexString(),
+      member = ctx.db.membership.key.find(memberKey(a.communityId, actor));
+    if (
+      !member?.active ||
+      member.validUntil <= now(ctx) ||
+      a.agent.equals(ctx.sender) ||
+      (a.commonSpace && !member.admin)
+    )
+      throw new SenderError("Agent delegation denied.");
+    const key = memberKey(a.communityId, a.agent.toHexString()),
+      old = ctx.db.builderGrant.key.find(key);
+    if (old && !old.owner.equals(ctx.sender))
+      throw new SenderError("Agent already paired.");
+    const row = {
+      key,
+      community: a.communityId,
+      agent: a.agent,
+      owner: ctx.sender,
+      commonSpace: a.commonSpace,
+    };
+    if (old) ctx.db.builderGrant.key.update(row);
+    else ctx.db.builderGrant.insert(row);
+  },
+);
+export const revokeCommunityAgent = db.reducer(
+  { communityId: t.string(), agent: t.identity() },
+  (ctx, a) => {
+    const member = ctx.db.membership.key.find(
+        memberKey(a.communityId, ctx.sender.toHexString()),
+      ),
+      key = memberKey(a.communityId, a.agent.toHexString()),
+      grant = ctx.db.builderGrant.key.find(key);
+    if (
+      !member?.active ||
+      member.validUntil <= now(ctx) ||
+      !grant ||
+      (!grant.owner.equals(ctx.sender) && !member.admin)
+    )
+      throw new SenderError("Agent revocation denied.");
+    ctx.db.builderGrant.key.delete(key);
+  },
+);
+export const publishPackage = db.reducer(
+  { bundle: t.string(), visibility: t.string(), community: t.string() },
+  (ctx, a) => {
+    checked(() => {
+      const principal = requireBuilder(ctx, a.community);
       registry(ctx).publish(
-        { id: ctx.sender.toHexString(), community: "development" },
+        { id: principal.identity, community: a.community },
         input<Bundle>(a.bundle),
         a.visibility as RegistryEntry["visibility"],
       );
@@ -392,14 +257,14 @@ export const createEntity = db.reducer(
     components: t.string(),
   },
   (ctx, a) => {
-    requireOperator(ctx);
     checked(() => {
+      const { property } = requirePropertyEdit(ctx, a.property);
       identifier(a.property);
       identifier(a.room);
       new WorldRuntime(new TableStore(ctx), now(ctx)).create({
         id: a.id,
-        community: "development",
-        owner: ctx.sender.toHexString(),
+        community: property.community,
+        owner: property.owner.toHexString(),
         property: a.property,
         room: a.room,
         generation: 1,
@@ -419,16 +284,17 @@ export const attachBehavior = db.reducer(
     config: t.string(),
   },
   (ctx, a) => {
-    requireOperator(ctx);
     checked(() => {
-      requireInstall(ctx, a.hash);
+      const { property } = requireEntityEdit(ctx, a.entity);
+      requireInstall(ctx, a.hash, property.community);
       const store = new TableStore(ctx);
-      new WorldRuntime(store, now(ctx)).attach(
+      const slot = new WorldRuntime(store, now(ctx)).attach(
         a.entity,
         a.slot,
         a.hash,
         copyValue(input(a.config)) as RecordValue,
       );
+      grantInstalled(ctx, slot, property.id, a.hash);
       store.schedule();
     });
   },
@@ -450,7 +316,7 @@ export const invokeAction = db.reducer(
   },
 );
 export const suspendBehavior = db.reducer({ slot: t.string() }, (ctx, a) => {
-  requireOperator(ctx);
+  requireSlotEdit(ctx, a.slot);
   checked(() => {
     const store = new TableStore(ctx);
     new WorldRuntime(store, now(ctx)).suspend(a.slot);
@@ -458,7 +324,7 @@ export const suspendBehavior = db.reducer({ slot: t.string() }, (ctx, a) => {
   });
 });
 export const resumeBehavior = db.reducer({ slot: t.string() }, (ctx, a) => {
-  requireOperator(ctx);
+  requireSlotEdit(ctx, a.slot);
   checked(() => {
     const store = new TableStore(ctx);
     new WorldRuntime(store, now(ctx)).resume(a.slot);
@@ -468,15 +334,16 @@ export const resumeBehavior = db.reducer({ slot: t.string() }, (ctx, a) => {
 export const upgradeBehavior = db.reducer(
   { slot: t.string(), hash: t.string(), config: t.string() },
   (ctx, a) => {
-    requireOperator(ctx);
     checked(() => {
-      requireInstall(ctx, a.hash);
+      const { property } = requireSlotEdit(ctx, a.slot);
+      requireInstall(ctx, a.hash, property.community);
       const store = new TableStore(ctx);
       new WorldRuntime(store, now(ctx)).upgrade(
         a.slot,
         a.hash,
         input(a.config),
       );
+      grantInstalled(ctx, a.slot, property.id, a.hash);
       store.schedule();
     });
   },
@@ -529,7 +396,7 @@ export const inspectEntity = db.procedure(
   t.string(),
   (ctx, a) =>
     ctx.withTx((tx) => {
-      requireOperator(tx);
+      requireEntityEdit(tx, a.id);
       const e = tx.db.entity.id.find(a.id);
       if (!e) return "null";
       return JSON.stringify({
@@ -542,5 +409,20 @@ export const inspectEntity = db.procedure(
         ),
         pending: [...tx.db.inbox.entity.filter(a.id)].length,
       });
+    }),
+);
+export const getPackage = db.procedure(
+  { community: t.string(), id: t.string(), version: t.string() },
+  t.string(),
+  (ctx, a) =>
+    ctx.withTx((tx) => {
+      const principal = requireBuilder(tx, a.community);
+      return JSON.stringify(
+        registry(tx).get(
+          { id: principal.identity, community: a.community },
+          a.id,
+          a.version,
+        ),
+      );
     }),
 );
