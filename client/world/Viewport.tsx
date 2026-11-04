@@ -1072,17 +1072,23 @@ export function Viewport(props: Props) {
           bubble.element.replaceChildren();
           for (const m of recent) {
             const line = document.createElement("p");
-            const name = document.createElement("strong");
-            name.textContent =
-              m.speaker +
-              (m.scripted ? " (object)" : "") +
-              (m.kind === "tell" ? " (to you)" : "");
-            line.append(
-              name,
-              document.createTextNode(
-                (m.kind === "emote" ? " " : ": ") + m.message,
-              ),
-            );
+            line.setAttribute("aria-label", `${m.speaker}: ${m.message}`);
+            if (m.scripted) {
+              const name = document.createElement("strong");
+              name.textContent =
+                m.speaker +
+                " (object)" +
+                (m.kind === "tell" ? " (to you)" : "");
+              line.append(
+                name,
+                document.createTextNode(
+                  (m.kind === "emote" ? " " : ": ") + m.message,
+                ),
+              );
+            } else {
+              line.textContent =
+                (m.kind === "tell" ? "(to you) " : "") + m.message;
+            }
             if (m.kind === "emote") line.className = "speech-emote";
             bubble.element.appendChild(line);
           }
