@@ -70,3 +70,31 @@ test("top-level var declarations initialize under the sandbox and reset per even
     /budget/,
   );
 });
+
+test("structured views and nested motion stay inside the interpreter boundary", () => {
+  const calls: unknown[] = [];
+  executeScript(
+    'function on_view_enter(ctx,name,entity){ctx.subscribe("v",{frame:"room",box:{center:[0,0,0],size:[2,2]},include:["player"]});if(ctx.view("v").length===1)ctx.motion.pause();ctx.say(entity.id);}',
+    "on_view_enter",
+    {
+      subscribe: (...args) => calls.push(args),
+      view: () => [{ id: "player-1", kind: "player", tags: [] }],
+      "motion.pause": () => {
+        calls.push("pause");
+      },
+      say: (s) => calls.push(s),
+    },
+    ["v", { id: "player-1" }],
+  );
+  assert.equal(calls[1], "pause");
+  assert.equal(calls[2], "player-1");
+  assert.throws(
+    () =>
+      executeScript(
+        'function on_use(ctx){var a={};a.self=a;ctx.subscribe("v",a);}',
+        "on_use",
+        { subscribe: () => {} },
+      ),
+    /budget/,
+  );
+});

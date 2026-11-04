@@ -1,3 +1,7 @@
+import {
+  propTrajectory,
+  type MotionState,
+} from "../../shared/intelligent-objects";
 import { samplePropMotion } from "../../shared/scene-features";
 import { surfaceMaterial } from "./materials";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -63,6 +67,7 @@ type WorldSpeech = {
   createdAt: number;
 };
 type Props = {
+  objectMotion?: Record<string, MotionState>;
   signTexts?: Record<string, string>;
   speech?: WorldSpeech[];
   onObject?: (id: string) => void;
@@ -262,8 +267,8 @@ export function Viewport(props: Props) {
       for (const b of room.models[o.model].boxes) addBox(g, b, o.id);
       scene.add(g);
       objects.set(o.id, g);
-      if (o.wall) {
-        walls.push(g);
+      if (o.wall || o.motion || o.objectId) {
+        if (o.wall) walls.push(g);
         g.traverse((c) => {
           if (c instanceof THREE.Mesh) {
             const original = c.material as THREE.MeshStandardMaterial;
@@ -273,7 +278,8 @@ export function Viewport(props: Props) {
             c.material.transparent = true;
           }
         });
-      } else pickables.push(g);
+      }
+      if (!o.wall) pickables.push(g);
     }
     function rig(def: Character) {
       const root = new THREE.Group(),
@@ -534,7 +540,14 @@ export function Viewport(props: Props) {
         (-(e.clientY - rect.top) / rect.height) * 2 + 1,
       );
       raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(pickables, true)[0];
+      const hit = raycaster.intersectObjects(pickables, true).find((hit) => {
+        let node: THREE.Object3D | null = hit.object;
+        while (node) {
+          if (!node.visible) return false;
+          node = node.parent;
+        }
+        return true;
+      });
       if (!hit) return;
       if (hit.object.userData.scriptObjectId) {
         callbacks.current.onObject?.(hit.object.userData.scriptObjectId);
@@ -712,6 +725,7 @@ export function Viewport(props: Props) {
           id,
           position: g.position.toArray(),
           yaw: g.rotation.y,
+          visible: g.visible,
         })),
         walls: walls.map((g) => ({
           position: g.position.toArray(),
@@ -790,16 +804,38 @@ export function Viewport(props: Props) {
       const dt = Math.min(frameDelta, 0.05);
       previous = now;
       elapsed = props.preview ? props.preview.time : elapsed + dt;
-      for (const prop of room.objects)
-        if (prop.motion) {
-          const sampled = samplePropMotion(
-            prop,
-            props.preview ? props.preview.time : serverNow() / 1000,
-          );
-          const group = objects.get(prop.id)!;
-          group.position.fromArray(sampled.position);
-          group.rotation.y = THREE.MathUtils.degToRad(sampled.yaw);
-        }
+      for (const prop of room.objects) {
+        const state = prop.objectId
+          ? callbacks.current.objectMotion?.[prop.objectId]
+          : undefined;
+        if (!prop.motion && !state) continue;
+        const sampled = state
+          ? propTrajectory(prop, state, serverNow() / 1000)
+          : samplePropMotion(
+              prop,
+              props.preview ? props.preview.time : serverNow() / 1000,
+            );
+        const group = objects.get(prop.id)!;
+        group.position.fromArray(sampled.position);
+        group.rotation.y = THREE.MathUtils.degToRad(sampled.yaw);
+        const outside = Math.max(
+          Math.abs(sampled.position[0]) - room.width / 2,
+          Math.abs(sampled.position[2]) - room.depth / 2,
+          0,
+        );
+        const fade = prop.motion ? Math.max(0, 1 - outside / 2) : 1;
+        group.visible = (state?.visible ?? true) && fade > 0;
+        group.traverse((c) => {
+          if (c instanceof THREE.Mesh) {
+            const material = c.material as THREE.MeshStandardMaterial;
+            if (c.userData.baseOpacity === undefined)
+              c.userData.baseOpacity = material.opacity;
+            material.opacity = c.userData.baseOpacity * fade;
+            material.transparent = true;
+            material.depthWrite = material.opacity > 0.8;
+          }
+        });
+      }
       signs.forEach((s, i) =>
         s.setText(
           callbacks.current.signTexts?.[room.signs![i].id] ??
@@ -1105,7 +1141,14 @@ export function Viewport(props: Props) {
           -((hoverPointer[1] - rect.top) / rect.height) * 2 + 1,
         );
         raycaster.setFromCamera(pointer, camera);
-        const hit = raycaster.intersectObjects(pickables, true)[0];
+        const hit = raycaster.intersectObjects(pickables, true).find((hit) => {
+          let node: THREE.Object3D | null = hit.object;
+          while (node) {
+            if (!node.visible) return false;
+            node = node.parent;
+          }
+          return true;
+        });
         const id = hit?.object.userData.objectId;
         if (id && callbacks.current.entrances?.[id]) hoveredEntrance = id;
       }

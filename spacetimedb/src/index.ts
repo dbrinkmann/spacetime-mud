@@ -1,3 +1,8 @@
+import {
+  prepareIntelligence,
+  reconcileIntelligence,
+  syncIntelligence,
+} from "./intelligence";
 import { assertAppearanceOnly } from "../../shared/appearance";
 import {
   schema,
@@ -32,6 +37,10 @@ import {
   communityObjectTimer,
   communitySpeech,
   communitySpeechRate,
+  objectMotion,
+  objectViews,
+  intelligenceClock,
+  intelligenceEvent,
 } from "./community-tables";
 import {
   parseDefinition,
@@ -246,6 +255,10 @@ const db = schema({
   communityObjectTimer,
   communitySpeech,
   communitySpeechRate,
+  objectMotion,
+  objectViews,
+  intelligenceClock,
+  intelligenceEvent,
   roomScene,
   avatar,
   visualDraft,
@@ -313,7 +326,7 @@ function placeCommunityCharacter(
   roomId: bigint,
 ) {
   clearCommunitySpeech(ctx, p.key);
-  ctx.db.communityCharacter.key.update({
+  updateCommunityCharacter(ctx, {
     ...p,
     roomId,
     path: JSON.stringify([communityScene(ctx, roomId).spawn]),
@@ -344,7 +357,7 @@ function leaveCommunitySession(ctx: Ctx) {
   const remaining = [...ctx.db.communitySession.characterKey.filter(p.key)];
   if (remaining.length) {
     if (p.controller === s.id.toHexString())
-      ctx.db.communityCharacter.key.update({
+      updateCommunityCharacter(ctx, {
         ...p,
         controller: remaining[0].id.toHexString(),
       });
@@ -352,7 +365,7 @@ function leaveCommunitySession(ctx: Ctx) {
   }
   const lifecycle = p.lifecycle + 1;
   clearCommunitySpeech(ctx, p.key);
-  ctx.db.communityCharacter.key.update({ ...p, controller: "", lifecycle });
+  updateCommunityCharacter(ctx, { ...p, controller: "", lifecycle });
   ctx.db.communityAway.insert({
     scheduledId: 0n,
     scheduledAt: ScheduleAt.time(
@@ -386,7 +399,7 @@ export const beginCommunityAway = db.reducer(
       }
       path.push(...leg);
     }
-    ctx.db.communityCharacter.key.update({
+    updateCommunityCharacter(ctx, {
       ...p,
       roomId: home.entrance,
       away: true,
@@ -441,7 +454,7 @@ function withdrawCommunitySessions(ctx: Ctx, key: string) {
   const p = ctx.db.communityCharacter.key.find(key);
   if (p && !p.away) {
     const lifecycle = p.lifecycle + 1;
-    ctx.db.communityCharacter.key.update({ ...p, controller: "", lifecycle });
+    updateCommunityCharacter(ctx, { ...p, controller: "", lifecycle });
     ctx.db.communityAway.insert({
       scheduledId: 0n,
       characterKey: key,
@@ -715,7 +728,7 @@ export const enterCommunity = db.reducer(
       const now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
       const scene = communityScene(ctx, old.roomId);
       const position = sampleMotion(communityMotionAt(old, now), scene, now);
-      ctx.db.communityCharacter.key.update({
+      updateCommunityCharacter(ctx, {
         ...old,
         controller: ctx.connectionId.toHexString(),
         lifecycle: old.lifecycle + 1,
@@ -743,6 +756,7 @@ export const enterCommunity = db.reducer(
         routine: "[]",
         avatarSource: "",
       });
+    reconcileIntelligence(ctx, old?.roomId ?? c.welcomeRoom, intelligenceRun);
   },
 );
 export const claimHome = db.reducer(
@@ -830,6 +844,9 @@ export const removeCommunityHome = db.reducer(
         deleteCommunityScript(ctx, o.id);
       for (const h of ctx.db.communityRevision.roomId.filter(r.id))
         ctx.db.communityRevision.id.delete(h.id);
+      for (const event of ctx.db.intelligenceEvent.roomId.filter(r.id))
+        ctx.db.intelligenceEvent.scheduledId.delete(event.scheduledId);
+      ctx.db.intelligenceClock.roomId.delete(r.id);
       ctx.db.communityRoom.id.delete(r.id);
     }
     ctx.db.property.id.delete(p.id);
@@ -929,7 +946,7 @@ export const moveCommunityCharacter = db.reducer(
     }
     const path =
       route(scene, start, target) ?? fail("Unreachable destination.");
-    ctx.db.communityCharacter.key.update({
+    updateCommunityCharacter(ctx, {
       ...p,
       path: JSON.stringify([start, ...path]),
       startedAt: ctx.timestamp,
@@ -968,7 +985,7 @@ export const setHomeRoutine = db.reducer(
       if (!route(scene, start, point)) fail("Routine point unreachable.");
       start = point;
     }
-    ctx.db.communityCharacter.key.update({
+    updateCommunityCharacter(ctx, {
       ...p,
       routine: JSON.stringify(points),
     });
@@ -982,7 +999,7 @@ export const publishCommunityAvatar = db.reducer(
       ctx.db.communityCharacter.key.find(communityKey(a.communityId, actor)) ??
       fail("Enter first.");
     const avatar = parseDefinition(a.source, "character");
-    ctx.db.communityCharacter.key.update({
+    updateCommunityCharacter(ctx, {
       ...p,
       avatarSource: JSON.stringify(avatar),
     });
@@ -1061,6 +1078,7 @@ function publishCommunityScene(
     source: canonical,
     revision: r.revision + 1,
   });
+  syncIntelligence(ctx, roomId, intelligenceRun);
   if (appearanceOnly) return; // Appearance edits do not interrupt movement or seating.
   const now = Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
   const oldScene = parseDefinition(r.source, "room");
@@ -1071,7 +1089,7 @@ function publishCommunityScene(
       ? current.position
       : scene.spawn;
     // Cancel paths invalidated by an edit, retaining each valid location.
-    ctx.db.communityCharacter.key.update({
+    updateCommunityCharacter(ctx, {
       ...p,
       path: JSON.stringify([position]),
       startedAt: ctx.timestamp,
@@ -1194,16 +1212,20 @@ function applyCommunityScript(
   o: CommunityScript,
   handler: string,
   actor?: Identity,
+  eventArgs: unknown[] = [],
 ) {
   const player = actor
     ? ctx.db.communityCharacter.key.find(communityKey(o.communityId, actor))
     : undefined;
+  const intelligence = prepareIntelligence(ctx, o.id, handler === "on_start");
   const result = evaluateObject(
     o.source,
     handler,
     o.state,
     actor?.toHexString() ?? "",
     player?.name ?? "",
+    intelligence.api,
+    eventArgs,
   );
   const current = [...ctx.db.communityObjectTimer.objectId.filter(o.id)];
   const names = new Set(current.map((t) => t.event));
@@ -1232,6 +1254,7 @@ function applyCommunityScript(
         event,
       });
   }
+  intelligence.commit();
   for (const m of result.messages)
     emitCommunitySpeech(
       ctx,
@@ -1243,7 +1266,65 @@ function applyCommunityScript(
       m.message,
       m.kind === "tell" ? actor : undefined,
     );
+  reconcileIntelligence(ctx, o.roomId, intelligenceRun);
   return result;
+}
+function intelligenceRun(
+  ctx: Ctx,
+  id: bigint,
+  event: string,
+  args: unknown[] = [],
+) {
+  const o = ctx.db.communityObject.id.find(id);
+  if (!o) return;
+  try {
+    const entity = args[1] as { kind?: string; id?: string } | undefined;
+    const actor =
+      entity?.kind === "player" && entity.id
+        ? ctx.db.communityCharacter.key.find(entity.id)?.identity
+        : undefined;
+    applyCommunityScript(ctx, o, event, actor, args);
+  } catch (error) {
+    const latest = ctx.db.communityObject.id.find(id);
+    if (latest)
+      ctx.db.communityObject.id.update({
+        ...latest,
+        lastError: String(error).slice(0, 1000),
+      });
+  }
+}
+export const tickIntelligence = db.reducer(
+  { onSchedule: intelligenceEvent },
+  { event: intelligenceEvent.rowType },
+  (ctx, { event }) => {
+    if (!ctx.sender.equals(ctx.identity) || ctx.connectionId)
+      fail("Scheduler only.");
+    if (
+      ctx.db.intelligenceClock.roomId.find(event.roomId)?.generation !==
+      event.generation
+    )
+      return;
+    ctx.db.intelligenceEvent.scheduledId.delete(event.scheduledId);
+    reconcileIntelligence(ctx, event.roomId, intelligenceRun, event.at);
+  },
+);
+export const communityObjectMotion = db.view(
+  { name: "community_object_motion", public: true },
+  t.array(objectMotion.rowType),
+  (ctx) =>
+    [...ctx.db.objectMotion.iter()].filter((r) =>
+      communityBuildAccess(ctx, r.communityId, ctx.sender),
+    ),
+);
+function updateCommunityCharacter(
+  ctx: Ctx,
+  row: ReturnType<Ctx["db"]["communityCharacter"]["insert"]>,
+) {
+  const old = ctx.db.communityCharacter.key.find(row.key);
+  ctx.db.communityCharacter.key.update(row);
+  if (old && old.roomId !== row.roomId)
+    reconcileIntelligence(ctx, old.roomId, intelligenceRun);
+  reconcileIntelligence(ctx, row.roomId, intelligenceRun);
 }
 function communityArrival(ctx: Ctx, roomId: bigint, actor: Identity) {
   for (const o of ctx.db.communityObject.roomId.filter(roomId)) {
@@ -1258,6 +1339,8 @@ function communityArrival(ctx: Ctx, roomId: bigint, actor: Identity) {
   }
 }
 function deleteCommunityScript(ctx: Ctx, id: bigint) {
+  ctx.db.objectMotion.objectId.delete(id);
+  ctx.db.objectViews.objectId.delete(id);
   for (const timer of ctx.db.communityObjectTimer.objectId.filter(id))
     ctx.db.communityObjectTimer.scheduledId.delete(timer.scheduledId);
   for (const v of ctx.db.communityObjectRevision.objectId.filter(id))

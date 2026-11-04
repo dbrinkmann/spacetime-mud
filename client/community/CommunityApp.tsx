@@ -1,3 +1,4 @@
+import type { MotionState } from "../../shared/intelligent-objects";
 import { homeSignText } from "../../shared/scene-features";
 import React, { useEffect, useMemo, useState } from "react";
 import { DbConnection } from "../module_bindings";
@@ -40,9 +41,11 @@ const queries = [
   "community_history",
   "my_community_agents",
   "community_objects",
+  "community_object_motion",
   "my_community_speech",
 ].map((t) => `SELECT * FROM ${t}`);
 type Snapshot = {
+  motion: Array<{ objectId: bigint; roomId: bigint; state: string }>;
   communities: Community[];
   rooms: CommunityRoom[];
   characters: CommunityCharacter[];
@@ -54,6 +57,7 @@ type Snapshot = {
   speech: CommunitySpeech[];
 };
 const empty: Snapshot = {
+  motion: [],
   communities: [],
   rooms: [],
   characters: [],
@@ -130,6 +134,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
           agents: [...c.db.myCommunityAgents.iter()],
           objects: [...c.db.communityObjects.iter()],
           speech: [...c.db.myCommunitySpeech.iter()],
+          motion: [...c.db.communityObjectMotion.iter()],
         });
     };
     const c = DbConnection.builder()
@@ -177,6 +182,7 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
       c.db.myCommunityRoles,
       c.db.myCommunityAgents,
       c.db.communityObjects,
+      c.db.communityObjectMotion,
       c.db.myCommunitySpeech,
     ]) {
       t.onInsert(refresh);
@@ -474,6 +480,14 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                           data.properties,
                         ),
                       ]),
+                    )}
+                    objectMotion={Object.fromEntries(
+                      data.motion
+                        .filter((m) => m.roomId === room.id)
+                        .map((m) => [
+                          String(m.objectId),
+                          JSON.parse(m.state) as MotionState,
+                        ]),
                     )}
                     onObject={(id) => {
                       void act(() =>

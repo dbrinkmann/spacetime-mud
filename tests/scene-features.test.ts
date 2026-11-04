@@ -76,7 +76,7 @@ test("authoring validates materials, moving-prop restrictions and sign reference
   scene.objects.at(-1)!.collision = [1, 2];
   assert.throws(
     () => parseDefinition(JSON.stringify(scene), "room"),
-    /decorative/,
+    /cannot have collision/,
   );
   delete scene.objects.at(-1)!.collision;
   scene.objects.at(-1)!.motion!.points[0] = [100, 0, 0];

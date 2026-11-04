@@ -105,6 +105,7 @@ import CommunityCharactersRow from "./community_characters_table";
 import CommunityExitsRow from "./community_exits_table";
 import CommunityHistoryRow from "./community_history_table";
 import CommunityObjectHistoryRow from "./community_object_history_table";
+import CommunityObjectMotionRow from "./community_object_motion_table";
 import CommunityObjectScriptsRow from "./community_object_scripts_table";
 import CommunityObjectsRow from "./community_objects_table";
 import CommunityPropertiesRow from "./community_properties_table";
@@ -181,6 +182,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, CommunityObjectHistoryRow),
+  communityObjectMotion: __table({
+    name: 'community_object_motion',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, CommunityObjectMotionRow),
   communityObjectScripts: __table({
     name: 'community_object_scripts',
     indexes: [

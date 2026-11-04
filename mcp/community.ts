@@ -66,6 +66,7 @@ const connected = new Promise<DbConnection>((resolve, reject) => {
             "community_characters",
             "community_history",
             "community_objects",
+            "community_object_motion",
             "community_object_scripts",
             "community_object_history",
           ].map((n) => `SELECT * FROM ${n}`),
@@ -170,6 +171,9 @@ function inspect(c: DbConnection, guild: string, roomId?: string) {
             ),
           }))
       : [],
+    object_motion: [...c.db.communityObjectMotion.iter()]
+      .filter((m) => m.roomId === selected)
+      .map((m) => ({ ...m, state: JSON.parse(m.state) })),
     exits: [...c.db.communityExits.iter()].filter(
       (e) => e.communityId === guild,
     ),
@@ -297,7 +301,7 @@ server.registerTool(
   },
   guard(async () => ({
     workflow:
-      "Call world_connect; player pairs inside Discord Create. Call world_inspect with community_id. Editable common properties require an admin grant; home properties belong to the paired member. Read current scene/revision before editing. Validate then publish directly; there is no review queue. Do not call legacy zone tools. Do not request player tokens, Discord secrets or model credentials. Scripted objects may link to static props/NPCs using objectId. Decorative moving props use motion and cannot have scripts or collision. Boxes support material, roughness and wear; signs support homeName bindings. Rooms use named links and no exclusive grid coordinates. Preserve existing room geometry and placements unless the requested change replaces them. Self avatar names come from the character, not the asset name.",
+      "Call world_connect; player pairs inside Discord Create. Call world_inspect with community_id. Editable common properties require an admin grant; home properties belong to the paired member. Read current scene/revision before editing. Validate then publish directly; there is no review queue. Do not call legacy zone tools. Do not request player tokens, Discord secrets or model credentials. Scripted objects may link to static props/NPCs using objectId. Moving props support motion plus objectId for server-controlled motion and view subscriptions; collision and seats remain unsupported. Boxes support material, roughness and wear; signs support homeName bindings. Rooms use named links and no exclusive grid coordinates. Preserve existing room geometry and placements unless the requested change replaces them. Self avatar names come from the character, not the asset name.",
     contract:
       typeof COMMUNITY_AUTHORING === "undefined"
         ? readFileSync(

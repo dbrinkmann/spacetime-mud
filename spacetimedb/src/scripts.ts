@@ -16,7 +16,8 @@ Interpreter.Object.prototype.valueOf = function () {
 };
 
 export type Scalar = string | number | boolean | null;
-export type ScriptApi = Record<string, (...args: Scalar[]) => Scalar | void>;
+// Native values cross only this adapter; structured calls have separate bounded conversion.
+export type ScriptApi = Record<string, (...args: any[]) => any>;
 const forbidden = new Set([
   "__proto__",
   "prototype",
@@ -30,7 +31,12 @@ function bounded(value: unknown) {
   if (typeof value === "number" && !Number.isFinite(value))
     throw Error("Script numbers must be finite.");
 }
-export function executeScript(source: string, handler: string, api: ScriptApi) {
+export function executeScript(
+  source: string,
+  handler: string,
+  api: ScriptApi,
+  eventArgs: unknown[] = [],
+) {
   if (source.length > 16000)
     throw Error("Script source limit (16000) exceeded.");
   if (!/^on_[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(handler))
@@ -42,7 +48,9 @@ export function executeScript(source: string, handler: string, api: ScriptApi) {
     handler +
     ' === "function") ' +
     handler +
-    "(ctx);";
+    "(ctx" +
+    eventArgs.map((a) => "," + JSON.stringify(a)).join("") +
+    ");";
   const ast = Interpreter.prototype.parse_(program, "object");
   let nodes = 0;
   function inspect(node: any, depth = 0) {
@@ -106,14 +114,41 @@ export function executeScript(source: string, handler: string, api: ScriptApi) {
   }
   const context = vm.createObjectProto(null);
   let effects = 0;
+  function structured(value: any, depth = 0, budget = { nodes: 0 }): any {
+    if (++budget.nodes > 512 || depth > 8)
+      throw Error("Structured API value budget exceeded.");
+    if (value === null || typeof value !== "object") {
+      bounded(value);
+      return value;
+    }
+    if (value.nativeFunc || value.node || value.asyncFunc)
+      throw Error("API values cannot contain functions.");
+    const result: any = value.class === "Array" ? [] : Object.create(null);
+    for (const key of Object.keys(value.properties ?? {})) {
+      if (forbidden.has(key)) throw Error("Reserved API property.");
+      if (key === "length" && Array.isArray(result)) continue;
+      result[key] = structured(value.properties[key], depth + 1, budget);
+    }
+    return result;
+  }
   for (const [name, fn] of Object.entries(api)) {
+    const path = name.split(".");
+    let parent = context;
+    for (const part of path.slice(0, -1)) {
+      if (!parent.properties[part])
+        vm.setProperty(parent, part, vm.createObjectProto(null));
+      parent = parent.properties[part];
+    }
     vm.setProperty(
-      context,
-      name,
+      parent,
+      path[path.length - 1],
       vm.createNativeFunction((...args: unknown[]) => {
         if (++effects > 64) throw Error("Game API call limit (64) exceeded.");
+        const acceptsStructured = name === "subscribe";
+        if (acceptsStructured) args = args.map((a) => structured(a));
         for (const value of args) {
           if (
+            !acceptsStructured &&
             value !== null &&
             !["string", "number", "boolean", "undefined"].includes(typeof value)
           )
@@ -122,7 +157,7 @@ export function executeScript(source: string, handler: string, api: ScriptApi) {
         }
         const result = fn(...(args as Scalar[]));
         bounded(result);
-        return result;
+        return name === "view" ? vm.nativeToPseudo(result) : result;
       }),
     );
   }

@@ -202,6 +202,45 @@ try {
     "zoom must magnify without resizing source",
   );
   await page.screenshot({ path: "test-results/art-style-closeup.png" });
+  const offscreen = neon.objects.find((o) => o.id === "car")!;
+  offscreen.motion = {
+    points: [
+      [-35, 0, 0],
+      [35, 0, 0],
+    ],
+    speed: 2,
+    mode: "once",
+  };
+  await page.evaluate(
+    async (source) => window.renderLanternPreview!({ source, time: 0 }),
+    JSON.stringify(neon),
+  );
+  assert.equal(
+    await page.evaluate(
+      () =>
+        (
+          window.boxWorld!.inspect() as {
+            props: Array<{ id: string; visible: boolean }>;
+          }
+        ).props.find((p) => p.id === "car")!.visible,
+    ),
+    false,
+  );
+  await page.evaluate(
+    async (source) => window.renderLanternPreview!({ source, time: 15 }),
+    JSON.stringify(neon),
+  );
+  assert.equal(
+    await page.evaluate(
+      () =>
+        (
+          window.boxWorld!.inspect() as {
+            props: Array<{ id: string; visible: boolean }>;
+          }
+        ).props.find((p) => p.id === "car")!.visible,
+    ),
+    true,
+  );
   console.log(JSON.stringify(errors));
   if (errors.length) throw Error("Rendering errors");
 } finally {

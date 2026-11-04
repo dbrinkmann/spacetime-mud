@@ -153,6 +153,9 @@ export const CommunityObjectInfo = __t.object("CommunityObjectInfo", {
 });
 export type CommunityObjectInfo = __Infer<typeof CommunityObjectInfo>;
 
+export const CommunityObjectMotion = __t.object("CommunityObjectMotion", {});
+export type CommunityObjectMotion = __Infer<typeof CommunityObjectMotion>;
+
 export const CommunityObjectRevision = __t.object("CommunityObjectRevision", {
   id: __t.u64(),
   objectId: __t.u64(),
@@ -275,6 +278,21 @@ export const Inbox = __t.object("Inbox", {
 });
 export type Inbox = __Infer<typeof Inbox>;
 
+export const IntelligenceClock = __t.object("IntelligenceClock", {
+  roomId: __t.u64(),
+  generation: __t.u64(),
+});
+export type IntelligenceClock = __Infer<typeof IntelligenceClock>;
+
+export const IntelligenceEvent = __t.object("IntelligenceEvent", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  roomId: __t.u64(),
+  generation: __t.u64(),
+  at: __t.f64(),
+});
+export type IntelligenceEvent = __Infer<typeof IntelligenceEvent>;
+
 export const Inventory = __t.object("Inventory", {
   key: __t.string(),
   owner: __t.identity(),
@@ -355,6 +373,24 @@ export const Object = __t.object("Object", {
   active: __t.bool(),
 });
 export type Object = __Infer<typeof Object>;
+
+export const ObjectMotion = __t.object("ObjectMotion", {
+  objectId: __t.u64(),
+  roomId: __t.u64(),
+  communityId: __t.string(),
+  placementId: __t.string(),
+  definition: __t.string(),
+  state: __t.string(),
+});
+export type ObjectMotion = __Infer<typeof ObjectMotion>;
+
+export const ObjectViews = __t.object("ObjectViews", {
+  objectId: __t.u64(),
+  roomId: __t.u64(),
+  definitions: __t.string(),
+  members: __t.string(),
+});
+export type ObjectViews = __Infer<typeof ObjectViews>;
 
 export const Player = __t.object("Player", {
   identity: __t.identity(),

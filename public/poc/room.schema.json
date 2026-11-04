@@ -302,7 +302,8 @@
               "mode": {
                 "enum": [
                   "loop",
-                  "pingpong"
+                  "pingpong",
+                  "once"
                 ]
               },
               "offset": {
@@ -310,6 +311,14 @@
                 "minimum": 0,
                 "maximum": 3600
               }
+            }
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,39}$"
             }
           }
         },

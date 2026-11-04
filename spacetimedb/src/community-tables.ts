@@ -189,3 +189,42 @@ export const communitySpeechRate = table(
   {},
   { key: t.string().primaryKey(), at: t.timestamp() },
 );
+export const objectMotion = table(
+  {},
+  {
+    objectId: t.u64().primaryKey(),
+    roomId: t.u64().index("btree"),
+    communityId: t.string(),
+    placementId: t.string(),
+    definition: t.string(),
+    state: t.string(),
+  },
+);
+export const objectViews = table(
+  {},
+  {
+    objectId: t.u64().primaryKey(),
+    roomId: t.u64().index("btree"),
+    definitions: t.string(),
+    members: t.string(),
+  },
+);
+export const intelligenceClock = table(
+  {},
+  {
+    roomId: t.u64().primaryKey(),
+    generation: t.u64(),
+    window: t.f64().default(0),
+    ticks: t.u32().default(0),
+  },
+);
+export const intelligenceEvent = table(
+  {},
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    scheduledAt: t.scheduleAt(),
+    roomId: t.u64().index("btree"),
+    generation: t.u64(),
+    at: t.f64(),
+  },
+);

@@ -7,12 +7,25 @@ export function samplePropMotion(prop: Placement, seconds: number) {
   const sequence =
     motion.mode === "loop"
       ? [...points, points[0]]
-      : [...points, ...points.slice(0, -1).reverse()];
+      : motion.mode === "once"
+        ? points
+        : [...points, ...points.slice(0, -1).reverse()];
   const lengths = sequence
     .slice(1)
     .map((p, i) => Math.hypot(...p.map((v, j) => v - sequence[i][j])));
   const total = lengths.reduce((a, b) => a + b, 0);
   if (!total) return { position: points[0], yaw: prop.yaw };
+  if (
+    motion.mode === "once" &&
+    (seconds + (motion.offset ?? 0)) * motion.speed >= total
+  ) {
+    const a = points[points.length - 2],
+      b = points[points.length - 1];
+    return {
+      position: b,
+      yaw: (Math.atan2(b[0] - a[0], b[2] - a[2]) * 180) / Math.PI,
+    };
+  }
   let distance =
     ((((seconds + (motion.offset ?? 0)) * motion.speed) % total) + total) %
     total;

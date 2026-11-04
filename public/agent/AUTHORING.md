@@ -132,7 +132,7 @@ Box `material` is optional: `plain` (default), `asphalt`, `concrete`, `metal`, `
 
 Example road box: `{"position":[0,0.02,0],"size":[8,0.04,20],"color":"#292d31","material":"asphalt"}`. Keep road markings `plain`. Use `metal` for car body panels, `glass` for windows, `fabric` for seats. Preview the lit result rather than relying on hex swatches.
 
-Decorative placements may include `motion`: `{"points":[[-4,0,0],[4,0,0]],"speed":2,"mode":"pingpong","offset":0}`. Points are offsets in the placement's local coordinates, transformed by its position and yaw. Models face +Z; runtime yaw follows the current path segment. Speed is meters/second (0.1..20). `loop` connects the last point back to the first, so author the entire return lane; `pingpong` reverses at the endpoints. Corners turn immediately; use extra waypoints for rounded routes. There are 2..24 points, all within the room; offset is seconds (0..3600) for staggering traffic. These props cannot have collision, seats, home entrances, exits, scripts, or cutaway walls. They do not carry players or run AI. Shared server time drives motion without reducers/timers per frame. `world_preview.time` samples the same path at a chosen time; it does not represent the current live phase. Inspect at multiple times before publishing.
+Decorative placements may include `motion`: `{"points":[[-4,0,0],[4,0,0]],"speed":2,"mode":"pingpong","offset":0}`. Points are offsets in the placement's local coordinates, transformed by its position and yaw. Models face +Z; runtime yaw follows the current path segment. Speed is meters/second (0.1..20). `loop` connects the last point back to the first, so author the entire return lane; `pingpong` reverses at the endpoints. Corners turn immediately; use extra waypoints for rounded routes. There are 2..24 points; transformed world X/Z coordinates may extend beyond the floor up to ±50m, with height 0..30m. Props fade over 2m outside the floor rectangle. `once` stops at the final point. Offset is seconds (0..3600) for staggering motion. These props cannot have collision, seats, home entrances, exits, or cutaway walls; they can have an `objectId` for server-controlled behavior. They do not carry players or run AI. Shared server time drives motion without reducers/timers per frame. `world_preview.time` samples the same path at a chosen time; it does not represent the current live phase. Inspect at multiple times before publishing.
 
 Signs may bind their text to a home entrance: `"binding":{"kind":"homeName","entranceSpot":"apartment-door-3"}`. Keep `text` as the vacancy/draft fallback, such as `Available`. The spot must be an authored `homeEntrance` in the same room. The game resolves the destination property's current name and redraws the sign on claim/removal/name changes without republishing. Agents control sign geometry, size, colors and placement; the game controls bound text. `world_preview` resolves names using the inspected room's current community context; standalone previews use the supplied text fallback. Long text automatically shrinks to fit.
 
@@ -151,3 +151,39 @@ Glass is transparent, not an opaque mask: glass in front of emissive geometry ex
 `world_validate` requires `kind:"room"` or `kind:"character"`, plus `source` JSON text. It does not accept community_id or room_id.
 
 For retrofits, call `world_publish_room` with `appearance_only:true`. The server compares against the current `base_revision` and rejects all changes except box `color/material/roughness/wear/emissive` (including NPC character boxes), and room `floorColor/floorMaterial/floorRoughness/floorWear`. Preserve all other data, including array order, model IDs, signs, lights, geometry, scripts, names, descriptions, exits and motion. A successful guarded publish records history but does not stop walking or clear seats. This flag is optional; ordinary publishing remains available for intentional structural edits.
+
+## Intelligent placements
+
+Bind one scripted object to one placement with `objectId`. Optional `tags:["car"]` identify scripted placements to sensors (up to eight tags, each an identifier of at most 40 characters). These capabilities apply to `objects` placements, not six-part `npcs` entries. A stationary prop can be a sensor or control its own visibility. Moving props remain noncolliding: sensing does not provide physics or carry players.
+
+- `ctx.motion.pause()` freezes the current position; `resume()` continues from it.
+- `ctx.motion.restart()` returns to the first waypoint, clears completion and starts moving. It preserves speed and visibility.
+- `ctx.motion.setSpeed(metersPerSecond)` changes speed without jumping (0.1..20).
+- `ctx.motion.progress()` returns 0..1 along the path; looping/pingpong progress resets each complete cycle.
+- `ctx.setVisible(boolean)` changes this placement's visibility. Hidden placements are excluded from other sensors; their own subscriptions remain active. Hiding does not pause motion.
+- `on_motion_end(ctx)` runs once per completion of a `once` path. Call restart to enable another completion.
+- `ctx.randomInt(min,max)` returns a server-deterministic inclusive integer. Use this instead of `Math.random`; bounds must be integers within ±1,000,000.
+
+Declare views in `on_start` using `ctx.subscribe(name, definition)`. Reusing a name replaces its definition. `on_start` also runs when a placement is first bound or its motion definition changes; make initialization idempotent. Script publication replaces subscriptions and cancels existing ordinary script timers. Appearance-only changes preserve motion. A changed motion definition starts a fresh path.
+
+```javascript
+function on_start(ctx) {
+  ctx.subscribe("nearby", {
+    frame: "self",
+    box: { center: [0, 0, 2], size: [3, 3] },
+    include: ["player"]
+  });
+}
+function on_view_enter(ctx, view, entity) {
+  if (view === "nearby") ctx.tell("Welcome, " + ctx.actorName() + "!");
+}
+function on_view_exit(ctx, view, entity) {}
+```
+
+Views are horizontal rectangles: center is `[x,y,z]` (Y is currently ignored), size is `[width,depth]`. `frame:"self"` follows the placement's position and current heading (+Z is forward); `frame:"room"` uses fixed room coordinates. Filters are ORed: `player` includes present player characters, including offline home avatars; `tag:car` includes visible scripted placements tagged car. An object never senses itself. Membership tests entity origins, not model bounds or line of sight. Configure clearances to account for geometry.
+
+`ctx.view(name)` returns current members as `{id,kind,tags}` records; kind is `player` or `object`. Entry and exit handlers receive `(ctx,viewName,entity)`. Player events supply actorId/actorName and private tell; object events have no player actor. Already-present entities generate entries when a subscription becomes active. Position/path changes, pauses, restarts, visibility and room transitions invalidate pending predictions. The scheduler solves linear crossings and waypoints, rounded forward to milliseconds; actual event delivery can be delayed by server load. There is no per-frame reducer polling. Clients, including late joiners, derive positions from persisted motion state and server time. `world_inspect.object_motion` exposes current state to authorized builders.
+
+Limits: four views per object; view centers within ±100 and dimensions 0.1..50; up to eight filters; 128 sensed entities per room; 64 delivered view/completion events per reconciliation and 128 scheduled room events/second. Existing interpreter budgets also apply. A runaway cascade disables the room's views, clears pending intelligence events and reports `lastError`; fix and republish scripts to restore subscriptions. Motion/visibility/subscription changes from a failing handler are discarded. Dry-run `world_test_object` checks API use but does not simulate live membership or motion; `world_preview` shows authored paths at `time`, never live script state.
+
+For respawning props, test occupancy at the **spawn position**, not the previous endpoint: while hidden, restart then pause, query the forward view, and only show/resume when clear. Retrying via `ctx.after` must recheck occupancy. Choose sufficient view depth for geometry and scheduling latency. The builder authors routes, yielding rules, timers and visuals; Lantern supplies the general primitives.

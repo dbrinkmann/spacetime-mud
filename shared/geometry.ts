@@ -55,10 +55,11 @@ export type Seat = { position: Vec3; approach: Vec3; yaw: number };
 export type PropMotion = {
   points: Vec3[];
   speed: number;
-  mode: "loop" | "pingpong";
+  mode: "loop" | "pingpong" | "once";
   offset?: number;
 };
 export type Placement = {
+  tags?: string[];
   motion?: PropMotion;
   id: string;
   name: string;
@@ -296,9 +297,18 @@ export function validate(
           "homeEntrance",
           "exit",
           "motion",
+          "tags",
         ]);
       str(o.id, `${path}.id`, 40);
       str(o.name, `${path}.name`);
+      if (o.tags !== undefined)
+        for (const tag of list(o.tags, `${path}.tags`, 8))
+          if (
+            typeof tag !== "string" ||
+            !/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(tag)
+          )
+            issue(path, "invalid tag");
+
       if (ids.has(String(o.id))) issue(`${path}.id`, "duplicate ID");
       ids.add(String(o.id));
       if (
@@ -335,21 +345,14 @@ export function validate(
         )
           issue(path, "motion path must have length");
         num(motion.speed, `${path}.motion.speed`, 0.1, 20);
-        if (!["loop", "pingpong"].includes(String(motion.mode)))
-          issue(path, "motion mode must be loop or pingpong");
+        if (!["loop", "pingpong", "once"].includes(String(motion.mode)))
+          issue(path, "motion mode must be loop, pingpong or once");
         if (motion.offset !== undefined)
           num(motion.offset, `${path}.motion.offset`, 0, 3600);
-        if (
-          o.collision ||
-          o.seat ||
-          o.objectId ||
-          o.homeEntrance ||
-          o.exit ||
-          o.wall
-        )
+        if (o.collision || o.seat || o.homeEntrance || o.exit || o.wall)
           issue(
             path,
-            "moving props must be decorative, without collision, seats, interactions or cutaway walls",
+            "moving props cannot have collision, seats, entrances, exits or cutaway walls",
           );
       }
       if (
@@ -361,14 +364,14 @@ export function validate(
           if (!Array.isArray(point) || point.length !== 3) continue;
           const p = worldPoint(o as Placement, point);
           if (
-            Math.abs(p[0]) > Number(root.width) / 2 ||
-            Math.abs(p[2]) > Number(root.depth) / 2 ||
+            Math.abs(p[0]) > 50 ||
+            Math.abs(p[2]) > 50 ||
             p[1] < 0 ||
             p[1] > 30
           )
             issue(
               path,
-              "motion path must remain within room bounds and height 0..30",
+              "motion path must remain within world bounds +/-50 and height 0..30",
             );
         }
       }
@@ -415,6 +418,18 @@ export function validate(
         num(seat.yaw, `${path}.seat.yaw`, -360, 360);
       }
     });
+    const boundScripts = new Set<string>();
+    for (const o of (Array.isArray(root.objects)
+      ? root.objects
+      : []) as Obj[]) {
+      if (!o?.objectId) continue;
+      if (boundScripts.has(String(o.objectId)))
+        issue(
+          "objects",
+          "scripted placements require unique objectId bindings",
+        );
+      boundScripts.add(String(o.objectId));
+    }
     list(root.lights, "lights", 6).forEach((v, i) => {
       const p = `lights[${i}]`,
         l = object(v, p, ["position", "color", "intensity"]);
@@ -502,6 +517,8 @@ export function validate(
           !/^[1-9][0-9]{0,19}$/.test(npc.objectId))
       )
         issue(`${p}.objectId`, "expected object ID");
+      if (npc.objectId && boundScripts.has(String(npc.objectId)))
+        issue(`${p}.objectId`, "a placement script cannot also bind to an NPC");
       if (extraIds.has(String(npc.id))) issue(`${p}.id`, "duplicate ID");
       extraIds.add(String(npc.id));
       vector(npc.position, `${p}.position`);
