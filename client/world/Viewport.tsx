@@ -1,3 +1,8 @@
+import { wornMaterial } from "./materials";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { loadSignFont, signMesh } from "./signs";
 import { serverNow } from "./clock";
 import { deadZoneShift } from "./camera";
@@ -97,14 +102,14 @@ export function Viewport(props: Props) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.05;
     container.appendChild(renderer.domElement);
     renderer.domElement.setAttribute("aria-label", "Interactive 3D room");
     renderer.domElement.setAttribute("role", "img");
     const roomScale = Math.max(1, props.room.width / 20, props.room.depth / 20);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#161b20");
-    scene.fog = new THREE.Fog("#161b20", 28 * roomScale, 55 * roomScale);
+    scene.background = new THREE.Color("#11171c");
+    scene.fog = new THREE.Fog("#11171c", 28 * roomScale, 55 * roomScale);
     const camera = new THREE.OrthographicCamera(
       -10,
       10,
@@ -154,8 +159,8 @@ export function Viewport(props: Props) {
       controls.update();
     };
     reset();
-    scene.add(new THREE.HemisphereLight("#cfdef0", "#7d6048", 2));
-    const sun = new THREE.DirectionalLight("#ffe4be", 3.2);
+    scene.add(new THREE.HemisphereLight("#9fb6ce", "#39332f", 1.1));
+    const sun = new THREE.DirectionalLight("#d3deeb", 1.65);
     sun.position.set(2 * roomScale, 10 * roomScale, 6 * roomScale);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -168,7 +173,7 @@ export function Viewport(props: Props) {
     scene.add(sun);
     const { room, character, guest } = props;
     room.lights.forEach((l) => {
-      const light = new THREE.PointLight(l.color, l.intensity, 8, 1.4);
+      const light = new THREE.PointLight(l.color, l.intensity * 1.15, 10, 1.5);
       light.position.fromArray(l.position);
       scene.add(light);
     });
@@ -178,12 +183,7 @@ export function Viewport(props: Props) {
       const key = color + emissive;
       let m = materials.get(key);
       if (!m) {
-        m = new THREE.MeshStandardMaterial({
-          color,
-          roughness: 0.85,
-          emissive: emissive ? color : "#000000",
-          emissiveIntensity: emissive ? 0.9 : 0,
-        });
+        m = wornMaterial(color, emissive);
         materials.set(key, m);
       }
       return m;
@@ -210,20 +210,27 @@ export function Viewport(props: Props) {
       color: room.floorColor,
     });
     floor.userData.floor = true;
-    // Floor seams are runtime surface treatment, not gameplay entities.
-    const seams = new THREE.GridHelper(
-      Math.max(room.width, room.depth),
-      24,
-      "#725b49",
-      "#725b49",
+    // Meter-spaced tile seams rather than a fixed grid stretched to room size.
+    const seamPoints: number[] = [];
+    for (let x = -room.width / 2 + 0.8; x < room.width / 2; x += 0.8)
+      seamPoints.push(x, -0.013, -room.depth / 2, x, -0.013, room.depth / 2);
+    for (let z = -room.depth / 2 + 0.8; z < room.depth / 2; z += 0.8)
+      seamPoints.push(-room.width / 2, -0.013, z, room.width / 2, -0.013, z);
+    const seamGeometry = new THREE.BufferGeometry();
+    seamGeometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(seamPoints, 3),
     );
-    seams.scale.set(
-      room.width / Math.max(room.width, room.depth),
-      1,
-      room.depth / Math.max(room.width, room.depth),
+    scene.add(
+      new THREE.LineSegments(
+        seamGeometry,
+        new THREE.LineBasicMaterial({
+          color: "#171b1e",
+          transparent: true,
+          opacity: 0.3,
+        }),
+      ),
     );
-    seams.position.y = -0.008;
-    scene.add(seams);
     const objects = new Map<string, THREE.Group>(),
       walls: THREE.Group[] = [];
     const pickables: THREE.Object3D[] = [floor];
@@ -238,7 +245,10 @@ export function Viewport(props: Props) {
         walls.push(g);
         g.traverse((c) => {
           if (c instanceof THREE.Mesh) {
-            c.material = (c.material as THREE.MeshStandardMaterial).clone();
+            const original = c.material as THREE.MeshStandardMaterial;
+            c.material = original.clone();
+            c.material.onBeforeCompile = original.onBeforeCompile;
+            c.material.customProgramCacheKey = original.customProgramCacheKey;
             c.material.transparent = true;
           }
         });
@@ -583,6 +593,42 @@ export function Viewport(props: Props) {
           : `${c.action} animation preview.`,
       );
     };
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    composer.renderTarget1.samples = 2;
+    composer.renderTarget2.samples = 2;
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+    // Modest kernel keeps contact shading usable inside the Discord iframe.
+    const occlusion = new SSAOPass(scene, camera, 1, 1, 8);
+    occlusion.ssaoMaterial.defines.PERSPECTIVE_CAMERA = 0;
+    occlusion.kernelRadius = 0.65;
+    occlusion.minDistance = 0.001;
+    occlusion.maxDistance = 0.08;
+    composer.addPass(occlusion);
+    // Cutaway walls must not remain solid occluders in the normal/depth pass.
+    const renderOcclusion = occlusion.render.bind(occlusion);
+    occlusion.render = (...args) => {
+      const faded = walls.filter((g) =>
+        g.children.some(
+          (c) =>
+            c instanceof THREE.Mesh &&
+            (c.material as THREE.MeshStandardMaterial).opacity < 0.5,
+        ),
+      );
+      faded.forEach((g) => {
+        g.visible = false;
+      });
+      try {
+        renderOcclusion(...args);
+      } finally {
+        faded.forEach((g) => {
+          g.visible = true;
+        });
+      }
+    };
+    const output = new OutputPass();
+    composer.addPass(output);
     const size = () => {
       const w = Math.max(1, container.clientWidth),
         h = Math.max(1, container.clientHeight);
@@ -598,6 +644,11 @@ export function Viewport(props: Props) {
       camera.bottom = -span;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      composer.setSize(w, h);
+      occlusion.setSize(
+        Math.max(1, Math.round(w / 2)),
+        Math.max(1, Math.round(h / 2)),
+      );
     };
     const observer = new ResizeObserver(size);
     observer.observe(container);
@@ -701,7 +752,8 @@ export function Viewport(props: Props) {
       }
     };
     renderer.setAnimationLoop((now) => {
-      const dt = Math.min((now - previous) / 1000 || 0.016, 0.05);
+      const frameDelta = Math.min((now - previous) / 1000 || 0.016, 0.25);
+      const dt = Math.min(frameDelta, 0.05);
       previous = now;
       elapsed = props.preview ? props.preview.time : elapsed + dt;
       if (!callbacks.current.live && path.length) {
@@ -812,6 +864,8 @@ export function Viewport(props: Props) {
           props.preview ? 1 : dt,
         );
       animateRig(companion, guestSeat ? "sit" : "idle", elapsed + 0.5, dt);
+      // OrbitControls damping is per-update; normalize it to wall-clock time.
+      controls.dampingFactor = 1 - Math.exp(-6 * frameDelta);
       controls.update();
       if (live) {
         const destination = new THREE.Vector3(
@@ -1009,7 +1063,7 @@ export function Viewport(props: Props) {
           entry.element.style.visibility = "hidden";
       }
       renderer.domElement.style.cursor = hoveredEntrance ? "pointer" : "";
-      renderer.render(scene, camera);
+      composer.render();
     });
     emit();
     return () => {
@@ -1035,6 +1089,10 @@ export function Viewport(props: Props) {
       });
       geometries.forEach((g) => g.dispose());
       mats.forEach((m) => m.dispose());
+      renderPass.dispose();
+      occlusion.dispose();
+      output.dispose();
+      composer.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();

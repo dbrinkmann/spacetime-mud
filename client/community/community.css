@@ -3,9 +3,9 @@
 }
 body {
   margin: 0;
-  background: #111619;
-  color: #e7ddc9;
-  font-family: Georgia, serif;
+  background: #0e1318;
+  color: #d6dce0;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
 }
 .community-app {
   max-width: 1440px;
@@ -28,12 +28,12 @@ body {
 }
 .community-app h3 {
   margin-top: 0;
-  color: #d9b875;
+  color: #d4a577;
 }
 .eyebrow {
   font: 11px monospace;
   letter-spacing: 0.16em;
-  color: #c6a667;
+  color: #a7b2ba;
 }
 .community-app nav {
   display: flex;
@@ -46,17 +46,17 @@ body {
 .community-app select {
   font: inherit;
   color: inherit;
-  border: 1px solid #5c513c;
+  border: 1px solid #39424a;
   border-radius: 5px;
   padding: 10px 14px;
-  background: #202627;
+  background: #1b232a;
 }
 .community-app button {
   cursor: pointer;
 }
 .community-app button:hover {
-  border-color: #d9b875;
-  background: #30312b;
+  border-color: #d4a577;
+  background: #29343e;
 }
 .community-app button:disabled {
   opacity: 0.5;
@@ -64,13 +64,13 @@ body {
 }
 .community-app button:focus-visible,
 .community-app input:focus-visible {
-  outline: 2px solid #d9b875;
+  outline: 2px solid #d4a577;
   outline-offset: 3px;
 }
 .community-app section,
 .community-app form {
-  background: #1b2224;
-  border: 1px solid #343b39;
+  background: #171e24;
+  border: 1px solid #303a43;
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -87,7 +87,7 @@ body {
 }
 .community-scene > p {
   padding: 0 16px;
-  color: #aaad9d;
+  color: #9caab5;
 }
 .community-scene .poc-viewport {
   height: 520px;
@@ -142,9 +142,9 @@ body {
   box-sizing: border-box;
   width: 100%;
   resize: vertical;
-  background: #111619;
-  color: #e7ddc9;
-  border: 1px solid #5c513c;
+  background: #0e1318;
+  color: #d6dce0;
+  border: 1px solid #39424a;
   padding: 14px;
   line-height: 1.5;
   border-radius: 5px;
@@ -234,7 +234,7 @@ body {
   font-size: 14px;
 }
 .community-app button[aria-pressed="true"] {
-  border-color: #d9b875;
+  border-color: #d4a577;
   background: #35382e;
 }
 .community-heading {
@@ -288,8 +288,8 @@ body {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: #1b2224;
-  border: 1px solid #343b39;
+  background: #171e24;
+  border: 1px solid #303a43;
   border-radius: 8px;
   overflow: hidden;
 }
@@ -299,7 +299,7 @@ body {
   gap: 4px;
   flex-wrap: nowrap;
   flex-shrink: 0;
-  border-bottom: 1px solid #343b39;
+  border-bottom: 1px solid #303a43;
 }
 .tool-panel {
   overflow: auto;
@@ -346,7 +346,7 @@ body {
   line-height: 16px;
 }
 .community-app > footer a {
-  color: #aaad9d;
+  color: #9caab5;
 }
 .community-app > .community-create,
 .community-app > section,
@@ -472,10 +472,10 @@ body {
   overflow: auto;
   overscroll-behavior: contain;
   padding: 9px 12px;
-  border: 1px solid #8e8262;
+  border: 1px solid #46535e;
   border-radius: 10px;
   background: #111b20ee;
-  color: #f1e7d2;
+  color: #e1e6e9;
   box-shadow: 0 4px 16px #0007;
   font:
     13px/1.45 system-ui,
@@ -490,8 +490,47 @@ body {
   margin-top: 6px;
 }
 .world-speech-bubble strong {
-  color: #e9c785;
+  color: #d4a577;
 }
 .world-speech-bubble .speech-emote {
   font-style: italic;
+}
+
+/* Restrained industrial chrome keeps the authored world in focus. */
+.community-app h1,
+.community-heading h2 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.community-app h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.community-app button,
+.community-app input,
+.community-app select,
+.community-app section,
+.community-app form {
+  border-radius: 3px;
+}
+.community-app button {
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+.community-app .community-scene {
+  border-color: #303b44;
+  background: #11171c;
+}
+.community-app .community-entrance {
+  background: #121a21ed;
+  color: #dce4e9;
+  border-color: #53616b;
+  font:
+    12px "Segoe UI",
+    sans-serif;
+}
+.world-speech-bubble {
+  border-radius: 4px;
 }

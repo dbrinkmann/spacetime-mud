@@ -25,12 +25,12 @@
   position: absolute;
   transform: translate(-50%, -100%);
   background: #161e20d9;
-  color: #ecdfb9;
-  border: 1px solid #aca17666;
+  color: #dce4e9;
+  border: 1px solid #8498a466;
   border-radius: 3px;
   padding: 3px 8px;
   font:
-    11px Georgia,
+    11px "Segoe UI",
     serif;
   pointer-events: none;
   white-space: nowrap;
