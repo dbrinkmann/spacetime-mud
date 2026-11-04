@@ -1,7 +1,27 @@
 # Lantern programmable world refactor
 
-Status: proposed implementation plan. Nothing in this document is implemented merely by being listed here.
+Status: implementation in progress on `refactor/programmable-world`. The isolated runtime foundation is running locally; the replacement application and release gates are not complete. Nothing in this document is implemented merely by being listed here.
 Date: 2026-11-04.
+
+## Implementation evidence
+
+The replacement module is `world-server`, deployed only to local database `lantern-runtime-refactor` at `http://127.0.0.1:3030`. Its endpoints are operator-only development scaffolding, not a substitute for verified community/player/agent authorization. The existing application remains the live release until parity is established.
+
+Implemented and tested so far:
+
+- Extracted one interpreter adapter into `spacetimedb/src/runtime/sandbox.ts`; the old `scripts.ts` forwards to it while the old release still exists. The replacement imports the adapter directly.
+- Bounded structured values and schemas; private slot state, public properties, declared exclusive component writers, copied API arguments/results, and data-only buffered effects.
+- Durable entity inboxes, deterministic recipient ordering, per-slot receipts, bounded dispatch batches, scheduled timers, failed-invocation isolation, and generation invalidation.
+- Same-property asynchronous messages and filtered inspection; sender authority is checked again at delivery. Rejection does not fault an innocent receiving slot. Action payloads are checked before enqueueing.
+- Created/bound/activated lifecycle, suspension/resumption, pinned package upgrades and bounded state-only migrations. Failed migrations preserve the old slot. Pending old-generation actions cannot invoke upgraded code.
+- Content-addressed package revisions, publisher namespace ownership, private/community/public read policies, portable export integrity, and unlisting distinct from installed execution. Dependency composition and registry discovery tools remain outstanding.
+- A virtual-clock simulation using the same interpreter, dispatcher and effect validation with transactional memory snapshots.
+
+Evidence: `tests/runtime-*.test.ts` and `npm run test:runtime:local`. The local integration fixture exercises actual scheduled reducers, package publication/attachment, switch-to-lamp messaging, state/component updates, invalid payload rejection and anonymous denial. This is not a Discord end-to-end test.
+
+Static renderer evidence is recorded in `docs/baselines/runtime-render-2026-11-04.json`, collected by `tests/runtime-render-baseline.ts` at 1280x720, 800x600 and 390x700. Comparative thresholds were set to at most 25% regression in scene preparation and p95 frame interval on the same environment, and at most one pixel of document overflow. The headless software-rendering measurements are comparative, not a hardware GPU frame-rate target. Script bindings were omitted from the preview input without changing geometry. Live subscription/server-work measurements and embedded Activity performance remain outstanding.
+
+Still required before release: complete phase-0 performance evidence; community/property authority integration and persisted runtime grants; aggregate work quotas and delivery-status reporting; remaining variable namespaces; dependency composition/templates and MCP tools; named parts/operations/navigation/spatial integration; dialogs/speech/character/home services; client rendering/subscriptions; full P01-P22 evidence, soak and rollback rehearsal. The old runtime and its wrapper are removed from the released application only at that cutover.
 
 ## Objective and decisions
 

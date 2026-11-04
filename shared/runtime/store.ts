@@ -1,0 +1,47 @@
+import type { Entity, Event, Package, Slot } from "./contracts";
+import type { Value } from "./values";
+export type Receipt = {
+  id: string;
+  event: string;
+  slot: string;
+  outcome: "handled" | "failed" | "stale" | "rejected";
+  error: string;
+};
+export type Delivery = {
+  event: Event;
+  recipients: Array<{ id: string; generation: number }>;
+  admitted?: Array<{ id: string; generation: number }>;
+  cursor: number;
+  started: boolean;
+};
+export type Timer = {
+  id: string;
+  entity: string;
+  slot: string;
+  generation: number;
+  due: number;
+  name: string;
+  payload: Value;
+  correlation: string;
+  depth: number;
+};
+/** All mutation calls occur within the host's transaction. No callbacks perform I/O. */
+export interface RuntimeStore {
+  entity(id: string): Entity | undefined;
+  putEntity(entity: Entity): void;
+  slots(entity: string): Slot[];
+  slot(id: string): Slot | undefined;
+  putSlot(slot: Slot): void;
+  package(hash: string): Package | undefined;
+  putPackage(pkg: Package): void;
+  pending(entity: string): Delivery[];
+  putDelivery(delivery: Delivery): void;
+  removeDelivery(id: string): void;
+  receipt(id: string): Receipt | undefined;
+  putReceipt(receipt: Receipt): void;
+  timers(slot: string): Timer[];
+  dueTimers(now: number, limit: number): Timer[];
+  putTimer(timer: Timer): void;
+  removeTimer(id: string): void;
+  nextSequence(): number;
+}

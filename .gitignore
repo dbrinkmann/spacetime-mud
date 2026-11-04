@@ -10,6 +10,7 @@ playwright-report/
 .bridge/
 .tools/
 spacetimedb/target/
+world-server/target/
 spacetime.local.json
 spacetimedb/spacetime.local.json
 
