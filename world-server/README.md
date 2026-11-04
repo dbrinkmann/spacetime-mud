@@ -28,4 +28,6 @@ The initial component set is visibility, transform, light and text. A handler st
 
 The simulator uses the same runtime with a virtual clock and transaction snapshots. Advancing a large time interval delivers each overdue timer once; it does not replay missed recurring intervals. The scheduler processes bounded work per entity. Per-entity/community rate accounting and complete receipt/status APIs remain release prerequisites.
 
+Timed transform operations use `ctx.operations.animate("transform", { position: [x,y,z], rotation: [x,y,z] }, seconds)`, plus `pause`, `resume`, and `cancel` with the resource key. The returned ID identifies the committed operation. Replacement starts from the current sampled pose and queues a cancellation event for the old operation. `operation:completed` and `operation:cancelled` receive `{ id, resource, outcome }`. Angles interpolate in authored degrees along each axis; this API does not imply physics, navigation clearance, parenting or passenger support. Both inspection and the shared sampler resolve state from the persisted timing anchor. Client rendering integration is pending.
+
 The full scope, incomplete items, parity matrix and release requirements remain in `docs/scriptable-world-plan.md`. No production reset or gateway switch is part of publishing this development module.

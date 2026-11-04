@@ -22,6 +22,11 @@ import type {
 import { validateComponent } from "../../../shared/runtime/components";
 import { executeBehavior, migrateBehavior } from "./execution";
 import { validateSource } from "./sandbox";
+import { prepareOperations } from "./operations";
+import {
+  sampleOperation,
+  operationDeadline,
+} from "../../../shared/runtime/operations";
 
 /** Called inside a database transaction (or a simulation step). No ambient clock or I/O. */
 export class WorldRuntime {
@@ -118,12 +123,25 @@ export class WorldRuntime {
   private cancelTimers(slot: Slot) {
     for (const timer of this.store.timers(slot.id))
       this.store.removeTimer(timer.id);
+    const entity = this.store.entity(slot.entity);
+    if (entity) {
+      let changed = false;
+      for (const op of this.store
+        .operations(slot.entity)
+        .filter((o) => o.slot === slot.id)) {
+        entity.components[op.resource] = sampleOperation(op, this.now);
+        this.store.removeOperation(op.id);
+        changed = true;
+      }
+      if (changed) {
+        entity.revision++;
+        this.store.putEntity(entity);
+      }
+    }
   }
   suspend(id: string) {
     const slot = this.requiredSlot(id);
     // Generation invalidation happens before the notification. Cleanup is unconditional.
-    if (this.store.pending(slot.entity).length >= BUDGETS.inbox)
-      throw Error("Inbox full.");
     this.store.putSlot({
       ...slot,
       enabled: false,
@@ -131,15 +149,16 @@ export class WorldRuntime {
       lastError: "",
     });
     this.cancelTimers(slot);
-    this.enqueue(
-      slot.entity,
-      "lifecycle",
-      "deactivated",
-      null,
-      { kind: "engine", id: "lifecycle" },
-      id,
-      slot.generation + 1,
-    );
+    if (this.store.pending(slot.entity).length < BUDGETS.inbox)
+      this.enqueue(
+        slot.entity,
+        "lifecycle",
+        "deactivated",
+        null,
+        { kind: "engine", id: "lifecycle" },
+        id,
+        slot.generation + 1,
+      );
   }
   resume(id: string) {
     const slot = this.requiredSlot(id);
@@ -267,6 +286,8 @@ export class WorldRuntime {
       e.property !== caller.property
     )
       return null;
+    for (const op of this.store.operations(id))
+      e.components[op.resource] = sampleOperation(op, this.now);
     return copyValue({
       id: e.id,
       room: e.room,
@@ -402,11 +423,28 @@ export class WorldRuntime {
       }
     }
     if (timers.size > BUDGETS.timers) throw Error("Timer budget exceeded.");
+    const operations = prepareOperations(
+      entity,
+      slot,
+      event,
+      result.effects,
+      this.store.operations(entity.id),
+      this.now,
+    );
+    if (
+      operations.notices.length &&
+      (event.depth >= BUDGETS.chain ||
+        this.store.pending(entity.id).length +
+          (counts.get(entity.id) ?? 0) +
+          operations.notices.length >
+          BUDGETS.inbox)
+    )
+      throw Error("Operation event budget exceeded.");
     const publicState = { ...entity.publicState };
     for (const effect of result.effects)
       if (effect.type === "public") publicState[effect.key] = effect.value;
     copyValue(publicState);
-    return timers;
+    return { timers, operations };
   }
   /** One recipient per invocation; later events cannot overtake the current dispatch. */
   step(entityId: string): boolean {
@@ -483,23 +521,28 @@ export class WorldRuntime {
         return true;
       }
     }
-    let result: ExecutionResult, timers: Map<string, Timer>;
+    let result: ExecutionResult,
+      prepared: ReturnType<WorldRuntime["validateResult"]>;
     try {
       result = pkg.manifest.handlers[`${event.type}:${event.name}`]
-        ? executeBehavior(pkg, slot, entity, event, this.now, (id) =>
-            this.inspect(entity, id),
+        ? executeBehavior(
+            pkg,
+            slot,
+            { ...entity, components: this.sampledComponents(entity) },
+            event,
+            this.now,
+            (id) => this.inspect(entity, id),
           )
         : {
             state: slot.state,
             effects: [],
             stats: { steps: 0, calls: 0, allocations: 0 },
           };
-      timers = this.validateResult(entity, slot, event, result);
+      prepared = this.validateResult(entity, slot, event, result);
     } catch (error) {
       const message = String(error).slice(0, 1000);
       this.store.putSlot({ ...slot, enabled: false, lastError: message });
-      for (const timer of this.store.timers(slot.id))
-        this.store.removeTimer(timer.id);
+      this.cancelTimers(slot);
       this.store.putReceipt({
         id: receiptId,
         event: event.id,
@@ -526,9 +569,25 @@ export class WorldRuntime {
       bound:
         slot.bound || (event.type === "lifecycle" && event.name === "bound"),
     });
+    const { timers, operations } = prepared;
+    entity.components = operations.components;
+    for (const old of this.store.operations(entity.id))
+      if (!operations.operations.some((o) => o.id === old.id))
+        this.store.removeOperation(old.id);
+    for (const op of operations.operations) this.store.putOperation(op);
+    for (const notice of operations.notices)
+      this.enqueue(
+        entity.id,
+        "operation",
+        notice.name,
+        notice.payload,
+        { kind: "engine", id: "operation" },
+        slot.id,
+        slot.generation,
+        event.correlation,
+        event.depth + 1,
+      );
     for (const effect of result.effects) {
-      if (effect.type === "component")
-        entity.components[effect.key] = effect.value;
       if (effect.type === "public")
         entity.publicState[effect.key] = effect.value;
       if (effect.type === "message")
@@ -546,7 +605,12 @@ export class WorldRuntime {
         );
     }
     if (
-      result.effects.some((e) => e.type === "public" || e.type === "component")
+      result.effects.some(
+        (e) =>
+          e.type === "public" ||
+          e.type === "component" ||
+          e.type === "operation",
+      )
     ) {
       entity.revision++;
       this.store.putEntity(entity);
@@ -560,6 +624,16 @@ export class WorldRuntime {
       slot: slot.id,
       outcome: "handled",
       error: "",
+      trace: {
+        packageHash: slot.packageHash,
+        eventType: event.type,
+        name: event.name,
+        source: event.source.id,
+        occurredAt: event.occurredAt,
+        handledAt: this.now,
+        ...result.stats,
+        effects: result.effects.map((e) => e.type),
+      },
     });
     this.advance(delivery);
     return true;
@@ -601,5 +675,48 @@ export class WorldRuntime {
       n++;
     }
     return n;
+  }
+  finishOperation(id: string, entityId: string) {
+    const op = this.store.operations(entityId).find((o) => o.id === id);
+    if (!op || operationDeadline(op) > this.now) return false;
+    const entity = this.store.entity(entityId),
+      slot = this.store.slot(op.slot);
+    if (
+      !entity?.enabled ||
+      !slot?.enabled ||
+      slot.generation !== op.generation
+    ) {
+      this.store.removeOperation(id);
+      return true;
+    }
+    if (this.store.pending(entityId).length >= BUDGETS.inbox) return false;
+    entity.components[op.resource] = sampleOperation(op, this.now);
+    entity.revision++;
+    this.store.putEntity(entity);
+    this.store.removeOperation(id);
+    this.enqueue(
+      entityId,
+      "operation",
+      "completed",
+      { id, resource: op.resource, outcome: "completed" },
+      { kind: "engine", id: "operation" },
+      slot.id,
+      slot.generation,
+      op.correlation,
+      op.depth,
+    );
+    return true;
+  }
+  finishDueOperations(limit: number = BUDGETS.dispatchBatch) {
+    let n = 0;
+    for (const op of this.store.dueOperations(this.now, limit))
+      if (this.finishOperation(op.id, op.entity)) n++;
+    return n;
+  }
+  private sampledComponents(entity: Entity) {
+    const components = copyValue(entity.components) as RecordValue;
+    for (const op of this.store.operations(entity.id))
+      components[op.resource] = sampleOperation(op, this.now);
+    return components;
   }
 }

@@ -49,6 +49,13 @@ export class WorldSimulation {
       );
       steps += fired;
       progress = fired > 0;
+      if (steps < maxSteps) {
+        const finished = this.transaction((r) =>
+          r.finishDueOperations(Math.min(16, maxSteps - steps)),
+        );
+        steps += finished;
+        progress = progress || finished > 0;
+      }
       for (const id of this.entities) {
         if (steps >= maxSteps) break;
         if (this.transaction((r) => r.step(id))) {

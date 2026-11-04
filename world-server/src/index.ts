@@ -28,6 +28,10 @@ import {
   type Revision,
   type Bundle,
 } from "../../shared/runtime/registry";
+import {
+  operationDeadline,
+  type Operation,
+} from "../../shared/runtime/operations";
 import type {
   RuntimeStore,
   Delivery,
@@ -111,6 +115,15 @@ const wake = table(
     scheduledAt: t.scheduleAt(),
   },
 );
+const operation = table(
+  {},
+  {
+    id: t.string().primaryKey(),
+    entity: t.string().index("btree"),
+    due: t.option(t.f64()),
+    data: t.string(),
+  },
+);
 const db = schema({
   authority,
   entity,
@@ -123,6 +136,7 @@ const db = schema({
   timer,
   counter,
   wake,
+  operation,
 });
 export default db;
 type Ctx = ReducerCtx<InferSchema<typeof db>>;
@@ -152,6 +166,32 @@ function checked<T>(fn: () => T): T {
 class TableStore implements RuntimeStore {
   touched = new Set<string>();
   constructor(readonly ctx: Ctx) {}
+  operations(entity: string) {
+    return [...this.ctx.db.operation.entity.filter(entity)].map(
+      (r) => JSON.parse(r.data) as Operation,
+    );
+  }
+  putOperation(op: Operation) {
+    const deadline = operationDeadline(op),
+      row = {
+        id: op.id,
+        entity: op.entity,
+        due: Number.isFinite(deadline) ? deadline : undefined,
+        data: JSON.stringify(op),
+      };
+    if (this.ctx.db.operation.id.find(op.id))
+      this.ctx.db.operation.id.update(row);
+    else this.ctx.db.operation.insert(row);
+    this.touched.add(op.entity);
+  }
+  removeOperation(id: string) {
+    const row = this.ctx.db.operation.id.find(id);
+    if (row) this.touched.add(row.entity);
+    this.ctx.db.operation.id.delete(id);
+  }
+  dueOperations(_now: number, _limit: number): Operation[] {
+    throw Error("Use entity-scoped scheduler.");
+  }
   entity(id: string) {
     const row = this.ctx.db.entity.id.find(id);
     return row ? (JSON.parse(row.data) as Entity) : undefined;
@@ -271,7 +311,10 @@ class TableStore implements RuntimeStore {
         timers = [...this.ctx.db.timer.entity.filter(id)];
       const due = pending
         ? now(this.ctx) + 0.01
-        : Math.min(...timers.map((t) => t.due));
+        : Math.min(
+            ...timers.map((t) => t.due),
+            ...this.operations(id).map(operationDeadline),
+          );
       const old = this.ctx.db.wake.entity.find(id);
       if (old) this.ctx.db.wake.scheduledId.delete(old.scheduledId);
       if (Number.isFinite(due))
@@ -450,6 +493,11 @@ export const dispatch = db.reducer(
     const store = new TableStore(ctx),
       runtime = new WorldRuntime(store, now(ctx));
     store.touched.add(work.entity);
+    for (const op of store
+      .operations(work.entity)
+      .filter((o) => operationDeadline(o) <= now(ctx))
+      .slice(0, BUDGETS.dispatchBatch))
+      runtime.finishOperation(op.id, work.entity);
     for (const row of [...ctx.db.timer.entity.filter(work.entity)]
       .filter((t) => t.due <= now(ctx))
       .slice(0, BUDGETS.dispatchBatch)) {

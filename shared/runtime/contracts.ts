@@ -19,6 +19,7 @@ export const BUDGETS = Object.freeze({
   timerMax: 86400,
   stateBytes: 8192,
   source: 16000,
+  operations: 4,
 });
 export type Source = {
   kind: "engine" | "player" | "behavior";
@@ -93,6 +94,19 @@ export type Slot = {
   bound: boolean;
 };
 export type Effect =
+  | {
+      type: "operation";
+      command: "animate";
+      resource: string;
+      id: string;
+      to: Value;
+      duration: number;
+    }
+  | {
+      type: "operation";
+      command: "pause" | "resume" | "cancel";
+      resource: string;
+    }
   | {
       type: "message";
       target: string;

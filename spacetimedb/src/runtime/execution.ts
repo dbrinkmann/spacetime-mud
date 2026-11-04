@@ -127,6 +127,33 @@ export function executeBehavior(
       resource(key);
       record({ type: "component", key, value: copyValue(value) });
     },
+    "operations.animate": (key: string, to: Value, duration: number) => {
+      resource(key);
+      if (!Number.isFinite(duration) || duration < 0.05 || duration > 3600)
+        throw Error("Animation duration must be .05..3600 seconds.");
+      const id = `operation:${event.sequence}:${slot.id}:${effects.length}`;
+      record({
+        type: "operation",
+        command: "animate",
+        resource: key,
+        id,
+        to: copyValue(to),
+        duration,
+      });
+      return id;
+    },
+    "operations.pause": (key: string) => {
+      resource(key);
+      record({ type: "operation", command: "pause", resource: key });
+    },
+    "operations.resume": (key: string) => {
+      resource(key);
+      record({ type: "operation", command: "resume", resource: key });
+    },
+    "operations.cancel": (key: string) => {
+      resource(key);
+      record({ type: "operation", command: "cancel", resource: key });
+    },
     "public.set": (key: string, value: Value) => {
       identifier(key);
       resource(`public.${key}`);
@@ -173,6 +200,7 @@ export function executeBehavior(
       "state.set",
       "messages.send",
       "components.set",
+      "operations.animate",
       "public.set",
       "timers.after",
     ],

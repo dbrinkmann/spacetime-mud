@@ -55,14 +55,25 @@ const manifest: PackageManifest = {
   config: { type: "object", properties: {} },
   state: { type: "object", properties: { count: { type: "number" } } },
   initialState: {},
-  writes: ["light"],
+  writes: ["light", "transform"],
   handlers: {
     "message:light.on": { handler: "on_message", input: { type: "null" } },
     "timer:tick": { handler: "on_tick", input: { type: "null" } },
+    "operation:completed": {
+      handler: "on_complete",
+      input: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          resource: { type: "string" },
+          outcome: { type: "string" },
+        },
+      },
+    },
   },
 };
 const source =
-  'function on_message(ctx){ctx.components.set("light",{color:"#ffaa00",intensity:4});ctx.state.set("count",1);ctx.timers.after(.25,"tick",null);} function on_tick(ctx){ctx.state.set("count",2);}';
+  'function on_message(ctx){ctx.components.set("light",{color:"#ffaa00",intensity:4});ctx.state.set("count",1);ctx.timers.after(.25,"tick",null);} function on_tick(ctx){ctx.state.set("count",2);ctx.operations.animate("transform",{position:[2,0,0],rotation:[0,90,0]},.1);} function on_complete(ctx){ctx.state.set("count",3);}';
 const hash = sha256(canonical({ source, manifest }));
 call(
   "publish_package",
@@ -81,7 +92,10 @@ call(
   lamp,
   "fixture",
   "room",
-  JSON.stringify({ light: { color: "#ffffff", intensity: 0 } }),
+  JSON.stringify({
+    light: { color: "#ffffff", intensity: 0 },
+    transform: { position: [0, 0, 0], rotation: [0, 0, 0] },
+  }),
 );
 call("attach_behavior", lamp, "light", hash, "{}");
 const switchManifest: PackageManifest = {
@@ -117,7 +131,7 @@ await until(
     data("slot", `${button}:control`)?.enabled,
 );
 call("invoke_action", button, "use", "null");
-await until(() => data("slot", `${lamp}:light`)?.state.count === 2);
+await until(() => data("slot", `${lamp}:light`)?.state.count === 3);
 assert.equal(data("entity", lamp).components.light.intensity, 4);
 assert.throws(() => call("invoke_action", button, "use", "{}"));
 assert.equal(data("slot", `${button}:control`).enabled, true);
@@ -125,7 +139,8 @@ call("suspend_behavior", `${lamp}:light`);
 await until(() => data("slot", `${lamp}:light`)?.enabled === false);
 call("resume_behavior", `${lamp}:light`);
 await until(() => data("slot", `${lamp}:light`)?.enabled === true);
-assert.equal(data("slot", `${lamp}:light`).state.count, 2);
+assert.equal(data("slot", `${lamp}:light`).state.count, 3);
+assert.deepEqual(data("entity", lamp).components.transform.position, [2, 0, 0]);
 assert.throws(() =>
   execFileSync(
     cli,
@@ -149,6 +164,6 @@ console.log(
     button,
     lamp,
     result:
-      "scheduled activation, action, message, state, component and authorization verified",
+      "scheduled activation, action, message, timer, transform operation, suspend/resume and authorization verified",
   }),
 );
