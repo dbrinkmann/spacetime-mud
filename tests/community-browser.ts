@@ -185,12 +185,19 @@ try {
     .poll(() =>
       page.evaluate(() => {
         const s = window.boxWorld!.inspect() as {
-          camera: { target: number[] };
-          position: number[];
+          position: [number, number, number];
         };
+        const point = window.boxWorld!.project([
+          s.position[0],
+          0.65,
+          s.position[2],
+        ]);
+        const rect = document
+          .querySelector(".poc-viewport")!
+          .getBoundingClientRect();
         return (
-          Math.abs(s.camera.target[0] - s.position[0]) < 0.01 &&
-          Math.abs(s.camera.target[2] - s.position[2]) < 0.01
+          Math.abs((point.x - rect.left) / rect.width - 0.5) <= 0.176 &&
+          Math.abs((point.y - rect.top) / rect.height - 0.5) <= 0.151
         );
       }),
     )

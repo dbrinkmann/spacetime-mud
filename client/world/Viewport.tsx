@@ -1,5 +1,6 @@
 import { loadSignFont, signMesh } from "./signs";
 import { serverNow } from "./clock";
+import { deadZoneShift } from "./camera";
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -773,17 +774,18 @@ export function Viewport(props: Props) {
           props.preview ? 1 : dt,
         );
       animateRig(companion, guestSeat ? "sit" : "idle", elapsed + 0.5, dt);
+      controls.update();
       if (live) {
         const destination = new THREE.Vector3(
           player.root.position.x,
           0.65,
           player.root.position.z,
         );
-        const shift = destination.sub(controls.target);
+        const shift = deadZoneShift(camera, destination);
         camera.position.add(shift);
         controls.target.add(shift);
+        camera.updateMatrixWorld();
       }
-      controls.update();
       // Fade walls on the camera side of the current focus, including when
       // following a character far from the room origin.
       for (const g of walls) {
