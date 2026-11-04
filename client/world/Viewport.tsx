@@ -107,8 +107,6 @@ export function Viewport(props: Props) {
     controls.enablePan = false;
     controls.minPolarAngle = 0.35;
     controls.maxPolarAngle = 1.35;
-    controls.minZoom = 0.65;
-    controls.maxZoom = 2.7;
     controls.mouseButtons = {
       LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: THREE.MOUSE.DOLLY,
