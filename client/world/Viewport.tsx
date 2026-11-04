@@ -1,4 +1,5 @@
-import { wornMaterial } from "./materials";
+import { samplePropMotion } from "../../shared/scene-features";
+import { surfaceMaterial } from "./materials";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -62,6 +63,7 @@ type WorldSpeech = {
   createdAt: number;
 };
 type Props = {
+  signTexts?: Record<string, string>;
   speech?: WorldSpeech[];
   onObject?: (id: string) => void;
   showGuest?: boolean;
@@ -179,25 +181,31 @@ export function Viewport(props: Props) {
     });
     const geometry = new THREE.BoxGeometry(1, 1, 1),
       materials = new Map<string, THREE.MeshStandardMaterial>();
-    function material(color: string, emissive = false) {
-      const key = color + emissive;
+    function material(box: Box) {
+      const key = JSON.stringify([
+        box.color,
+        box.emissive,
+        box.material,
+        box.roughness,
+        box.wear,
+      ]);
       let m = materials.get(key);
       if (!m) {
-        m = wornMaterial(color, emissive);
+        m = surfaceMaterial(box);
         materials.set(key, m);
       }
       return m;
     }
     let boxCount = 0;
     const addBox = (parent: THREE.Object3D, b: Box, id?: string) => {
-      const mesh = new THREE.Mesh(geometry, material(b.color, b.emissive));
+      const mesh = new THREE.Mesh(geometry, material(b));
       mesh.position.fromArray(b.position);
       mesh.scale.fromArray(b.size);
       if (b.rotation)
         mesh.rotation.set(
           ...(b.rotation.map((x) => THREE.MathUtils.degToRad(x)) as Vec3),
         );
-      mesh.castShadow = !b.emissive;
+      mesh.castShadow = !b.emissive && b.material !== "glass";
       mesh.receiveShadow = true;
       mesh.userData.objectId = id;
       parent.add(mesh);
@@ -678,7 +686,12 @@ export function Viewport(props: Props) {
           position: n.actor.root.position.toArray(),
           head: n.actor.joints.head.rotation.toArray(),
         })),
-        signs: (room.signs ?? []).map((s) => s.text),
+        signs: signs.map((s) => s.getText()),
+        props: [...objects].map(([id, g]) => ({
+          id,
+          position: g.position.toArray(),
+          yaw: g.rotation.y,
+        })),
         walls: walls.map((g) => ({
           position: g.position.toArray(),
           opacity: (
@@ -756,6 +769,23 @@ export function Viewport(props: Props) {
       const dt = Math.min(frameDelta, 0.05);
       previous = now;
       elapsed = props.preview ? props.preview.time : elapsed + dt;
+      for (const prop of room.objects)
+        if (prop.motion) {
+          const sampled = samplePropMotion(
+            prop,
+            props.preview ? props.preview.time : serverNow() / 1000,
+          );
+          const group = objects.get(prop.id)!;
+          group.position.fromArray(sampled.position);
+          group.rotation.y = THREE.MathUtils.degToRad(sampled.yaw);
+        }
+      signs.forEach((s, i) =>
+        s.setText(
+          callbacks.current.signTexts?.[room.signs![i].id] ??
+            room.signs![i].text,
+        ),
+      );
+
       if (!callbacks.current.live && path.length) {
         const goal = new THREE.Vector3(...path[0]),
           delta = goal.clone().sub(player.root.position);

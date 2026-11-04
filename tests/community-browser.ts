@@ -63,13 +63,71 @@ try {
   );
   await until(() => c.db.myCommunities.id.find(guild));
   const welcome = c.db.myCommunities.id.find(guild)!.welcomeRoom;
+  const welcomeScene = entranceRoom();
+  welcomeScene.models.car = {
+    boxes: [
+      {
+        position: [0, 0.5, 0],
+        size: [0.8, 0.6, 1.8],
+        color: "#596b7b",
+        material: "metal",
+      },
+    ],
+  };
+  welcomeScene.objects.push({
+    id: "traffic",
+    name: "Traffic",
+    model: "car",
+    position: [0, 0, 0],
+    yaw: 0,
+    motion: {
+      points: [
+        [-4, 0, 0],
+        [4, 0, 0],
+      ],
+      speed: 2,
+      mode: "pingpong",
+    },
+  });
+  welcomeScene.signs = [
+    {
+      id: "home-name",
+      text: "Available",
+      binding: { kind: "homeName", entranceSpot: "door-0" },
+      position: [-2, 2.6, -3],
+      yaw: 0,
+      width: 2,
+      height: 0.4,
+      color: "#ffffff",
+    },
+  ];
   await c.reducers.publishCommunityRoom({
     roomId: welcome,
-    source: JSON.stringify(entranceRoom()),
+    source: JSON.stringify(welcomeScene),
     baseRevision: 0,
   });
   await expect(page.locator(".community-entrance")).toHaveCount(2);
   await expect(page.locator(".community-entrance").first()).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window.boxWorld!.inspect() as { signs: string[] }).signs,
+      ),
+    )
+    .toContain("Available");
+  const carPosition = () =>
+    page.evaluate(
+      () =>
+        (
+          window.boxWorld!.inspect() as {
+            props: Array<{ id: string; position: number[] }>;
+          }
+        ).props.find((p) => p.id === "traffic")!.position[0],
+    );
+  const initialCarPosition = await carPosition();
+  await expect
+    .poll(async () => Math.abs((await carPosition()) - initialCarPosition))
+    .toBeGreaterThan(0.2);
   const vacantDoor = await page.evaluate(() =>
     window.boxWorld!.project([-2, 1, -3]),
   );
@@ -239,6 +297,13 @@ try {
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window.boxWorld!.inspect() as { signs: string[] }).signs,
+      ),
+    )
+    .toContain("Alice's cottage");
   await page.locator(".poc-viewport").hover();
   await page.mouse.wheel(0, 1000);
   await page.waitForTimeout(200);

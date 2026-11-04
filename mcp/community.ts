@@ -1,3 +1,4 @@
+import { homeSignText } from "../shared/scene-features";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -184,7 +185,7 @@ server.registerTool(
   "world_preview",
   {
     description:
-      "Render an unpublished room source or an existing room_id using the hosted game renderer. Returns a PNG, without publishing. yaw rotates the default camera in degrees; time freezes character animation in seconds. Requires active pairing. No local browser installation.",
+      "Render an unpublished room source or an existing room_id using the hosted game renderer. Returns a PNG, without publishing. yaw rotates the default camera in degrees; time freezes character animation and decorative prop motion in seconds. Requires active pairing. No local browser installation.",
     inputSchema: {
       ...scope,
       source: source.optional(),
@@ -200,7 +201,20 @@ server.registerTool(
       const state = inspect(c, a.community_id, a.room_id);
       const roomSource = a.source ?? state.room?.source;
       if (!roomSource) throw Error("Provide source or an existing room_id.");
-      validateNavigation(parseDefinition(roomSource, "room"));
+      const previewScene = parseDefinition(roomSource, "room");
+      validateNavigation(previewScene);
+      if (state.room)
+        for (const sign of previewScene.signs ?? []) {
+          sign.text = homeSignText(
+            sign.text,
+            sign.binding?.entranceSpot,
+            state.room.id,
+            state.exits,
+            state.rooms,
+            state.properties,
+          );
+        }
+
       const response = await fetch(`${site}/api/preview`, {
         method: "POST",
         headers: {
@@ -209,7 +223,7 @@ server.registerTool(
         },
         body: JSON.stringify({
           community_id: a.community_id,
-          source: roomSource,
+          source: JSON.stringify(previewScene),
           character: a.character,
           yaw: a.yaw,
           time: a.time,
@@ -273,7 +287,7 @@ server.registerTool(
   },
   guard(async () => ({
     workflow:
-      "Call world_connect; player pairs inside Discord Create. Call world_inspect with community_id. Editable common properties require an admin grant; home properties belong to the paired member. Read current scene/revision before editing. Validate then publish directly; there is no review queue. Do not call legacy zone tools. Do not request player tokens, Discord secrets or model credentials. Existing scripted-object IDs cannot be attached to community scenes yet. Rooms use named links and no exclusive grid coordinates. Preserve existing room geometry and placements unless the requested change replaces them. Self avatar names come from the character, not the asset name.",
+      "Call world_connect; player pairs inside Discord Create. Call world_inspect with community_id. Editable common properties require an admin grant; home properties belong to the paired member. Read current scene/revision before editing. Validate then publish directly; there is no review queue. Do not call legacy zone tools. Do not request player tokens, Discord secrets or model credentials. Scripted objects may link to static props/NPCs using objectId. Decorative moving props use motion and cannot have scripts or collision. Boxes support material, roughness and wear; signs support homeName bindings. Rooms use named links and no exclusive grid coordinates. Preserve existing room geometry and placements unless the requested change replaces them. Self avatar names come from the character, not the asset name.",
     contract:
       typeof COMMUNITY_AUTHORING === "undefined"
         ? readFileSync(

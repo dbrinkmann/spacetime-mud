@@ -20,13 +20,14 @@ export function signMesh(sign: Sign) {
   const ctx = canvas.getContext("2d")!;
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  let text = sign.text;
   const draw = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (sign.background) {
       ctx.fillStyle = sign.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-    const lines = sign.text.split("\n");
+    const lines = text.split("\n");
     let fontSize = Math.min(160, (canvas.height * 0.8) / lines.length);
     ctx.font = `${fontSize}px LanternSigns`;
     const widest = Math.max(...lines.map((l) => ctx.measureText(l).width), 1);
@@ -63,5 +64,16 @@ export function signMesh(sign: Sign) {
   );
   mesh.position.fromArray(sign.position);
   mesh.rotation.y = THREE.MathUtils.degToRad(sign.yaw);
-  return { mesh, redraw: draw, dispose: () => texture.dispose() };
+  return {
+    mesh,
+    getText: () => text,
+    redraw: draw,
+    setText: (next: string) => {
+      if (next !== text) {
+        text = next;
+        draw();
+      }
+    },
+    dispose: () => texture.dispose(),
+  };
 }

@@ -97,6 +97,27 @@
                 },
                 "emissive": {
                   "type": "boolean"
+                },
+                "material": {
+                  "enum": [
+                    "plain",
+                    "asphalt",
+                    "concrete",
+                    "metal",
+                    "wood",
+                    "fabric",
+                    "glass"
+                  ]
+                },
+                "roughness": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "wear": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
                 }
               },
               "required": [
@@ -248,6 +269,48 @@
               "id",
               "approach"
             ]
+          },
+          "motion": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "points",
+              "speed",
+              "mode"
+            ],
+            "properties": {
+              "points": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 24,
+                "items": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number",
+                    "minimum": -100,
+                    "maximum": 100
+                  }
+                }
+              },
+              "speed": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 20
+              },
+              "mode": {
+                "enum": [
+                  "loop",
+                  "pingpong"
+                ]
+              },
+              "offset": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            }
           }
         },
         "required": [
@@ -348,6 +411,24 @@
           },
           "emissive": {
             "type": "boolean"
+          },
+          "binding": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "entranceSpot"
+            ],
+            "properties": {
+              "kind": {
+                "const": "homeName"
+              },
+              "entranceSpot": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              }
+            }
           }
         },
         "required": [
@@ -434,6 +515,27 @@
                         },
                         "emissive": {
                           "type": "boolean"
+                        },
+                        "material": {
+                          "enum": [
+                            "plain",
+                            "asphalt",
+                            "concrete",
+                            "metal",
+                            "wood",
+                            "fabric",
+                            "glass"
+                          ]
+                        },
+                        "roughness": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "wear": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "required": [
@@ -487,6 +589,27 @@
                         },
                         "emissive": {
                           "type": "boolean"
+                        },
+                        "material": {
+                          "enum": [
+                            "plain",
+                            "asphalt",
+                            "concrete",
+                            "metal",
+                            "wood",
+                            "fabric",
+                            "glass"
+                          ]
+                        },
+                        "roughness": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "wear": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "required": [
@@ -540,6 +663,27 @@
                         },
                         "emissive": {
                           "type": "boolean"
+                        },
+                        "material": {
+                          "enum": [
+                            "plain",
+                            "asphalt",
+                            "concrete",
+                            "metal",
+                            "wood",
+                            "fabric",
+                            "glass"
+                          ]
+                        },
+                        "roughness": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "wear": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "required": [
@@ -593,6 +737,27 @@
                         },
                         "emissive": {
                           "type": "boolean"
+                        },
+                        "material": {
+                          "enum": [
+                            "plain",
+                            "asphalt",
+                            "concrete",
+                            "metal",
+                            "wood",
+                            "fabric",
+                            "glass"
+                          ]
+                        },
+                        "roughness": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "wear": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "required": [
@@ -646,6 +811,27 @@
                         },
                         "emissive": {
                           "type": "boolean"
+                        },
+                        "material": {
+                          "enum": [
+                            "plain",
+                            "asphalt",
+                            "concrete",
+                            "metal",
+                            "wood",
+                            "fabric",
+                            "glass"
+                          ]
+                        },
+                        "roughness": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "wear": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "required": [
@@ -699,6 +885,27 @@
                         },
                         "emissive": {
                           "type": "boolean"
+                        },
+                        "material": {
+                          "enum": [
+                            "plain",
+                            "asphalt",
+                            "concrete",
+                            "metal",
+                            "wood",
+                            "fabric",
+                            "glass"
+                          ]
+                        },
+                        "roughness": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "wear": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
                         }
                       },
                       "required": [
@@ -804,6 +1011,27 @@
                           },
                           "emissive": {
                             "type": "boolean"
+                          },
+                          "material": {
+                            "enum": [
+                              "plain",
+                              "asphalt",
+                              "concrete",
+                              "metal",
+                              "wood",
+                              "fabric",
+                              "glass"
+                            ]
+                          },
+                          "roughness": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "wear": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
                           }
                         },
                         "required": [

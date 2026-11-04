@@ -17,7 +17,20 @@ export const pivots: Record<Part, Vec3> = {
   leftLeg: [0.16, 0.76, 0],
   rightLeg: [-0.16, 0.76, 0],
 };
+export const surfaceMaterials = [
+  "plain",
+  "asphalt",
+  "concrete",
+  "metal",
+  "wood",
+  "fabric",
+  "glass",
+] as const;
+export type SurfaceMaterial = (typeof surfaceMaterials)[number];
 export type Box = {
+  material?: SurfaceMaterial;
+  roughness?: number;
+  wear?: number;
   position: Vec3;
   size: Vec3;
   rotation?: Vec3;
@@ -39,7 +52,14 @@ export type Character = {
 };
 export type Model = { boxes: Box[] };
 export type Seat = { position: Vec3; approach: Vec3; yaw: number };
+export type PropMotion = {
+  points: Vec3[];
+  speed: number;
+  mode: "loop" | "pingpong";
+  offset?: number;
+};
 export type Placement = {
+  motion?: PropMotion;
   id: string;
   name: string;
   model: string;
@@ -53,6 +73,7 @@ export type Placement = {
   exit?: { id: string; approach: Vec3 };
 };
 export type Sign = {
+  binding?: { kind: "homeName"; entranceSpot: string };
   id: string;
   text: string;
   position: Vec3;
@@ -146,6 +167,9 @@ export function validate(
       "rotation",
       "color",
       "emissive",
+      "material",
+      "roughness",
+      "wear",
     ]);
     vector(
       b.position,
@@ -157,6 +181,14 @@ export function validate(
     if (b.rotation !== undefined)
       vector(b.rotation, `${path}.rotation`, -360, 360);
     color(b.color, `${path}.color`);
+    if (
+      b.material !== undefined &&
+      !surfaceMaterials.includes(b.material as SurfaceMaterial)
+    )
+      issue(`${path}.material`, "unknown material");
+    if (b.roughness !== undefined) num(b.roughness, `${path}.roughness`, 0, 1);
+    if (b.wear !== undefined) num(b.wear, `${path}.wear`, 0, 1);
+
     if (b.emissive !== undefined && typeof b.emissive !== "boolean")
       issue(`${path}.emissive`, "expected boolean");
   };
@@ -247,6 +279,7 @@ export function validate(
           "objectId",
           "homeEntrance",
           "exit",
+          "motion",
         ]);
       str(o.id, `${path}.id`, 40);
       str(o.name, `${path}.name`);
@@ -263,6 +296,66 @@ export function validate(
           : 0;
       vector(o.position, `${path}.position`);
       num(o.yaw, `${path}.yaw`, -360, 360);
+      if (o.motion !== undefined) {
+        const motion = object(o.motion, `${path}.motion`, [
+          "points",
+          "speed",
+          "mode",
+          "offset",
+        ]);
+        const points = list(motion.points, `${path}.motion.points`, 24);
+        if (points.length < 2)
+          issue(`${path}.motion.points`, "at least two points required");
+        points.forEach((point, j) =>
+          vector(point, `${path}.motion.points[${j}]`, -100, 100),
+        );
+        if (
+          points.length >= 2 &&
+          points.every(
+            (p) =>
+              Array.isArray(p) &&
+              JSON.stringify(p) === JSON.stringify(points[0]),
+          )
+        )
+          issue(path, "motion path must have length");
+        num(motion.speed, `${path}.motion.speed`, 0.1, 20);
+        if (!["loop", "pingpong"].includes(String(motion.mode)))
+          issue(path, "motion mode must be loop or pingpong");
+        if (motion.offset !== undefined)
+          num(motion.offset, `${path}.motion.offset`, 0, 3600);
+        if (
+          o.collision ||
+          o.seat ||
+          o.objectId ||
+          o.homeEntrance ||
+          o.exit ||
+          o.wall
+        )
+          issue(
+            path,
+            "moving props must be decorative, without collision, seats, interactions or cutaway walls",
+          );
+      }
+      if (
+        o.motion &&
+        Array.isArray((o.motion as Obj).points) &&
+        Array.isArray(o.position)
+      ) {
+        for (const point of (o.motion as Obj).points as Vec3[]) {
+          if (!Array.isArray(point) || point.length !== 3) continue;
+          const p = worldPoint(o as Placement, point);
+          if (
+            Math.abs(p[0]) > Number(root.width) / 2 ||
+            Math.abs(p[2]) > Number(root.depth) / 2 ||
+            p[1] < 0 ||
+            p[1] > 30
+          )
+            issue(
+              path,
+              "motion path must remain within room bounds and height 0..30",
+            );
+        }
+      }
       if (o.collision !== undefined)
         vector(o.collision, `${path}.collision`, 0.1, 20, 2);
       if (
@@ -326,9 +419,29 @@ export function validate(
           "color",
           "background",
           "emissive",
+          "binding",
         ]);
       str(sign.id, `${p}.id`, 40);
       str(sign.text, `${p}.text`, 120);
+      if (sign.binding !== undefined) {
+        const binding = object(sign.binding, `${p}.binding`, [
+          "kind",
+          "entranceSpot",
+        ]);
+        if (binding.kind !== "homeName")
+          issue(`${p}.binding.kind`, "expected homeName");
+        str(binding.entranceSpot, `${p}.binding.entranceSpot`, 40);
+        if (
+          !(Array.isArray(root.objects) ? root.objects : []).some(
+            (o) => o && o.id === binding.entranceSpot && o.homeEntrance,
+          )
+        )
+          issue(
+            `${p}.binding.entranceSpot`,
+            "must reference a home entrance in this room",
+          );
+      }
+
       if (typeof sign.text === "string" && sign.text.split("\n").length > 4)
         issue(`${p}.text`, "maximum four lines");
       if (extraIds.has(String(sign.id))) issue(`${p}.id`, "duplicate ID");

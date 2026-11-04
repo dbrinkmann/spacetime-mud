@@ -1,25 +1,33 @@
 import * as THREE from "three";
+import type { Box } from "../../shared/geometry";
 
 // Object-local, meter-scaled shading: detail follows moving characters and does
 // not stretch across large room slabs. No textures or per-box draw calls added.
-export function wornMaterial(color: string, emissive = false) {
-  const pigment = new THREE.Color(color);
-  if (!emissive) {
-    const luminance =
-      pigment.r * 0.2126 + pigment.g * 0.7152 + pigment.b * 0.0722;
-    pigment
-      .lerp(new THREE.Color().setRGB(luminance, luminance, luminance), 0.48)
-      .multiplyScalar(0.72)
-      .addScalar(0.012);
-  }
+export function surfaceMaterial(box: Box) {
+  const { color, emissive = false, material: kind = "plain", wear = 0 } = box;
+  const roughness =
+    box.roughness ??
+    {
+      plain: 0.8,
+      asphalt: 0.96,
+      concrete: 0.9,
+      metal: 0.35,
+      wood: 0.75,
+      fabric: 1,
+      glass: 0.12,
+    }[kind];
   const material = new THREE.MeshStandardMaterial({
-    color: pigment,
-    roughness: 0.86,
-    metalness: 0.08,
+    color,
+    roughness,
+    metalness: kind === "metal" ? 0.7 : 0,
+    transparent: kind === "glass",
+    opacity: kind === "glass" ? 0.28 : 1,
+    depthWrite: kind !== "glass",
     emissive: emissive ? color : "#000000",
     emissiveIntensity: emissive ? 1.35 : 0,
   });
-  if (emissive) return material;
+  if (emissive || (kind === "plain" && wear === 0) || kind === "glass")
+    return material;
   material.onBeforeCompile = (shader) => {
     shader.vertexShader =
       `varying vec3 vSurface; varying vec3 vBox; varying vec3 vSize;\n` +
@@ -49,12 +57,13 @@ export function wornMaterial(color: string, emissive = false) {
       #include <color_fragment>
       float mottling = surfaceNoise(vSurface * 5.0);
       float grain = surfaceNoise(vSurface * 110.0);
+      float pattern = ${kind === "wood" ? "surfaceNoise(vSurface * vec3(35.0, 2.0, 35.0))" : kind === "fabric" ? "0.5 + 0.25*sin(vSurface.x*340.0)*sin((vSurface.y+vSurface.z)*340.0)" : "grain"};
       // The second-smallest distance is distance to a box edge, excluding its face.
       vec3 d = max(vec3(0.0), (vec3(0.5) - abs(vBox)) * vSize);
       float edge = min(max(d.x,d.y), min(max(d.x,d.z),max(d.y,d.z)));
       float wear = (1.0-smoothstep(0.0,0.018,edge)) * (0.4+0.6*mottling);
-      diffuseColor.rgb *= 0.65 + mottling*0.45 + grain*0.18;
-      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*1.35+vec3(0.025),wear*0.45);
+      diffuseColor.rgb *= ${kind === "concrete" ? "0.88 + mottling*0.16 + grain*0.06" : kind === "wood" ? "0.78 + pattern*0.28" : kind === "asphalt" ? "0.94 + grain*0.1" : kind === "fabric" ? "0.93 + pattern*0.1" : "1.0"};
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*1.35+vec3(0.025),wear*${wear.toFixed(4)}*0.45);
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -64,7 +73,7 @@ export function wornMaterial(color: string, emissive = false) {
       vec3 surfaceDx = dFdx(-vViewPosition), surfaceDy = dFdy(-vViewPosition);
       vec3 surfaceS = cross(surfaceDy, normal), surfaceT = cross(normal, surfaceDx);
       float surfaceDet = dot(surfaceDx, surfaceS);
-      float relief = (grain * 0.003 + mottling * 0.012);
+      float relief = ${kind === "asphalt" ? "grain * 0.0008" : kind === "concrete" ? "grain*0.001 + mottling*0.003" : kind === "wood" ? "pattern*0.001" : kind === "fabric" ? "pattern*0.0008" : "0.0"};
       normal = normalize(abs(surfaceDet) * normal - sign(surfaceDet) * (dFdx(relief)*surfaceS + dFdy(relief)*surfaceT));
     `,
     );
@@ -72,10 +81,10 @@ export function wornMaterial(color: string, emissive = false) {
       "#include <roughnessmap_fragment>",
       `
       #include <roughnessmap_fragment>
-      roughnessFactor = clamp(roughnessFactor + (mottling-0.5)*0.18,0.55,1.0);
+      roughnessFactor = clamp(roughnessFactor + (grain-0.5)*0.04,0.0,1.0);
     `,
     );
   };
-  material.customProgramCacheKey = () => "lantern-worn-box-v1";
+  material.customProgramCacheKey = () => `lantern-surface-v2:${kind}:${wear}`;
   return material;
 }

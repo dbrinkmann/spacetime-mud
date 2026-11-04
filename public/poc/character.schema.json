@@ -60,9 +60,34 @@
               },
               "emissive": {
                 "type": "boolean"
+              },
+              "material": {
+                "enum": [
+                  "plain",
+                  "asphalt",
+                  "concrete",
+                  "metal",
+                  "wood",
+                  "fabric",
+                  "glass"
+                ]
+              },
+              "roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "wear": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
-            "required": ["position", "size", "color"]
+            "required": [
+              "position",
+              "size",
+              "color"
+            ]
           },
           "minItems": 1,
           "maxItems": 80
@@ -109,9 +134,34 @@
               },
               "emissive": {
                 "type": "boolean"
+              },
+              "material": {
+                "enum": [
+                  "plain",
+                  "asphalt",
+                  "concrete",
+                  "metal",
+                  "wood",
+                  "fabric",
+                  "glass"
+                ]
+              },
+              "roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "wear": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
-            "required": ["position", "size", "color"]
+            "required": [
+              "position",
+              "size",
+              "color"
+            ]
           },
           "minItems": 1,
           "maxItems": 80
@@ -158,9 +208,34 @@
               },
               "emissive": {
                 "type": "boolean"
+              },
+              "material": {
+                "enum": [
+                  "plain",
+                  "asphalt",
+                  "concrete",
+                  "metal",
+                  "wood",
+                  "fabric",
+                  "glass"
+                ]
+              },
+              "roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "wear": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
-            "required": ["position", "size", "color"]
+            "required": [
+              "position",
+              "size",
+              "color"
+            ]
           },
           "minItems": 1,
           "maxItems": 80
@@ -207,9 +282,34 @@
               },
               "emissive": {
                 "type": "boolean"
+              },
+              "material": {
+                "enum": [
+                  "plain",
+                  "asphalt",
+                  "concrete",
+                  "metal",
+                  "wood",
+                  "fabric",
+                  "glass"
+                ]
+              },
+              "roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "wear": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
-            "required": ["position", "size", "color"]
+            "required": [
+              "position",
+              "size",
+              "color"
+            ]
           },
           "minItems": 1,
           "maxItems": 80
@@ -256,9 +356,34 @@
               },
               "emissive": {
                 "type": "boolean"
+              },
+              "material": {
+                "enum": [
+                  "plain",
+                  "asphalt",
+                  "concrete",
+                  "metal",
+                  "wood",
+                  "fabric",
+                  "glass"
+                ]
+              },
+              "roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "wear": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
-            "required": ["position", "size", "color"]
+            "required": [
+              "position",
+              "size",
+              "color"
+            ]
           },
           "minItems": 1,
           "maxItems": 80
@@ -305,9 +430,34 @@
               },
               "emissive": {
                 "type": "boolean"
+              },
+              "material": {
+                "enum": [
+                  "plain",
+                  "asphalt",
+                  "concrete",
+                  "metal",
+                  "wood",
+                  "fabric",
+                  "glass"
+                ]
+              },
+              "roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "wear": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
               }
             },
-            "required": ["position", "size", "color"]
+            "required": [
+              "position",
+              "size",
+              "color"
+            ]
           },
           "minItems": 1,
           "maxItems": 80
@@ -406,19 +556,54 @@
                 },
                 "emissive": {
                   "type": "boolean"
+                },
+                "material": {
+                  "enum": [
+                    "plain",
+                    "asphalt",
+                    "concrete",
+                    "metal",
+                    "wood",
+                    "fabric",
+                    "glass"
+                  ]
+                },
+                "roughness": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "wear": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
                 }
               },
-              "required": ["position", "size", "color"]
+              "required": [
+                "position",
+                "size",
+                "color"
+              ]
             },
             "minItems": 0,
             "maxItems": 80
           }
         },
-        "required": ["name", "parent", "position", "boxes"]
+        "required": [
+          "name",
+          "parent",
+          "position",
+          "boxes"
+        ]
       },
       "minItems": 0,
       "maxItems": 24
     }
   },
-  "required": ["version", "name", "parts", "cosmetics"]
+  "required": [
+    "version",
+    "name",
+    "parts",
+    "cosmetics"
+  ]
 }

@@ -1,3 +1,4 @@
+import { homeSignText } from "../../shared/scene-features";
 import React, { useEffect, useMemo, useState } from "react";
 import { DbConnection } from "../module_bindings";
 import type {
@@ -461,6 +462,19 @@ export function CommunityApp({ activity }: { activity?: ActivityAccess }) {
                           m.createdAt.microsSinceUnixEpoch / 1000n,
                         ),
                       }))}
+                    signTexts={Object.fromEntries(
+                      (scene.signs ?? []).map((s) => [
+                        s.id,
+                        homeSignText(
+                          s.text,
+                          s.binding?.entranceSpot,
+                          room.id,
+                          data.exits,
+                          data.rooms,
+                          data.properties,
+                        ),
+                      ]),
+                    )}
                     onObject={(id) => {
                       void act(() =>
                         approach(objectApproach(id), async () => {
