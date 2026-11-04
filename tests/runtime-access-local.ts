@@ -76,9 +76,10 @@ try {
     components: JSON.stringify({ light: { color: "#ffffff", intensity: 0 } }),
   };
   await assert.rejects(member.reducers.createEntity(command), /denied/i);
-  await assert.rejects(
-    member.procedures.previewRoom({ property, room: "room" }),
-    /denied/i,
+  assert.deepEqual(
+    JSON.parse(await member.procedures.previewRoom({ property, room: "room" }))
+      .entities,
+    [],
   );
   await assert.rejects(
     agent.reducers.createEntity(command),

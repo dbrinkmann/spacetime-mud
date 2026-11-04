@@ -19,7 +19,10 @@ import type {
   Delivery,
   Timer,
 } from "../../../shared/runtime/store";
-import { validateComponent } from "../../../shared/runtime/components";
+import {
+  validateComponent,
+  copyComponentData,
+} from "../../../shared/runtime/components";
 import { executeBehavior, migrateBehavior } from "./execution";
 import { validateSource } from "./sandbox";
 import {
@@ -27,7 +30,10 @@ import {
   settleInvocation,
 } from "../../../shared/runtime/budgets";
 import { canonical } from "../../../shared/runtime/digest";
+import { validateTemplate } from "../../../shared/runtime/templates";
 import { prepareOperations } from "./operations";
+import { validateNavigationEdit } from "../../../shared/runtime/navigation-edit";
+import { queryRoom } from "../../../shared/runtime/spatial";
 import {
   sampleOperation,
   operationDeadline,
@@ -59,9 +65,55 @@ export class WorldRuntime {
       validateComponent(k, v);
     this.store.putEntity({
       ...entity,
-      components: copyValue(entity.components) as RecordValue,
+      components: copyComponentData(entity.components) as RecordValue,
       publicState: copyValue(entity.publicState) as RecordValue,
       variables: copyValue(entity.variables ?? {}) as RecordValue,
+    });
+  }
+  spawn(hash: string, id: string, parent: Entity, position: number[]) {
+    const template = this.store.template(hash);
+    if (!template || template.property !== parent.property)
+      throw Error("Template unavailable in this property.");
+    validateTemplate(template, (hash) => this.store.package(hash));
+    const components = copyComponentData(template.components) as RecordValue;
+    const pose = components.transform as RecordValue | undefined;
+    components.transform = { position, rotation: pose?.rotation ?? [0, 0, 0] };
+    this.create({
+      ...parent,
+      id,
+      generation: 1,
+      revision: 1,
+      enabled: true,
+      components,
+      publicState: {},
+      variables: {},
+    });
+    const entity = this.requiredEntity(id);
+    for (const binding of template.bindings) {
+      const slot = this.attach(id, binding.slot, binding.hash, binding.config);
+      this.store.installGrant(this.store.slot(slot)!, entity);
+    }
+    return id;
+  }
+  destroy(id: string) {
+    const entity = this.requiredEntity(id);
+    for (const slot of this.store.slots(id)) {
+      this.cancelTimers(slot);
+      this.store.putSlot({
+        ...slot,
+        enabled: false,
+        generation: slot.generation + 1,
+      });
+    }
+    for (const d of this.store.pending(id))
+      this.store.removeDelivery(d.event.id);
+    for (const r of this.store.interactions(id))
+      this.store.removeInteraction(r.id);
+    this.store.putEntity({
+      ...entity,
+      enabled: false,
+      generation: entity.generation + 1,
+      revision: entity.revision + 1,
     });
   }
   attach(
@@ -93,6 +145,7 @@ export class WorldRuntime {
     }
     for (const resource of pkg.manifest.writes)
       if (
+        !resource.startsWith("world.") &&
         !resource.startsWith("public.") &&
         !resource.startsWith("variables.") &&
         !Object.prototype.hasOwnProperty.call(e.components, resource)
@@ -131,10 +184,14 @@ export class WorldRuntime {
     return slot;
   }
   private cancelTimers(slot: Slot) {
+    for (const view of this.store.views(slot.entity))
+      if (view.slot === slot.id) this.store.removeView(view.id);
     for (const timer of this.store.timers(slot.id))
       this.store.removeTimer(timer.id);
     const entity = this.store.entity(slot.entity);
     if (entity) {
+      for (const lease of this.store.reservations(entity.property, entity.room))
+        if (lease.slot === slot.id) this.store.removeReservation(lease.id);
       let changed = false;
       for (const op of this.store
         .operations(slot.entity)
@@ -221,6 +278,7 @@ export class WorldRuntime {
       if (
         !resource.startsWith("public.") &&
         !resource.startsWith("variables.") &&
+        !resource.startsWith("world.") &&
         !Object.prototype.hasOwnProperty.call(entity.components, resource)
       )
         throw Error("Required component unavailable.");
@@ -292,6 +350,20 @@ export class WorldRuntime {
     });
   }
   inspect(caller: Entity, id: string): Value {
+    if (id.startsWith("player:")) {
+      const player = this.store
+        .players(caller.property, caller.room, this.now)
+        .find((p) => p.id === id);
+      return player
+        ? {
+            id,
+            kind: "player",
+            room: caller.room,
+            position: player.trajectory.position,
+            velocity: player.trajectory.velocity,
+          }
+        : null;
+    }
     const e = this.store.entity(id);
     if (
       !e ||
@@ -305,7 +377,14 @@ export class WorldRuntime {
     return copyValue({
       id: e.id,
       room: e.room,
-      components: e.components,
+      components: Object.fromEntries(
+        Object.entries(e.components).filter(
+          ([key]) =>
+            key !== "character" &&
+            key !== "visual" &&
+            !key.startsWith("visual."),
+        ),
+      ),
       publicState: e.publicState,
     });
   }
@@ -388,6 +467,23 @@ export class WorldRuntime {
     const counts = new Map<string, number>(),
       timers = new Map(this.store.timers(slot.id).map((t) => [t.name, t]));
     for (const effect of result.effects) {
+      if (
+        effect.type === "transfer" &&
+        !this.store
+          .roomEntities(entity.property, effect.room)
+          .some((e) => e.components.walkSurface)
+      )
+        throw Error("Destination room unavailable.");
+      if (effect.type === "spawn") {
+        const template = this.store.template(effect.hash);
+        if (
+          !template ||
+          template.property !== entity.property ||
+          this.store.entity(effect.id)
+        )
+          throw Error("Spawn template unavailable.");
+        validateTemplate(template, (hash) => this.store.package(hash));
+      }
       if (effect.type === "message") {
         const target = this.requiredEntity(effect.target);
         if (
@@ -446,6 +542,44 @@ export class WorldRuntime {
       this.store.operations(entity.id),
       this.now,
     );
+    validateNavigationEdit(
+      this.store,
+      entity,
+      { ...entity, components: operations.components },
+      this.now,
+    );
+    const views = new Map(
+      this.store
+        .views(entity.id)
+        .filter((v) => v.slot === slot.id)
+        .map((v) => [v.name, v.definition]),
+    );
+    for (const effect of result.effects)
+      if (effect.type === "view") {
+        if (effect.definition) views.set(effect.name, effect.definition);
+        else views.delete(effect.name);
+      }
+    if (views.size > 4) throw Error("A behavior supports up to four views.");
+    const selfViews = [
+      ...views.values(),
+      ...this.store
+        .views(entity.id)
+        .filter((v) => v.slot !== slot.id)
+        .map((v) => v.definition),
+    ].some((v) => v.frame === "self");
+    if (
+      selfViews &&
+      operations.operations.some(
+        (o) =>
+          o.resource === "transform" &&
+          !o.path &&
+          !o.paused &&
+          o.from.rotation[1] !== o.to.rotation[1],
+      )
+    )
+      throw Error(
+        "Self-frame sensing requires fixed yaw or path-segment heading; use a room-frame view while rotating.",
+      );
     const variables = copyValue(entity.variables ?? {}) as RecordValue,
       changed = new Set<string>();
     for (const effect of result.effects)
@@ -596,6 +730,17 @@ export class WorldRuntime {
             event,
             this.now,
             (id) => this.inspect(entity, id),
+            event.source.kind === "player"
+              ? this.store.playerState(slot.id, event.source.id)
+              : {},
+            (name) =>
+              this.store
+                .views(entity.id)
+                .find((v) => v.slot === slot.id && v.name === name)?.members ??
+              [],
+            this.store.operations(entity.id),
+            (view) => queryRoom(this.store, entity, this.now, view),
+            this.store.reservations(entity.property, entity.room),
           )
         : {
             state: slot.state,
@@ -666,6 +811,65 @@ export class WorldRuntime {
         event.depth + 1,
       );
     for (const effect of result.effects) {
+      if (effect.type === "playerState")
+        this.store.putPlayerState(slot.id, effect.player, effect.value);
+      if (effect.type === "view") {
+        const id = `${slot.id}/${effect.name}`;
+        if (effect.definition)
+          this.store.putView({
+            id,
+            entity: entity.id,
+            slot: slot.id,
+            generation: slot.generation,
+            name: effect.name,
+            definition: effect.definition,
+            members:
+              this.store.views(entity.id).find((v) => v.id === id)?.members ??
+              [],
+          });
+        else this.store.removeView(id);
+      }
+      if (effect.type === "reservation") {
+        for (const lease of this.store.reservations(
+          entity.property,
+          entity.room,
+        ))
+          if (lease.expires <= this.now) this.store.removeReservation(lease.id);
+        if (effect.value) this.store.putReservation(effect.value);
+        else this.store.removeReservation(effect.id);
+      }
+      if (effect.type === "speech" || effect.type === "dialog") {
+        for (const old of this.store.interactions(entity.id))
+          if (
+            old.expires <= this.now ||
+            (old.slot === slot.id &&
+              old.kind === effect.type &&
+              old.player === effect.player)
+          )
+            this.store.removeInteraction(old.id);
+        this.store.putInteraction({
+          id:
+            effect.type === "dialog"
+              ? effect.id
+              : `speech:${event.sequence}:${slot.id}:${result.effects.indexOf(effect)}`,
+          entity: entity.id,
+          property: entity.property,
+          room: entity.room,
+          slot: slot.id,
+          generation: slot.generation,
+          kind: effect.type,
+          player: effect.player,
+          text: effect.type === "dialog" ? effect.prompt : effect.text,
+          ...(effect.type === "dialog"
+            ? {
+                name: effect.name,
+                choices: effect.choices,
+                ...(effect.maxLength ? { maxLength: effect.maxLength } : {}),
+              }
+            : {}),
+          expires: this.now + (effect.type === "dialog" ? 120 : 8),
+        });
+      }
       if (effect.type === "public")
         entity.publicState[effect.key] = effect.value;
       if (effect.type === "message")
@@ -715,6 +919,39 @@ export class WorldRuntime {
       },
     });
     this.advance(delivery);
+    for (const effect of result.effects) {
+      if (effect.type === "spawn")
+        this.spawn(effect.hash, effect.id, entity, effect.position);
+      if (effect.type === "transfer") {
+        for (const s of this.store.slots(entity.id)) this.cancelTimers(s);
+        const updated = this.requiredEntity(entity.id);
+        updated.room = effect.room;
+        updated.generation++;
+        updated.components.transform = {
+          position: effect.position,
+          rotation: [0, 0, 0],
+        };
+        updated.revision++;
+        this.store.putEntity(updated);
+        for (const d of this.store.pending(entity.id))
+          this.store.removeDelivery(d.event.id);
+        for (const r of this.store.interactions(entity.id))
+          this.store.removeInteraction(r.id);
+        for (const s of this.store.slots(entity.id))
+          if (s.enabled)
+            this.enqueue(
+              entity.id,
+              "lifecycle",
+              "bound",
+              null,
+              { kind: "engine", id: "transfer" },
+              s.id,
+              s.generation,
+            );
+      }
+    }
+    if (result.effects.some((e) => e.type === "destroy"))
+      this.destroy(entity.id);
     return true;
   }
   private advance(d: Delivery) {
@@ -773,6 +1010,15 @@ export class WorldRuntime {
     entity.revision++;
     this.store.putEntity(entity);
     this.store.removeOperation(id);
+    this.store.putSlot({
+      ...slot,
+      completedOperations: [
+        ...(slot.completedOperations ?? [])
+          .filter((o) => o.resource !== op.resource)
+          .slice(-(BUDGETS.operations - 1)),
+        op,
+      ],
+    });
     this.enqueue(
       entityId,
       "operation",
@@ -793,7 +1039,7 @@ export class WorldRuntime {
     return n;
   }
   private sampledComponents(entity: Entity) {
-    const components = copyValue(entity.components) as RecordValue;
+    const components = copyComponentData(entity.components) as RecordValue;
     for (const op of this.store.operations(entity.id))
       components[op.resource] = sampleOperation(op, this.now);
     return components;

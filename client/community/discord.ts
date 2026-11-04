@@ -10,7 +10,7 @@ export type ActivityAccess = {
   session: DiscordSession;
   renew: () => Promise<DiscordSession>;
 };
-export async function connectActivity(): Promise<ActivityAccess> {
+export async function connectActivity(host = HOST): Promise<ActivityAccess> {
   const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
   if (!clientId)
     throw new Error(
@@ -19,7 +19,7 @@ export async function connectActivity(): Promise<ActivityAccess> {
   const sdk = new DiscordSDK(clientId);
   await sdk.ready();
   if (!sdk.guildId) throw new Error("Launch this world from a Discord server.");
-  patchUrlMappings([{ prefix: "/db", target: new URL(HOST).host }]);
+  patchUrlMappings([{ prefix: "/db", target: new URL(host).host }]);
   const post = async <T>(path: string, body: unknown): Promise<T> => {
     const r = await fetch(path, {
       method: "POST",

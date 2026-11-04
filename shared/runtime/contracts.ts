@@ -41,7 +41,9 @@ export type EventType =
   | "timer"
   | "operation"
   | "spatial"
-  | "variable";
+  | "variable"
+  | "dialog"
+  | "speech";
 export type Event = {
   id: string;
   entity: string;
@@ -91,6 +93,7 @@ export type Package = {
   source: string;
 };
 export type Slot = {
+  completedOperations?: import("./operations").Operation[];
   id: string;
   entity: string;
   packageHash: string;
@@ -103,6 +106,30 @@ export type Slot = {
   bound: boolean;
 };
 export type Effect =
+  | {
+      type: "reservation";
+      id: string;
+      value: import("./reservations").Reservation | null;
+    }
+  | {
+      type: "view";
+      name: string;
+      definition: import("../intelligent-objects").ViewDefinition | null;
+    }
+  | { type: "spawn"; hash: string; id: string; position: number[] }
+  | { type: "destroy" }
+  | { type: "transfer"; room: string; position: number[] }
+  | { type: "playerState"; value: RecordValue; player: string }
+  | { type: "speech"; text: string; player?: string }
+  | {
+      type: "dialog";
+      name: string;
+      prompt: string;
+      choices: string[];
+      maxLength?: number;
+      player: string;
+      id: string;
+    }
   | { type: "variable"; key: string; value: Value; deleted: boolean }
   | {
       type: "operation";
@@ -111,11 +138,19 @@ export type Effect =
       id: string;
       to: Value;
       duration: number;
+      path?: number[][];
+      mode?: "once" | "loop" | "pingpong";
     }
   | {
       type: "operation";
-      command: "pause" | "resume" | "cancel";
+      command: "pause" | "resume" | "cancel" | "restart";
       resource: string;
+    }
+  | {
+      type: "operation";
+      command: "speed";
+      resource: string;
+      multiplier: number;
     }
   | {
       type: "message";
@@ -186,7 +221,7 @@ export function validateManifest(input: unknown): PackageManifest {
     )
       throw Error("Invalid handler declaration.");
     if (
-      !/^(lifecycle|message|action|timer|operation|spatial|variable):[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/.test(
+      !/^(lifecycle|message|action|timer|operation|spatial|variable|dialog|speech):[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/.test(
         name,
       )
     )

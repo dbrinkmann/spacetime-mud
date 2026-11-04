@@ -32,6 +32,37 @@ body,
 .runtime-stage canvas {
   display: block;
 }
+.runtime-bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 9px 12px;
+  max-width: 240px;
+  background: #e0e8ed;
+  color: #15212b;
+  border-radius: 8px;
+  pointer-events: none;
+  text-align: center;
+}
+.runtime-name {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 2px 5px;
+  background: #19242bd9;
+  color: #dce5eb;
+  font: 12px system-ui;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.runtime-composer {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -100%);
+  z-index: 2;
+}
+.runtime-composer input {
+  width: 230px;
+}
 .runtime-workbench aside {
   padding: 16px;
   overflow: auto;

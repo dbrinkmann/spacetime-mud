@@ -1,7 +1,15 @@
-import { copyValue, type Value } from "./values";
-import { surfaceMaterials } from "../geometry";
+import { copyValue, identifier, type Value } from "./values";
+import { surfaceMaterials, validate as validateGeometry } from "../geometry";
+/** Authored geometry is larger than script messages/state and has its own data budget. */
+export function copyComponentData(input: unknown) {
+  return copyValue(input, 262144, { nodes: 32768, depth: 16, array: 2048 });
+}
 export function validateComponent(key: string, input: Value): Value {
-  const v = copyValue(input);
+  if (/^(transform|visual|visibility|light|sign|text|wall)\./.test(key)) {
+    identifier(key.slice(key.indexOf(".") + 1), "part name");
+    key = key.slice(0, key.indexOf("."));
+  }
+  const v = copyComponentData(input);
   const record = () => {
     if (!v || typeof v !== "object" || Array.isArray(v))
       throw Error("Component must be a record.");
@@ -16,6 +24,101 @@ export function validateComponent(key: string, input: Value): Value {
       throw Error("Invalid component vector.");
   };
   switch (key) {
+    case "label":
+      if (typeof v !== "string" || v.length > 100)
+        throw Error("Label must be at most 100 characters.");
+      break;
+    case "character":
+      validateGeometry(v, "character");
+      break;
+    case "animation":
+      if (!["idle", "walk", "sit", "wave", "talk"].includes(v as string))
+        throw Error("Unknown character animation.");
+      break;
+    case "wall":
+      if (typeof v !== "boolean") throw Error("Wall must be boolean.");
+      break;
+    case "sign": {
+      const r = record();
+      if (
+        Object.keys(r).some(
+          (k) =>
+            ![
+              "text",
+              "position",
+              "yaw",
+              "width",
+              "height",
+              "color",
+              "background",
+              "emissive",
+              "doubleSided",
+              "homeEntrance",
+            ].includes(k),
+        )
+      )
+        throw Error("Unknown sign field.");
+      if (typeof r.text !== "string" || r.text.length > 1000)
+        throw Error("Invalid sign text.");
+      vector(r.position, -100, 100);
+      if (typeof r.yaw !== "number" || Math.abs(r.yaw) > 360)
+        throw Error("Invalid sign yaw.");
+      for (const k of ["width", "height"])
+        if (typeof r[k] !== "number" || r[k] <= 0 || r[k] > 30)
+          throw Error("Invalid sign size.");
+      for (const k of ["color", "background"])
+        if (
+          (k === "color" || r[k] !== undefined) &&
+          (typeof r[k] !== "string" || !/^#[0-9a-f]{6}$/i.test(r[k] as string))
+        )
+          throw Error("Invalid sign color.");
+      for (const k of ["emissive", "doubleSided"])
+        if (r[k] !== undefined && typeof r[k] !== "boolean")
+          throw Error("Invalid sign flag.");
+      if (r.homeEntrance !== undefined) identifier(r.homeEntrance);
+      break;
+    }
+    case "tags":
+      if (
+        !Array.isArray(v) ||
+        v.length > 16 ||
+        v.some(
+          (t) =>
+            typeof t !== "string" || !/^([a-zA-Z][a-zA-Z0-9_-]{0,39})$/.test(t),
+        )
+      )
+        throw Error("Invalid tags.");
+      break;
+    case "seat": {
+      const r = record();
+      if (
+        Object.keys(r).some((k) => !["position", "yaw"].includes(k)) ||
+        typeof r.yaw !== "number" ||
+        Math.abs(r.yaw) > 360
+      )
+        throw Error("Invalid seat.");
+      vector(r.position, -100, 100);
+      break;
+    }
+    case "exit": {
+      const r = record();
+      if (Object.keys(r).some((k) => !["property", "room"].includes(k)))
+        throw Error("Unknown exit field.");
+      identifier(r.property, "destination property");
+      identifier(r.room, "destination room");
+      break;
+    }
+    case "homeEntrance": {
+      const r = record();
+      if (
+        Object.keys(r).some((k) => k !== "name") ||
+        typeof r.name !== "string" ||
+        !r.name.trim() ||
+        r.name.length > 80
+      )
+        throw Error("Invalid entrance name.");
+      break;
+    }
     case "walkSurface": {
       const r = record();
       if (Object.keys(r).some((k) => !["width", "depth", "spawn"].includes(k)))
@@ -58,9 +161,9 @@ export function validateComponent(key: string, input: Value): Value {
       if (
         Object.keys(r).some((k) => k !== "boxes") ||
         !Array.isArray(r.boxes) ||
-        r.boxes.length > 32
+        r.boxes.length > 256
       )
-        throw Error("Visual requires up to 32 boxes.");
+        throw Error("Visual requires up to 256 boxes.");
       for (const box of r.boxes) {
         if (!box || typeof box !== "object" || Array.isArray(box))
           throw Error("Invalid visual box.");

@@ -5,9 +5,29 @@ import {
   cooperationPackages,
 } from "../shared/runtime/cooperation";
 import { WorldSimulation } from "../spacetimedb/src/runtime/simulation";
+import { WorldRuntime } from "../spacetimedb/src/runtime/engine";
 import { presentEntity } from "../shared/runtime/presentation";
 import { validateComponent } from "../shared/runtime/components";
 import { sampleOperation } from "../shared/runtime/operations";
+test("authored geometry has a separate budget from script payloads", () => {
+  const sim = new WorldSimulation(),
+    e = cooperationEntities("detail", "home", "guild", "owner")[1];
+  e.components.visual = {
+    boxes: Array.from({ length: 128 }, (_, i) => ({
+      position: [i % 16, Math.floor(i / 16), 0],
+      size: [0.2, 0.2, 0.2],
+      color: "#667788",
+      material: "metal",
+      roughness: 0.7,
+      wear: 0.2,
+    })),
+  };
+  sim.create(e);
+  const visible = presentEntity(sim.store.entity(e.id)!, [], []);
+  assert.equal((visible.components.visual as any).boxes.length, 128);
+  const runtime = new WorldRuntime(sim.store, 0);
+  assert.equal((runtime.inspect(e, e.id) as any).components.visual, undefined);
+});
 test("authored switch drives an independently installed hinge and indicator; reconnect samples motion", () => {
   let sim = new WorldSimulation();
   const pkgs = cooperationPackages("examples");

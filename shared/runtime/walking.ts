@@ -1,6 +1,19 @@
 import type { Entity } from "./contracts";
 import type { Vec3 } from "../geometry";
 import { route, walkable, type NavigationRoom } from "../navigation";
+import { pathTrajectory } from "../intelligent-objects";
+export function walkerTrajectory(w: Walker, now: number) {
+  const elapsed = Math.max(0, now - w.walk.started),
+    duration = walkDuration(w.walk);
+  const phase = w.away ? elapsed % (duration + 10) : elapsed;
+  const trajectory = pathTrajectory(
+    [w.walk.start, ...w.walk.points],
+    phase * w.walk.speed,
+    w.walk.speed,
+  );
+  if (w.away && trajectory.ended) trajectory.next = duration + 10 - phase;
+  return trajectory;
+}
 export type Walk = {
   start: Vec3;
   points: Vec3[];
@@ -8,6 +21,11 @@ export type Walk = {
   speed: number;
 };
 export type Walker = {
+  name?: string;
+  gesture?: { animation: "wave" | "talk"; until: number };
+  away?: boolean;
+  character?: import("../geometry").Character;
+  seat?: string;
   id: string;
   property: string;
   room: string;
@@ -15,6 +33,17 @@ export type Walker = {
   action?: { entity: string; name: string; generation: number };
   error?: string;
 };
+export function walkerPosition(walker: Walker, now: number): Vec3 {
+  if (!walker.away) return walkPosition(walker.walk, now);
+  const period = walkDuration(walker.walk) + 10;
+  return walkPosition(
+    {
+      ...walker.walk,
+      started: now - (Math.max(0, now - walker.walk.started) % period),
+    },
+    now,
+  );
+}
 export function walkDuration(walk: Walk) {
   let distance = 0,
     last = walk.start;

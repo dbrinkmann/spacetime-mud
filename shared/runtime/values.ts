@@ -33,11 +33,18 @@ export function identifier(value: unknown, label = "identifier"): string {
 export function copyValue(
   input: unknown,
   byteLimit: number = VALUE_LIMITS.bytes,
+  options: {
+    nodes?: number;
+    depth?: number;
+    array?: number;
+    string?: number;
+  } = {},
 ): Value {
+  const limits = { ...VALUE_LIMITS, ...options };
   let nodes = 0;
   const visiting = new Set<object>();
   const walk = (v: unknown, depth: number): Value => {
-    if (++nodes > VALUE_LIMITS.nodes || depth > VALUE_LIMITS.depth)
+    if (++nodes > limits.nodes || depth > limits.depth)
       throw Error("Value complexity budget exceeded.");
     if (v === null || typeof v === "boolean") return v;
     if (typeof v === "number") {
@@ -45,8 +52,7 @@ export function copyValue(
       return v;
     }
     if (typeof v === "string") {
-      if (v.length > VALUE_LIMITS.string)
-        throw Error("String budget exceeded.");
+      if (v.length > limits.string) throw Error("String budget exceeded.");
       return v;
     }
     if (typeof v !== "object")
@@ -60,7 +66,7 @@ export function copyValue(
     visiting.add(v);
     let result: Value;
     if (array) {
-      if (v.length > VALUE_LIMITS.array || Object.keys(v).length !== v.length)
+      if (v.length > limits.array || Object.keys(v).length !== v.length)
         throw Error("Arrays must be dense and bounded.");
       const out: Value[] = [];
       for (let i = 0; i < v.length; i++) {

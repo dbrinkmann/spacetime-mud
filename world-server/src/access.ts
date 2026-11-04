@@ -79,6 +79,12 @@ export function requireEntityEdit(ctx: Ctx, id: string) {
   if (!entity) throw new SenderError("Entity unavailable.");
   return requirePropertyEdit(ctx, entity.property);
 }
+export function requirePropertyVisit(ctx: Ctx, id: string) {
+  const property = ctx.db.propertyAuthority.id.find(id);
+  if (!property) throw new SenderError("Property unavailable.");
+  requireBuilder(ctx, property.community);
+  return property;
+}
 export function requireSlotEdit(ctx: Ctx, id: string) {
   const slot = ctx.db.slot.id.find(id);
   if (!slot) throw new SenderError("Slot unavailable.");

@@ -1,3 +1,4 @@
+import { buildCharacter } from "./character";
 import {
   propTrajectory,
   type MotionState,
@@ -282,32 +283,9 @@ export function Viewport(props: Props) {
       if (!o.wall) pickables.push(g);
     }
     function rig(def: Character) {
-      const root = new THREE.Group(),
-        body = new THREE.Group(),
-        joints = {} as Record<Part, THREE.Group>;
-      root.add(body);
-      for (const part of parts) {
-        const group = new THREE.Group();
-        group.position.fromArray(pivots[part]);
-        body.add(group);
-        joints[part] = group;
-        def.parts[part].forEach((b) => addBox(group, b));
-      }
-      const cosmetics: THREE.Group[] = [];
-      for (const a of def.cosmetics) {
-        const group = new THREE.Group();
-        group.name = a.name;
-        group.position.fromArray(a.position);
-        if (a.rotation)
-          group.rotation.set(
-            ...(a.rotation.map((x) => THREE.MathUtils.degToRad(x)) as Vec3),
-          );
-        a.boxes.forEach((b) => addBox(group, b));
-        joints[a.parent].add(group);
-        cosmetics.push(group);
-      }
-      scene.add(root);
-      return { root, body, joints, cosmetics };
+      const rig = buildCharacter(def, addBox);
+      scene.add(rig.root);
+      return rig;
     }
     const signs = (room.signs ?? []).map(signMesh);
     signs.forEach((s, i) => {

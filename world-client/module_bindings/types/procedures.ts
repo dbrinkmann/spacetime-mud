@@ -6,15 +6,27 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all procedure arg schemas
+import * as EntityHistoryProcedure from "../entity_history_procedure";
+import * as ExportTemplateProcedure from "../export_template_procedure";
 import * as GetPackageProcedure from "../get_package_procedure";
 import * as InspectEntityProcedure from "../inspect_entity_procedure";
+import * as ListWorldProcedure from "../list_world_procedure";
+import * as PreviewPrincipalProcedure from "../preview_principal_procedure";
 import * as PreviewRoomProcedure from "../preview_room_procedure";
 import * as RuntimeInfoProcedure from "../runtime_info_procedure";
 
+export type EntityHistoryArgs = __Infer<typeof EntityHistoryProcedure.params>;
+export type EntityHistoryResult = __Infer<typeof EntityHistoryProcedure.returnType>;
+export type ExportTemplateArgs = __Infer<typeof ExportTemplateProcedure.params>;
+export type ExportTemplateResult = __Infer<typeof ExportTemplateProcedure.returnType>;
 export type GetPackageArgs = __Infer<typeof GetPackageProcedure.params>;
 export type GetPackageResult = __Infer<typeof GetPackageProcedure.returnType>;
 export type InspectEntityArgs = __Infer<typeof InspectEntityProcedure.params>;
 export type InspectEntityResult = __Infer<typeof InspectEntityProcedure.returnType>;
+export type ListWorldArgs = __Infer<typeof ListWorldProcedure.params>;
+export type ListWorldResult = __Infer<typeof ListWorldProcedure.returnType>;
+export type PreviewPrincipalArgs = __Infer<typeof PreviewPrincipalProcedure.params>;
+export type PreviewPrincipalResult = __Infer<typeof PreviewPrincipalProcedure.returnType>;
 export type PreviewRoomArgs = __Infer<typeof PreviewRoomProcedure.params>;
 export type PreviewRoomResult = __Infer<typeof PreviewRoomProcedure.returnType>;
 export type RuntimeInfoArgs = __Infer<typeof RuntimeInfoProcedure.params>;

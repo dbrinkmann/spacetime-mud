@@ -1,11 +1,85 @@
-import type { RuntimeStore, Delivery, Receipt, Timer } from "./store";
+import type {
+  RuntimeStore,
+  Delivery,
+  Receipt,
+  Timer,
+  InteractionRecord,
+  ObjectView,
+} from "./store";
+import type { RecordValue } from "./values";
 import type { Entity, Slot, Package } from "./contracts";
 import type { WorkMeter } from "./budgets";
+import type { EntityTemplate } from "./templates";
 import { operationDeadline, type Operation } from "./operations";
 const clone = <T>(v: T): T =>
   v === undefined ? v : JSON.parse(JSON.stringify(v));
 /** Deterministic simulation store. Production uses table-backed storage. */
 export class MemoryStore implements RuntimeStore {
+  private reservationRows = new Map<
+    string,
+    import("./reservations").Reservation
+  >();
+  reservations(property: string, room: string) {
+    return [...this.reservationRows.values()]
+      .filter((r) => r.property === property && r.room === room)
+      .map(clone);
+  }
+  putReservation(value: import("./reservations").Reservation) {
+    this.reservationRows.set(value.id, clone(value));
+  }
+  removeReservation(id: string) {
+    this.reservationRows.delete(id);
+  }
+  players(
+    _property: string,
+    _room: string,
+    _now: number,
+  ): import("../intelligent-objects").SensedEntity[] {
+    return [];
+  }
+  private viewRows = new Map<string, ObjectView>();
+  views(entity: string) {
+    return [...this.viewRows.values()]
+      .filter((v) => v.entity === entity)
+      .map(clone);
+  }
+  putView(value: ObjectView) {
+    this.viewRows.set(value.id, clone(value));
+  }
+  removeView(id: string) {
+    this.viewRows.delete(id);
+  }
+  private templates = new Map<string, EntityTemplate>();
+  template(hash: string) {
+    return clone(this.templates.get(hash));
+  }
+  putTemplate(template: EntityTemplate) {
+    if (this.templates.has(template.hash))
+      throw Error("Immutable template exists.");
+    this.templates.set(template.hash, clone(template));
+  }
+  installGrant(slot: Slot, _entity: Entity) {
+    this.revoked.delete(slot.id);
+  }
+  private playerStates = new Map<string, RecordValue>();
+  private interactionRows = new Map<string, InteractionRecord>();
+  playerState(slot: string, player: string) {
+    return clone(this.playerStates.get(JSON.stringify([slot, player])) ?? {});
+  }
+  putPlayerState(slot: string, player: string, value: RecordValue) {
+    this.playerStates.set(JSON.stringify([slot, player]), clone(value));
+  }
+  interactions(entity: string) {
+    return [...this.interactionRows.values()]
+      .filter((r) => r.entity === entity)
+      .map(clone);
+  }
+  putInteraction(value: InteractionRecord) {
+    this.interactionRows.set(value.id, clone(value));
+  }
+  removeInteraction(id: string) {
+    this.interactionRows.delete(id);
+  }
   private meters = new Map<string, WorkMeter>();
   workMeter(key: string) {
     return clone(this.meters.get(key));
@@ -54,6 +128,14 @@ export class MemoryStore implements RuntimeStore {
   }
   entity(id: string) {
     return clone(this.entities.get(id));
+  }
+  entityIds() {
+    return [...this.entities.keys()];
+  }
+  roomEntities(property: string, room: string) {
+    return [...this.entities.values()]
+      .filter((e) => e.enabled && e.property === property && e.room === room)
+      .map(clone);
   }
   putEntity(e: Entity) {
     this.entities.set(e.id, clone(e));
@@ -131,6 +213,7 @@ export class MemoryStore implements RuntimeStore {
   export() {
     return JSON.stringify({
       entities: [...this.entities],
+      reservationRows: [...this.reservationRows],
       instances: [...this.instances],
       packages: [...this.packages],
       inbox: [...this.inbox],
@@ -141,12 +224,17 @@ export class MemoryStore implements RuntimeStore {
       revoked: [...this.revoked],
       animations: [...this.animations],
       meters: [...this.meters],
+      templates: [...this.templates],
+      viewRows: [...this.viewRows],
+      playerStates: [...this.playerStates],
+      interactionRows: [...this.interactionRows],
     });
   }
   static restore(source: string) {
     const data = JSON.parse(source),
       store = new MemoryStore();
     store.entities = new Map(data.entities);
+    store.reservationRows = new Map(data.reservationRows ?? []);
     store.instances = new Map(data.instances);
     store.packages = new Map(data.packages);
     store.inbox = new Map(data.inbox);
@@ -157,6 +245,10 @@ export class MemoryStore implements RuntimeStore {
     store.revoked = new Set(data.revoked ?? []);
     store.animations = new Map(data.animations ?? []);
     store.meters = new Map(data.meters ?? []);
+    store.templates = new Map(data.templates ?? []);
+    store.viewRows = new Map(data.viewRows ?? []);
+    store.playerStates = new Map(data.playerStates ?? []);
+    store.interactionRows = new Map(data.interactionRows ?? []);
     return store;
   }
 }

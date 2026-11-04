@@ -16,6 +16,12 @@ export const Authority = __t.object("Authority", {
 });
 export type Authority = __Infer<typeof Authority>;
 
+export const Avatar = __t.object("Avatar", {
+  id: __t.string(),
+  data: __t.string(),
+});
+export type Avatar = __Infer<typeof Avatar>;
+
 export const BehaviorPackage = __t.object("BehaviorPackage", {
   hash: __t.string(),
   data: __t.string(),
@@ -51,6 +57,30 @@ export const Entity = __t.object("Entity", {
 });
 export type Entity = __Infer<typeof Entity>;
 
+export const EntityHistory = __t.object("EntityHistory", {
+  id: __t.string(),
+  entity: __t.string(),
+  revision: __t.u32(),
+  data: __t.string(),
+});
+export type EntityHistory = __Infer<typeof EntityHistory>;
+
+export const EntityTemplate = __t.object("EntityTemplate", {
+  hash: __t.string(),
+  property: __t.string(),
+  data: __t.string(),
+});
+export type EntityTemplate = __Infer<typeof EntityTemplate>;
+
+export const HomeLink = __t.object("HomeLink", {
+  entrance: __t.string(),
+  property: __t.string(),
+  community: __t.string(),
+  owner: __t.identity(),
+  name: __t.string(),
+});
+export type HomeLink = __Infer<typeof HomeLink>;
+
 export const Inbox = __t.object("Inbox", {
   id: __t.string(),
   entity: __t.string(),
@@ -68,6 +98,17 @@ export const InstalledGrant = __t.object("InstalledGrant", {
 });
 export type InstalledGrant = __Infer<typeof InstalledGrant>;
 
+export const Interaction = __t.object("Interaction", {
+  id: __t.string(),
+  entity: __t.string(),
+  property: __t.string(),
+  data: __t.string(),
+});
+export type Interaction = __Infer<typeof Interaction>;
+
+export const LiveRoomStamp = __t.object("LiveRoomStamp", {});
+export type LiveRoomStamp = __Infer<typeof LiveRoomStamp>;
+
 export const Membership = __t.object("Membership", {
   key: __t.string(),
   community: __t.string(),
@@ -78,6 +119,13 @@ export const Membership = __t.object("Membership", {
   validUntil: __t.f64(),
 });
 export type Membership = __Infer<typeof Membership>;
+
+export const ObjectView = __t.object("ObjectView", {
+  id: __t.string(),
+  entity: __t.string(),
+  data: __t.string(),
+});
+export type ObjectView = __Infer<typeof ObjectView>;
 
 export const Operation = __t.object("Operation", {
   id: __t.string(),
@@ -100,6 +148,20 @@ export const PackageRevision = __t.object("PackageRevision", {
 });
 export type PackageRevision = __Infer<typeof PackageRevision>;
 
+export const PlaySession = __t.object("PlaySession", {
+  id: __t.string(),
+  player: __t.string(),
+});
+export type PlaySession = __Infer<typeof PlaySession>;
+
+export const PlayerState = __t.object("PlayerState", {
+  id: __t.string(),
+  slot: __t.string(),
+  player: __t.string(),
+  data: __t.string(),
+});
+export type PlayerState = __Infer<typeof PlayerState>;
+
 export const PropertyAuthority = __t.object("PropertyAuthority", {
   id: __t.string(),
   community: __t.string(),
@@ -117,12 +179,36 @@ export const Receipt = __t.object("Receipt", {
 });
 export type Receipt = __Infer<typeof Receipt>;
 
+export const Reservation = __t.object("Reservation", {
+  id: __t.string(),
+  property: __t.string(),
+  room: __t.string(),
+  data: __t.string(),
+});
+export type Reservation = __Infer<typeof Reservation>;
+
+export const RoomStamp = __t.object("RoomStamp", {
+  id: __t.string(),
+  stamp: __t.string(),
+});
+export type RoomStamp = __Infer<typeof RoomStamp>;
+
 export const Slot = __t.object("Slot", {
   id: __t.string(),
   entity: __t.string(),
   data: __t.string(),
 });
 export type Slot = __Infer<typeof Slot>;
+
+export const SpatialWake = __t.object("SpatialWake", {
+  scheduledId: __t.u64(),
+  key: __t.string(),
+  property: __t.string(),
+  room: __t.string(),
+  due: __t.f64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type SpatialWake = __Infer<typeof SpatialWake>;
 
 export const Timer = __t.object("Timer", {
   id: __t.string(),

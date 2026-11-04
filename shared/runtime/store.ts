@@ -1,7 +1,33 @@
 import type { Entity, Event, Package, Slot } from "./contracts";
-import type { Value } from "./values";
+import type { Value, RecordValue } from "./values";
+export type InteractionRecord = {
+  id: string;
+  entity: string;
+  room: string;
+  property: string;
+  slot: string;
+  generation: number;
+  kind: "speech" | "dialog";
+  player?: string;
+  text: string;
+  name?: string;
+  choices?: string[];
+  maxLength?: number;
+  expires: number;
+};
 import type { Operation } from "./operations";
 import type { WorkMeter } from "./budgets";
+import type { EntityTemplate } from "./templates";
+import type { ViewDefinition } from "../intelligent-objects";
+export type ObjectView = {
+  id: string;
+  entity: string;
+  slot: string;
+  generation: number;
+  name: string;
+  definition: ViewDefinition;
+  members: string[];
+};
 export type Receipt = {
   id: string;
   event: string;
@@ -42,9 +68,32 @@ export type Timer = {
 };
 /** All mutation calls occur within the host's transaction. No callbacks perform I/O. */
 export interface RuntimeStore {
+  reservations(
+    property: string,
+    room: string,
+  ): import("./reservations").Reservation[];
+  putReservation(value: import("./reservations").Reservation): void;
+  removeReservation(id: string): void;
+  players(
+    property: string,
+    room: string,
+    now: number,
+  ): import("../intelligent-objects").SensedEntity[];
+  views(entity: string): ObjectView[];
+  putView(value: ObjectView): void;
+  removeView(id: string): void;
+  template(hash: string): EntityTemplate | undefined;
+  putTemplate(template: EntityTemplate): void;
+  installGrant(slot: Slot, entity: Entity): void;
+  playerState(slot: string, player: string): RecordValue;
+  putPlayerState(slot: string, player: string, value: RecordValue): void;
+  interactions(entity: string): InteractionRecord[];
+  putInteraction(value: InteractionRecord): void;
+  removeInteraction(id: string): void;
   workMeter(key: string): WorkMeter | undefined;
   putWorkMeter(meter: WorkMeter): void;
   entity(id: string): Entity | undefined;
+  roomEntities(property: string, room: string): Entity[];
   putEntity(entity: Entity): void;
   slots(entity: string): Slot[];
   slot(id: string): Slot | undefined;

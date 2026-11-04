@@ -5,6 +5,7 @@ import {
   type Operation,
 } from "../../../shared/runtime/operations";
 import { copyValue, type RecordValue } from "../../../shared/runtime/values";
+import { copyComponentData } from "../../../shared/runtime/components";
 import {
   BUDGETS,
   type Entity,
@@ -24,7 +25,7 @@ export function prepareOperations(
   existing: Operation[],
   now: number,
 ) {
-  const components = copyValue(entity.components) as RecordValue;
+  const components = copyComponentData(entity.components) as RecordValue;
   const operations = new Map(existing.map((op) => [op.resource, op]));
   const notices: OperationNotice[] = [];
   const cancel = (resource: string) => {
@@ -46,8 +47,14 @@ export function prepareOperations(
     }
     if (effect.type !== "operation") continue;
     const key = effect.resource,
-      old = operations.get(key);
-    if (key !== "transform")
+      old =
+        operations.get(key) ??
+        (effect.command === "restart"
+          ? slot.completedOperations?.find(
+              (o) => o.resource === key && o.generation === slot.generation,
+            )
+          : undefined);
+    if (key !== "transform" && !key.startsWith("transform."))
       throw Error("Timed operations currently require a transform resource.");
     if (old && old.slot !== slot.id)
       throw Error("Operation resource belongs to another slot.");
@@ -72,6 +79,7 @@ export function prepareOperations(
         paused: false,
         correlation: event.correlation,
         depth: event.depth,
+        ...(effect.path ? { path: effect.path, mode: effect.mode } : {}),
       });
     } else if (effect.command === "cancel") cancel(key);
     else {
@@ -79,9 +87,16 @@ export function prepareOperations(
       components[key] = sampleOperation(old, now);
       operations.set(key, {
         ...old,
-        progress: operationProgress(old, now),
+        progress:
+          effect.command === "restart" ? 0 : operationProgress(old, now),
         started: now,
-        paused: effect.command === "pause",
+        paused:
+          effect.command === "pause"
+            ? true
+            : effect.command === "resume"
+              ? false
+              : old.paused,
+        speed: effect.command === "speed" ? effect.multiplier : old.speed,
       });
     }
   }

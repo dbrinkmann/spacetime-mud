@@ -11,9 +11,11 @@ import { canonical, sha256 } from "../shared/runtime/digest";
 import { WORK_LIMITS } from "../shared/runtime/budgets";
 import { counterExample } from "../shared/runtime/examples";
 import { cooperationPackages } from "../shared/runtime/cooperation";
+import { guidePackage } from "../shared/runtime/guide-example";
 import { validateSource } from "../spacetimedb/src/runtime/sandbox";
 import { WorldSimulation } from "../spacetimedb/src/runtime/simulation";
 import { WorldRuntime } from "../spacetimedb/src/runtime/engine";
+import { copyComponentData } from "../shared/runtime/components";
 const key = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.:-]{0,79}$/);
 const slotRef = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.:-]{1,160}$/);
 const packageInput = z.object({
@@ -52,11 +54,62 @@ const guard =
     }
   };
 /** Provider-neutral v2 authoring surface. No live connection is needed for validation or simulation. */
-export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
+export function createRuntimeMcp(
+  connect: () => Promise<DbConnection>,
+  options: {
+    preview?: (input: Record<string, unknown>) => Promise<string>;
+  } = {},
+) {
   const server = new McpServer({
     name: "lantern-runtime-builder",
     version: "2.0.0",
   });
+  server.registerTool(
+    "world_preview",
+    {
+      description:
+        "Render a live room or unpublished RoomPresentation through the hosted game renderer; PNG, no publication. Optional camera focus, zoom, yaw and time offset.",
+      inputSchema: {
+        community: z.string(),
+        property: key,
+        room: key,
+        source: z.string().max(2000000).optional(),
+        focus: z.tuple([z.number(), z.number(), z.number()]).optional(),
+        zoom: z.number().min(0.25).max(20).optional(),
+        yaw: z.number().min(-360).max(360).optional(),
+        time: z.number().min(0).max(3600).optional(),
+      },
+    },
+    async (a) => {
+      try {
+        if (!options.preview)
+          throw Error(
+            "Set LANTERN_RUNTIME_SITE to the replacement preview host.",
+          );
+        const c = await connect();
+        const source =
+          a.source ??
+          (await c.procedures.previewRoom({
+            property: a.property,
+            room: a.room,
+          }));
+        const data = await options.preview({
+          runtime: true,
+          community_id: a.community,
+          source,
+          focus: a.focus,
+          zoom: a.zoom,
+          yaw: a.yaw,
+          time: a.time,
+        });
+        return {
+          content: [{ type: "image" as const, mimeType: "image/png", data }],
+        };
+      } catch (e) {
+        return { ...json({ error: String(e) }), isError: true };
+      }
+    },
+  );
   server.registerTool(
     "world_guide",
     {
@@ -71,6 +124,7 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
       workLimits: WORK_LIMITS,
       packageExample: counterExample,
       cooperationExamples: cooperationPackages("examples"),
+      dialogueExample: guidePackage,
       componentExamples: {
         walkSurface: { width: 10, depth: 8, spawn: [3, 0, 3] },
         collider: { size: [1, 1], center: [0, 0, 0], enabled: true },
@@ -103,11 +157,21 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
       messaging:
         "ctx.messages.send(entity,name,payload) is asynchronous and same-property. ctx.messages.sendToSlot(entity,localSlotName,name,payload) targets one behavior's contract. The provisional ID identifies delivery only after commit. ctx.entities.inspect returns public state and sampled components, not private variables.",
       time: "ctx.timers.after(seconds,name,payload), cancel(name); timer:name subscriptions. ctx.clock.now() is server/virtual time in seconds.",
+      spatial:
+        "ctx.subscribe(name,{frame:'self'|'room',box:{center:[x,y,z],size:[width,depth],height?:meters},include:['player','tag:car'],hysteresis?:meters}); unsubscribe(name); view(name) returns member IDs. spatial:enter/exit payload {view,entity:{id,kind}}. ctx.entities.query(viewDefinition) returns up to 64 {id,kind,position}; inspect(id) accepts player:IDENTITY. Self-frame sensing requires fixed yaw or path-segment heading. Hidden sources still sense; hidden targets are omitted.",
+      reservations:
+        "ctx.reservations.claim(name,{center:[x,y,z],size:[width,height,depth]},seconds) atomically reserves a room-space region and returns boolean. Reclaim renews; release(name) frees. Hidden sources retain claims. Four claims per slot, .25..300 second leases. Lifecycle cleanup frees claims. Reservations do not create physics colliders.",
+      random:
+        "ctx.random() returns deterministic event-seeded values in [0,1). Replaying an event repeats its draws.",
       operations:
-        "ctx.operations.animate('transform',{position:[x,y,z],rotation:[x,y,z]},seconds), pause/resume/cancel(resource). operation:completed/cancelled payload is {id,resource,outcome}. Rotation is linear authored degrees.",
+        "ctx.operations.animate(resource,{position:[x,y,z],rotation:[x,y,z]},seconds), follow(resource,points,speed,mode), pause/resume/restart/cancel(resource), setSpeed(resource,multiplier), progress(resource). Restart preserves paused state; progress reads event-start state. Path modes once/loop/pingpong; base speed meters/second. Named parts share NAME across visual, transform, light, sign, text, wall and visibility. operation:completed/cancelled payload {id,resource,outcome}.",
+      interaction:
+        "ctx.say(text) speaks publicly; ctx.tell(text) privately; ctx.dialog(name,prompt,choices) emits dialog:name with {choice}; ctx.prompt(name,prompt,maxLength) emits {text}. ctx.player.get/set stores private per-player memory. Player actions/speech/spatial arrivals carry context; messages do not inherit it. speech:said carries {speaker,text}; script speech does not trigger recursion.",
+      lifecycle:
+        "world_publish_template stores components and pinned behavior bindings. ctx.world.spawn(hash,position) returns a new entity ID; ctx.world.destroy() removes self from the world; ctx.world.transfer(room,position) moves self within its property, cancels timers/operations and emits bound. Declare world.spawn/world.destroy/world.transfer in writes. Transfer requires an authored destination walk surface. Template/spawn tools support configured behavior reuse; dependency discovery is not implemented.",
       limitations: [
         "The local authorized workshop (?runtime) supports floor walking, static collider routing and approach-before-action. Each room needs one origin-centered walkSurface; collider footprints and interaction approach offsets use the entity yaw. Only null-payload actions are exposed by this UI. Moving obstacle avoidance and Activity integration remain incomplete.",
-        "No player dialogs, spawning, spatial views or path operations yet",
+        "Spatial views, seating, away avatars, character/sign/light parts and home graphs are implemented locally. Replacement Discord deployment and launch verification remain outstanding.",
         "Simulation does not impersonate live memberships or authorize live actions",
       ],
     })),
@@ -180,7 +244,7 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
     "world_create_entity",
     {
       description:
-        "Create a runtime entity within an authorized property. This does not yet author room geometry.",
+        "Create an entity with geometry, signs, lights, characters, navigation and interactions in an authorized property.",
       inputSchema: {
         id: key,
         property: key,
@@ -193,7 +257,7 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
         await connect()
       ).reducers.createEntity({
         ...a,
-        components: JSON.stringify(copyValue(a.components)),
+        components: JSON.stringify(copyComponentData(a.components)),
       });
       return { id: a.id };
     }),
@@ -295,6 +359,256 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
     }),
   );
   server.registerTool(
+    "world_update_entity",
+    {
+      description:
+        "Patch authored components against an inspected revision. Unchanged motion resources continue running.",
+      inputSchema: {
+        id: key,
+        revision: z.number().int().min(1),
+        components: z.record(z.string(), z.unknown()),
+      },
+    },
+    guard(async (a) => {
+      await (
+        await connect()
+      ).reducers.updateEntity({
+        ...a,
+        components: JSON.stringify(copyComponentData(a.components)),
+      });
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
+    "world_destroy_entity",
+    {
+      description:
+        "Remove an editable entity from the live world and cancel its queued work, timers and operations.",
+      inputSchema: { id: key },
+    },
+    guard(async (a) => {
+      await (await connect()).reducers.destroyEntity(a);
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
+    "world_publish_template",
+    {
+      description:
+        "Publish a reusable entity definition with components and pinned configured behavior slots. Return the immutable hash used by scripts or the spawn tool.",
+      inputSchema: {
+        property: key,
+        components: z.record(z.string(), z.unknown()),
+        bindings: z
+          .array(
+            z.object({
+              slot: key,
+              hash: z.string().regex(/^[a-f0-9]{64}$/),
+              config: z.record(z.string(), z.unknown()),
+            }),
+          )
+          .max(8),
+      },
+    },
+    guard(async (a) => {
+      const definition = {
+        components: copyComponentData(a.components),
+        bindings: a.bindings.map((b) => ({
+          ...b,
+          config: copyValue(b.config),
+        })),
+      };
+      const hash = sha256(canonical({ ...definition, property: a.property }));
+      await (
+        await connect()
+      ).reducers.publishTemplate({
+        property: a.property,
+        definition: JSON.stringify(definition),
+      });
+      return { hash };
+    }),
+  );
+  server.registerTool(
+    "world_spawn_template",
+    {
+      description:
+        "Instantiate an authorized template and initialize each configured behavior in a room.",
+      inputSchema: {
+        property: key,
+        room: key,
+        id: key,
+        hash: z.string().regex(/^[a-f0-9]{64}$/),
+        position: z.tuple([z.number(), z.number(), z.number()]),
+      },
+    },
+    guard(async (a) => {
+      await (
+        await connect()
+      ).reducers.spawnTemplate({ ...a, position: JSON.stringify(a.position) });
+      return { accepted: true, id: a.id };
+    }),
+  );
+  server.registerTool(
+    "world_create_room",
+    {
+      description:
+        "Create an origin-centered walkable room and editable floor. Add authored exits to connect rooms; homes have independent expandable room graphs.",
+      inputSchema: {
+        property: key,
+        room: key,
+        name: z.string().min(1).max(80),
+        width: z.number().min(4).max(100),
+        depth: z.number().min(4).max(100),
+      },
+    },
+    guard(async (a) => {
+      await (await connect()).reducers.createRoom(a);
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
+    "world_list_rooms",
+    {
+      description:
+        "List the community's authored rooms, home entrances and current player location.",
+      inputSchema: { community: z.string().max(80) },
+    },
+    guard(async (a) =>
+      JSON.parse(await (await connect()).procedures.listWorld(a)),
+    ),
+  );
+  server.registerTool(
+    "world_export_template",
+    {
+      description:
+        "Export a reusable entity template with every pinned behavior, source, license and configuration. No private instance state is exported.",
+      inputSchema: { hash: z.string().regex(/^[0-9a-f]{64}$/) },
+    },
+    guard(async (a) =>
+      JSON.parse(await (await connect()).procedures.exportTemplate(a)),
+    ),
+  );
+  server.registerTool(
+    "world_import_template",
+    {
+      description:
+        "Import a shared template into your package namespace and property. Explicit reference replacements apply to components/configuration, never source code. Returns the new template hash; does not spawn instances.",
+      inputSchema: {
+        community: z.string(),
+        property: key,
+        namespace: key,
+        bundle: z.unknown(),
+        references: z.record(z.string(), z.string()).optional(),
+      },
+    },
+    guard(async (a) => {
+      const bundle = a.bundle as {
+        format: number;
+        components: RecordValue;
+        bindings: Array<{ slot: string; hash: string; config: RecordValue }>;
+        packages: Array<Parameters<typeof packageBundle>[0] & { hash: string }>;
+      };
+      if (
+        bundle.format !== 2 ||
+        !Array.isArray(bundle.packages) ||
+        bundle.packages.length > 8 ||
+        !Array.isArray(bundle.bindings) ||
+        bundle.bindings.length > 8
+      )
+        throw Error("Invalid template bundle.");
+      const replacements = a.references ?? {};
+      const remap = (v: unknown): unknown =>
+        typeof v === "string"
+          ? (replacements[v] ?? v)
+          : Array.isArray(v)
+            ? v.map(remap)
+            : v && typeof v === "object"
+              ? Object.fromEntries(
+                  Object.entries(v).map(([k, v]) => [k, remap(v)]),
+                )
+              : v;
+      const packages = bundle.packages.map((p) => {
+        const original = packageBundle(p);
+        if (original.hash !== p.hash) throw Error("Package hash mismatch.");
+        return {
+          old: p.hash,
+          next: packageBundle({
+            ...p,
+            manifest: {
+              ...original.manifest,
+              id: `${a.namespace}.${original.manifest.id}`,
+            },
+          }),
+        };
+      });
+      const bindings = bundle.bindings.map((b) => {
+        const pkg = packages.find((p) => p.old === b.hash);
+        if (!pkg) throw Error("Missing pinned dependency.");
+        return { ...b, hash: pkg.next.hash, config: remap(b.config) };
+      });
+      const definition = { components: remap(bundle.components), bindings };
+      const c = await connect();
+      for (const pkg of packages)
+        await c.reducers.publishPackage({
+          bundle: JSON.stringify(pkg.next),
+          visibility: "community",
+          community: a.community,
+        });
+      await c.reducers.publishTemplate({
+        property: a.property,
+        definition: JSON.stringify(definition),
+      });
+      return {
+        hash: sha256(canonical({ ...definition, property: a.property })),
+        packages: packages.map((p) => p.next.manifest.id),
+      };
+    }),
+  );
+  server.registerTool(
+    "world_entity_history",
+    {
+      description:
+        "Read recent authored component revisions. Runtime state is not restored by an appearance restore.",
+      inputSchema: { id: key },
+    },
+    guard(async (a) =>
+      JSON.parse(await (await connect()).procedures.entityHistory(a)),
+    ),
+  );
+  server.registerTool(
+    "world_restore_entity",
+    {
+      description:
+        "Restore components from an authored revision as a new revision; preserves private state and rejects stale edits or removal of bound resources.",
+      inputSchema: {
+        id: key,
+        revision: z.number().int().nonnegative(),
+        sourceRevision: z.number().int().nonnegative(),
+      },
+    },
+    guard(async (a) => {
+      await (await connect()).reducers.restoreEntity(a);
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
+    "world_set_avatar",
+    {
+      description:
+        "Publish the paired member's six-part character and rigid cosmetics. Uses the same character schema and animation rig as placed NPCs.",
+      inputSchema: { community: z.string().max(80), definition: z.unknown() },
+    },
+    guard(async (a) => {
+      await (
+        await connect()
+      ).reducers.setAvatar({
+        community: a.community,
+        definition: JSON.stringify(a.definition),
+      });
+      return { accepted: true };
+    }),
+  );
+  server.registerTool(
     "world_simulate",
     {
       description:
@@ -351,7 +665,7 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
           generation: 1,
           revision: 1,
           enabled: true,
-          components: copyValue(e.components) as RecordValue,
+          components: copyComponentData(e.components) as RecordValue,
           publicState: {},
         });
       for (const b of a.bindings) {
@@ -360,10 +674,13 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
         sim.attach(b.entity, b.slot, hash, copyValue(b.config) as RecordValue);
       }
       let remaining = 256;
-      remaining -= sim.advance(0, remaining).steps;
+      remaining -= sim.run(0, remaining).steps;
       for (const step of a.timeline) {
         if (remaining <= 0) throw Error("Simulation work budget exhausted.");
-        remaining -= sim.advance(step.advance, remaining).steps;
+        const outcome = sim.run(step.advance, remaining);
+        remaining -= outcome.steps;
+        if (!outcome.complete)
+          throw Error("Simulation work budget exhausted before target time.");
         if (step.action) {
           sim.action(
             step.action.entity,
@@ -371,7 +688,7 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
             copyValue(step.action.payload),
             "fixture-player",
           );
-          if (remaining > 0) remaining -= sim.advance(0, remaining).steps;
+          if (remaining > 0) remaining -= sim.run(0, remaining).steps;
         }
       }
       const runtime = new WorldRuntime(sim.store, sim.time);

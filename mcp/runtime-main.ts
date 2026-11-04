@@ -16,6 +16,7 @@ const directory =
   process.env.MCP_STATE_DIR ?? join(homedir(), ".lantern-agent", "runtime-v2");
 let pending: Promise<DbConnection> | undefined,
   connection: DbConnection | undefined;
+let sessionToken = "";
 function connect() {
   if (pending) return pending;
   pending = new Promise<DbConnection>((resolve, reject) => {
@@ -46,6 +47,7 @@ function connect() {
             if (info.apiVersion !== 2) throw Error("Runtime API mismatch.");
             clearTimeout(timeout);
             writeFileSync(file, JSON.stringify({ token }), { mode: 0o600 });
+            sessionToken = token;
             resolve(c);
           } catch (e) {
             clearTimeout(timeout);
@@ -64,7 +66,32 @@ function connect() {
   });
   return pending;
 }
-const server = createRuntimeMcp(connect);
+const server = createRuntimeMcp(
+  connect,
+  process.env.LANTERN_RUNTIME_SITE
+    ? {
+        preview: async (input) => {
+          const response = await fetch(
+            `${process.env.LANTERN_RUNTIME_SITE!.replace(/\/$/, "")}/api/preview`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${sessionToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(input),
+              signal: AbortSignal.timeout(90000),
+            },
+          );
+          if (!response.ok)
+            throw Error(
+              `Preview failed (${response.status}): ${await response.text()}`,
+            );
+          return Buffer.from(await response.arrayBuffer()).toString("base64");
+        },
+      }
+    : {},
+);
 await server.connect(new StdioServerTransport());
 process.once("SIGTERM", () => {
   connection?.disconnect();

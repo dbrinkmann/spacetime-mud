@@ -143,7 +143,86 @@ export const walkArrival = table(
     scheduledAt: t.scheduleAt(),
   },
 );
+export const spatialWake = table(
+  {},
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    key: t.string().unique(),
+    property: t.string(),
+    room: t.string(),
+    due: t.f64(),
+    scheduledAt: t.scheduleAt(),
+  },
+);
 export const db = schema({
+  objectView: table(
+    {},
+    {
+      id: t.string().primaryKey(),
+      entity: t.string().index("btree"),
+      data: t.string(),
+    },
+  ),
+  spatialWake,
+  avatar: table({}, { id: t.string().primaryKey(), data: t.string() }),
+  playSession: table(
+    {},
+    { id: t.string().primaryKey(), player: t.string().index("btree") },
+  ),
+  homeLink: table(
+    {},
+    {
+      entrance: t.string().primaryKey(),
+      property: t.string().unique(),
+      community: t.string().index("btree"),
+      owner: t.identity(),
+      name: t.string(),
+    },
+  ),
+  entityTemplate: table(
+    {},
+    {
+      hash: t.string().primaryKey(),
+      property: t.string().index("btree"),
+      data: t.string(),
+    },
+  ),
+  entityHistory: table(
+    {},
+    {
+      id: t.string().primaryKey(),
+      entity: t.string().index("btree"),
+      revision: t.u32(),
+      data: t.string(),
+    },
+  ),
+  reservation: table(
+    {},
+    {
+      id: t.string().primaryKey(),
+      property: t.string().index("btree"),
+      room: t.string(),
+      data: t.string(),
+    },
+  ),
+  playerState: table(
+    {},
+    {
+      id: t.string().primaryKey(),
+      slot: t.string().index("btree"),
+      player: t.string(),
+      data: t.string(),
+    },
+  ),
+  interaction: table(
+    {},
+    {
+      id: t.string().primaryKey(),
+      entity: t.string().index("btree"),
+      property: t.string().index("btree"),
+      data: t.string(),
+    },
+  ),
   walker: table(
     {},
     {

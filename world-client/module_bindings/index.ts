@@ -34,61 +34,105 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AnswerDialogReducer from "./answer_dialog_reducer";
 import AttachBehaviorReducer from "./attach_behavior_reducer";
 import AuthorizeCommunityAgentReducer from "./authorize_community_agent_reducer";
+import ClaimHomeReducer from "./claim_home_reducer";
 import CreateEntityReducer from "./create_entity_reducer";
 import CreatePropertyReducer from "./create_property_reducer";
+import CreateRoomReducer from "./create_room_reducer";
+import DestroyEntityReducer from "./destroy_entity_reducer";
+import EmoteReducer from "./emote_reducer";
 import EnterWalkRoomReducer from "./enter_walk_room_reducer";
 import InvokeActionReducer from "./invoke_action_reducer";
+import JoinWorldReducer from "./join_world_reducer";
 import ProvisionCommunityReducer from "./provision_community_reducer";
 import PublishPackageReducer from "./publish_package_reducer";
+import PublishTemplateReducer from "./publish_template_reducer";
+import RenameHomeReducer from "./rename_home_reducer";
+import RestoreEntityReducer from "./restore_entity_reducer";
 import ResumeBehaviorReducer from "./resume_behavior_reducer";
 import RevokeCommunityAgentReducer from "./revoke_community_agent_reducer";
+import SayReducer from "./say_reducer";
+import SetAvatarReducer from "./set_avatar_reducer";
 import SetCommunityGatewayReducer from "./set_community_gateway_reducer";
 import SetCommunityMemberReducer from "./set_community_member_reducer";
+import SetPlayerNameReducer from "./set_player_name_reducer";
+import SpawnTemplateReducer from "./spawn_template_reducer";
 import SuspendBehaviorReducer from "./suspend_behavior_reducer";
 import TestEntityActionReducer from "./test_entity_action_reducer";
+import UpdateEntityReducer from "./update_entity_reducer";
 import UpgradeBehaviorReducer from "./upgrade_behavior_reducer";
 import WalkToReducer from "./walk_to_reducer";
 
 // Import all procedure arg schemas
+import * as EntityHistoryProcedure from "./entity_history_procedure";
+import * as ExportTemplateProcedure from "./export_template_procedure";
 import * as GetPackageProcedure from "./get_package_procedure";
 import * as InspectEntityProcedure from "./inspect_entity_procedure";
+import * as ListWorldProcedure from "./list_world_procedure";
+import * as PreviewPrincipalProcedure from "./preview_principal_procedure";
 import * as PreviewRoomProcedure from "./preview_room_procedure";
 import * as RuntimeInfoProcedure from "./runtime_info_procedure";
 
 // Import all table schema definitions
+import LiveRoomStampRow from "./live_room_stamp_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  liveRoomStamp: __table({
+    name: 'live_room_stamp',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, LiveRoomStampRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("answer_dialog", AnswerDialogReducer),
   __reducerSchema("attach_behavior", AttachBehaviorReducer),
   __reducerSchema("authorize_community_agent", AuthorizeCommunityAgentReducer),
+  __reducerSchema("claim_home", ClaimHomeReducer),
   __reducerSchema("create_entity", CreateEntityReducer),
   __reducerSchema("create_property", CreatePropertyReducer),
+  __reducerSchema("create_room", CreateRoomReducer),
+  __reducerSchema("destroy_entity", DestroyEntityReducer),
+  __reducerSchema("emote", EmoteReducer),
   __reducerSchema("enter_walk_room", EnterWalkRoomReducer),
   __reducerSchema("invoke_action", InvokeActionReducer),
+  __reducerSchema("join_world", JoinWorldReducer),
   __reducerSchema("provision_community", ProvisionCommunityReducer),
   __reducerSchema("publish_package", PublishPackageReducer),
+  __reducerSchema("publish_template", PublishTemplateReducer),
+  __reducerSchema("rename_home", RenameHomeReducer),
+  __reducerSchema("restore_entity", RestoreEntityReducer),
   __reducerSchema("resume_behavior", ResumeBehaviorReducer),
   __reducerSchema("revoke_community_agent", RevokeCommunityAgentReducer),
+  __reducerSchema("say", SayReducer),
+  __reducerSchema("set_avatar", SetAvatarReducer),
   __reducerSchema("set_community_gateway", SetCommunityGatewayReducer),
   __reducerSchema("set_community_member", SetCommunityMemberReducer),
+  __reducerSchema("set_player_name", SetPlayerNameReducer),
+  __reducerSchema("spawn_template", SpawnTemplateReducer),
   __reducerSchema("suspend_behavior", SuspendBehaviorReducer),
   __reducerSchema("test_entity_action", TestEntityActionReducer),
+  __reducerSchema("update_entity", UpdateEntityReducer),
   __reducerSchema("upgrade_behavior", UpgradeBehaviorReducer),
   __reducerSchema("walk_to", WalkToReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("entity_history", EntityHistoryProcedure.params, EntityHistoryProcedure.returnType),
+  __procedureSchema("export_template", ExportTemplateProcedure.params, ExportTemplateProcedure.returnType),
   __procedureSchema("get_package", GetPackageProcedure.params, GetPackageProcedure.returnType),
   __procedureSchema("inspect_entity", InspectEntityProcedure.params, InspectEntityProcedure.returnType),
+  __procedureSchema("list_world", ListWorldProcedure.params, ListWorldProcedure.returnType),
+  __procedureSchema("preview_principal", PreviewPrincipalProcedure.params, PreviewPrincipalProcedure.returnType),
   __procedureSchema("preview_room", PreviewRoomProcedure.params, PreviewRoomProcedure.returnType),
   __procedureSchema("runtime_info", RuntimeInfoProcedure.params, RuntimeInfoProcedure.returnType),
 );

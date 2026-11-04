@@ -7,6 +7,32 @@ if (
   import("./runtime/Workbench").then(({ RuntimeWorkbench }) =>
     root.render(<RuntimeWorkbench />),
   );
+} else if (
+  import.meta.env.VITE_RUNTIME_DATABASE &&
+  (new URLSearchParams(location.search).has("frame_id") ||
+    new URLSearchParams(location.search).has("activity"))
+) {
+  root.render(<p>Connecting to your Discord community…</p>);
+  Promise.all([import("./community/discord"), import("./runtime/Workbench")])
+    .then(async ([{ connectActivity }, { RuntimeWorkbench }]) =>
+      root.render(
+        <RuntimeWorkbench
+          activity={await connectActivity(import.meta.env.VITE_RUNTIME_HOST)}
+        />,
+      ),
+    )
+    .catch((e) =>
+      root.render(
+        <main>
+          <h1>Could not open your community</h1>
+          <p>{String(e.message)}</p>
+        </main>,
+      ),
+    );
+} else if (new URLSearchParams(location.search).has("runtime-preview")) {
+  import("./runtime/Preview").then(({ mountRuntimePreview }) =>
+    mountRuntimePreview(root),
+  );
 } else if (new URLSearchParams(location.search).has("preview")) {
   import("./world/HostedPreview").then(({ mountPreview }) =>
     mountPreview(root),

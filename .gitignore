@@ -1,6 +1,8 @@
 node_modules/
 dist/
 public/agent/lantern-agent.mjs
+public/agent/lantern-runtime.mjs
+public/agent/RUNTIME.md
 .local-db/
 .env
 .env.local

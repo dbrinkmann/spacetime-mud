@@ -2,6 +2,7 @@ import puppeteer, { type BrowserWorker } from "@cloudflare/puppeteer";
 import type { D1Database } from "@cloudflare/workers-types";
 import { parseDefinition } from "../shared/geometry";
 import { validateNavigation } from "../shared/navigation";
+import { validateComponent } from "../shared/runtime/components";
 type Env = {
   BROWSER: BrowserWorker;
   SESSIONS: D1Database;
@@ -20,6 +21,7 @@ export async function preview(req: Request, env: Env) {
     return error("Builder authorization required.", 401);
   let input: {
     community_id: string;
+    runtime?: boolean;
     source: string;
     character?: string;
     yaw?: number;
@@ -77,7 +79,21 @@ export async function preview(req: Request, env: Env) {
         ))
     )
       throw Error("focus must contain three finite coordinates in -100..100.");
-    validateNavigation(parseDefinition(input.source, "room"));
+    if (input.runtime) {
+      const room = JSON.parse(input.source);
+      if (
+        !Array.isArray(room.entities) ||
+        room.entities.length > 256 ||
+        !Number.isFinite(room.serverTime)
+      )
+        throw Error("Invalid runtime preview.");
+      for (const e of room.entities)
+        for (const [key, value] of Object.entries(e.components))
+          validateComponent(
+            key,
+            value as import("../shared/runtime/values").Value,
+          );
+    } else validateNavigation(parseDefinition(input.source, "room"));
     if (input.character !== undefined) {
       if (typeof input.character !== "string")
         throw Error("Character must be JSON text.");
@@ -122,19 +138,26 @@ export async function preview(req: Request, env: Env) {
         void request.continue();
       else void request.abort();
     });
-    await page.goto(`${origin}/?preview`, {
-      waitUntil: "networkidle0",
-      timeout: 25000,
-    });
+    await page.goto(
+      `${origin}/?${input.runtime ? "runtime-preview" : "preview"}`,
+      {
+        waitUntil: "networkidle0",
+        timeout: 25000,
+      },
+    );
     await page.waitForFunction(
-      "typeof window.renderLanternPreview === 'function'",
+      input.runtime
+        ? "typeof window.renderRuntimePreview === 'function'"
+        : "typeof window.renderLanternPreview === 'function'",
     );
     await page.evaluate(
       async (payload) => {
-        await window.renderLanternPreview!(payload);
+        if (payload.runtime) await window.renderRuntimePreview!(payload);
+        else await window.renderLanternPreview!(payload);
       },
       {
         source: input.source,
+        runtime: input.runtime,
         character: input.character,
         yaw: input.yaw,
         time: input.time,
@@ -143,7 +166,7 @@ export async function preview(req: Request, env: Env) {
       },
     );
     await new Promise((resolve) => setTimeout(resolve, 300));
-    const canvas = await page.$("canvas[aria-label='Interactive 3D room']");
+    const canvas = await page.$("canvas");
     if (!canvas) throw Error("Renderer did not create a canvas.");
     const png = await canvas.screenshot({ type: "png" });
     return new Response(new Uint8Array(png), {
