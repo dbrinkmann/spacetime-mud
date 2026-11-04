@@ -74,18 +74,54 @@ try {
   camera.lookAt(0, 1, 0);
   camera.updateMatrixWorld();
   const screen = new Vector3(-2, 0.75, 1).project(camera);
-  await page
-    .locator("canvas")
-    .click({
-      position: {
-        x: ((screen.x + 1) * rect.width) / 2,
-        y: ((1 - screen.y) * rect.height) / 2,
-      },
-    });
+  await page.locator("canvas").click({
+    position: {
+      x: ((screen.x + 1) * rect.width) / 2,
+      y: ((1 - screen.y) * rect.height) / 2,
+    },
+  });
   assert.equal(
     await page.getByLabel("Object", { exact: true }).inputValue(),
     `${prefix}.switch`,
   );
+  await page.getByRole("button", { name: "toggle", exact: true }).click();
+  await page
+    .getByTestId("walking-state")
+    .filter({ hasText: "Approaching object" })
+    .waitFor();
+  await page
+    .getByLabel("Object", { exact: true })
+    .selectOption(`${prefix}.lamp`);
+  assert.ok(
+    (await page.getByTestId("components").textContent())!.includes(
+      '"intensity": 0',
+    ),
+  );
+  const destination = new Vector3(3, 0, -3).project(camera);
+  await page
+    .locator("canvas")
+    .click({
+      position: {
+        x: ((destination.x + 1) * rect.width) / 2,
+        y: ((1 - destination.y) * rect.height) / 2,
+      },
+    });
+  await page
+    .getByTestId("walking-state")
+    .filter({ hasText: /^Walking$/ })
+    .waitFor();
+  await page
+    .getByTestId("walking-state")
+    .filter({ hasText: /^Standing$/ })
+    .waitFor();
+  assert.ok(
+    (await page.getByTestId("components").textContent())!.includes(
+      '"intensity": 0',
+    ),
+  );
+  await page
+    .getByLabel("Object", { exact: true })
+    .selectOption(`${prefix}.switch`);
   await page.getByRole("button", { name: "toggle", exact: true }).click();
   await page
     .getByLabel("Object", { exact: true })

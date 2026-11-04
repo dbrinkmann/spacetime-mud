@@ -4,6 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { surfaceMaterial } from "../world/materials";
 import type { Box } from "../../shared/geometry";
 import type { RoomPresentation } from "../../shared/runtime/presentation";
+import { walkPosition } from "../../shared/runtime/walking";
 import {
   sampleOperation,
   type TransformValue,
@@ -13,15 +14,31 @@ import {
 export function RuntimeScene({
   snapshot,
   onSelect,
+  onWalk,
 }: {
   snapshot: RoomPresentation;
   onSelect: (id: string) => void;
+  onWalk: (x: number, z: number) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const current = useRef({ snapshot, received: performance.now(), onSelect });
+  const current = useRef({
+    snapshot,
+    received: performance.now(),
+    onSelect,
+    onWalk,
+  });
   useEffect(() => {
-    current.current = { snapshot, received: performance.now(), onSelect };
-  }, [snapshot, onSelect]);
+    current.current = {
+      snapshot,
+      received: performance.now(),
+      onSelect,
+      onWalk,
+    };
+  }, [snapshot]);
+  useEffect(() => {
+    current.current.onSelect = onSelect;
+    current.current.onWalk = onWalk;
+  }, [onSelect, onWalk]);
   useEffect(() => {
     const element = host.current!;
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -43,6 +60,7 @@ export function RuntimeScene({
       string,
       { group: THREE.Group; visual: string; light?: THREE.PointLight }
     >();
+    const avatars = new Map<string, THREE.Group>();
     const dispose = (group: THREE.Group) => {
       group.traverse((node) => {
         if (node instanceof THREE.Mesh) {
@@ -88,7 +106,14 @@ export function RuntimeScene({
       if (hit) {
         let node: THREE.Object3D | null = hit.object;
         while (node && !node.userData.entity) node = node.parent;
-        if (node) current.current.onSelect(node.userData.entity);
+        if (node) {
+          const entity = current.current.snapshot.entities.find(
+            (e) => e.id === node!.userData.entity,
+          );
+          if (entity?.actions.length || entity?.components.collider)
+            current.current.onSelect(node.userData.entity);
+          else current.current.onWalk(hit.point.x, hit.point.z);
+        }
       }
     };
     renderer.domElement.addEventListener("pointerdown", pointerDown);
@@ -97,6 +122,48 @@ export function RuntimeScene({
     const render = () => {
       const { snapshot: data, received } = current.current;
       const now = data.serverTime + (performance.now() - received) / 1000;
+      for (const [id, avatar] of avatars)
+        if (!data.walkers?.some((w) => w.id === id)) {
+          dispose(avatar);
+          avatars.delete(id);
+        }
+      for (const walker of data.walkers ?? []) {
+        let avatar = avatars.get(walker.id);
+        if (!avatar) {
+          avatar = new THREE.Group();
+          for (const [x, y, z, w, h, d, color] of [
+            [0, 1.5, 0, 0.35, 0.35, 0.35, 0xddc8a0],
+            [0, 1, 0, 0.45, 0.6, 0.25, 0x79a5ad],
+            [-0.32, 1, 0, 0.16, 0.6, 0.2, 0x79a5ad],
+            [0.32, 1, 0, 0.16, 0.6, 0.2, 0x79a5ad],
+            [-0.13, 0.35, 0, 0.2, 0.7, 0.22, 0x303b47],
+            [0.13, 0.35, 0, 0.2, 0.7, 0.22, 0x303b47],
+          ]) {
+            const mesh = new THREE.Mesh(
+              new THREE.BoxGeometry(w, h, d),
+              new THREE.MeshStandardMaterial({ color }),
+            );
+            mesh.position.set(x, y, z);
+            avatar.add(mesh);
+          }
+          avatars.set(walker.id, avatar);
+          scene.add(avatar);
+        }
+        const position = walkPosition(walker.walk, now),
+          next = walkPosition(walker.walk, now + 0.05);
+        avatar.position.fromArray(position);
+        if (Math.hypot(next[0] - position[0], next[2] - position[2]) > 0.0001) {
+          avatar.rotation.y = Math.atan2(
+            next[0] - position[0],
+            next[2] - position[2],
+          );
+          avatar.children[4].rotation.x = Math.sin(now * 10) * 0.3;
+          avatar.children[5].rotation.x = -Math.sin(now * 10) * 0.3;
+        } else {
+          avatar.children[4].rotation.x = 0;
+          avatar.children[5].rotation.x = 0;
+        }
+      }
       for (const [id, node] of nodes)
         if (!data.entities.some((e) => e.id === id)) {
           dispose(node.group);
@@ -169,6 +236,7 @@ export function RuntimeScene({
       resize.disconnect();
       controls.dispose();
       nodes.forEach((n) => dispose(n.group));
+      avatars.forEach(dispose);
       renderer.dispose();
       renderer.domElement.remove();
     };

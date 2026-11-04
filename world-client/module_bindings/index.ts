@@ -38,6 +38,7 @@ import AttachBehaviorReducer from "./attach_behavior_reducer";
 import AuthorizeCommunityAgentReducer from "./authorize_community_agent_reducer";
 import CreateEntityReducer from "./create_entity_reducer";
 import CreatePropertyReducer from "./create_property_reducer";
+import EnterWalkRoomReducer from "./enter_walk_room_reducer";
 import InvokeActionReducer from "./invoke_action_reducer";
 import ProvisionCommunityReducer from "./provision_community_reducer";
 import PublishPackageReducer from "./publish_package_reducer";
@@ -48,6 +49,7 @@ import SetCommunityMemberReducer from "./set_community_member_reducer";
 import SuspendBehaviorReducer from "./suspend_behavior_reducer";
 import TestEntityActionReducer from "./test_entity_action_reducer";
 import UpgradeBehaviorReducer from "./upgrade_behavior_reducer";
+import WalkToReducer from "./walk_to_reducer";
 
 // Import all procedure arg schemas
 import * as GetPackageProcedure from "./get_package_procedure";
@@ -69,6 +71,7 @@ const reducersSchema = __reducers(
   __reducerSchema("authorize_community_agent", AuthorizeCommunityAgentReducer),
   __reducerSchema("create_entity", CreateEntityReducer),
   __reducerSchema("create_property", CreatePropertyReducer),
+  __reducerSchema("enter_walk_room", EnterWalkRoomReducer),
   __reducerSchema("invoke_action", InvokeActionReducer),
   __reducerSchema("provision_community", ProvisionCommunityReducer),
   __reducerSchema("publish_package", PublishPackageReducer),
@@ -79,6 +82,7 @@ const reducersSchema = __reducers(
   __reducerSchema("suspend_behavior", SuspendBehaviorReducer),
   __reducerSchema("test_entity_action", TestEntityActionReducer),
   __reducerSchema("upgrade_behavior", UpgradeBehaviorReducer),
+  __reducerSchema("walk_to", WalkToReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

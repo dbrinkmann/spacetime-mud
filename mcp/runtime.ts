@@ -72,6 +72,9 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
       packageExample: counterExample,
       cooperationExamples: cooperationPackages("examples"),
       componentExamples: {
+        walkSurface: { width: 10, depth: 8, spawn: [3, 0, 3] },
+        collider: { size: [1, 1], center: [0, 0, 0], enabled: true },
+        interaction: { approach: [0, 0, 1] },
         visual: {
           boxes: [
             {
@@ -103,7 +106,7 @@ export function createRuntimeMcp(connect: () => Promise<DbConnection>) {
       operations:
         "ctx.operations.animate('transform',{position:[x,y,z],rotation:[x,y,z]},seconds), pause/resume/cancel(resource). operation:completed/cancelled payload is {id,resource,outcome}. Rotation is linear authored degrees.",
       limitations: [
-        "Cuboid visual components render in the local authorized workshop (?runtime); room navigation, collision and Activity integration are not connected yet",
+        "The local authorized workshop (?runtime) supports floor walking, static collider routing and approach-before-action. Each room needs one origin-centered walkSurface; collider footprints and interaction approach offsets use the entity yaw. Only null-payload actions are exposed by this UI. Moving obstacle avoidance and Activity integration remain incomplete.",
         "No player dialogs, spawning, spatial views or path operations yet",
         "Simulation does not impersonate live memberships or authorize live actions",
       ],

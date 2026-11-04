@@ -16,6 +16,43 @@ export function validateComponent(key: string, input: Value): Value {
       throw Error("Invalid component vector.");
   };
   switch (key) {
+    case "walkSurface": {
+      const r = record();
+      if (Object.keys(r).some((k) => !["width", "depth", "spawn"].includes(k)))
+        throw Error("Unknown walk surface field.");
+      for (const k of ["width", "depth"])
+        if (typeof r[k] !== "number" || r[k] < 1 || r[k] > 100)
+          throw Error("Invalid walk surface size.");
+      vector(r.spawn, -50, 50);
+      if ((r.spawn as number[])[1] !== 0)
+        throw Error("Spawn must be on the ground.");
+      break;
+    }
+    case "interaction": {
+      const r = record();
+      if (Object.keys(r).some((k) => k !== "approach"))
+        throw Error("Unknown interaction field.");
+      vector(r.approach, -100, 100);
+      break;
+    }
+    case "collider": {
+      const r = record();
+      if (
+        Object.keys(r).some(
+          (k) => !["size", "center", "enabled"].includes(k),
+        ) ||
+        typeof r.enabled !== "boolean"
+      )
+        throw Error("Invalid collider.");
+      vector(r.center, -100, 100);
+      if (
+        !Array.isArray(r.size) ||
+        r.size.length !== 2 ||
+        r.size.some((n) => typeof n !== "number" || n < 0.01 || n > 100)
+      )
+        throw Error("Invalid collider size.");
+      break;
+    }
     case "visual": {
       const r = record();
       if (

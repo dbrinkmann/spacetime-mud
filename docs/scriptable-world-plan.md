@@ -9,6 +9,8 @@ The replacement module is `world-server`, deployed only to local database `lante
 
 Implemented and tested so far:
 
+- Development walking slice: one authored walk surface per room, rectangular yaw-rotated colliders, authored approach offsets, server-planned paths, client-sampled avatar movement and scheduled arrival actions. A new walk cancels the previous arrival. The browser fixture verifies delayed interaction, floor-click cancellation and subsequent successful approach; unit tests verify obstacle routing and mid-path replacement. It still uses builder-authorized development entry points and polling. Moving collider changes are checked at arrival, not continuously; Discord player sessions, proactive rerouting and full character/presence semantics remain outstanding.
+
 - First visible cooperation slice: cuboid `visual` components retain existing materials, and a reusable client renderer samples persisted transform operations and light state. Three ordinary packages implement a configurable switch, hinged visual door and indicator. The local authorized workshop (`?runtime`, development only) reads the live replacement database; clicking geometry and invoking its action drives server scripts, not a browser simulation. `tests/runtime-workbench.ts` verifies picking, switch-to-door-to-lamp messaging, operation completion, reload persistence and narrow layout. The author preview polls a permission-checked projection; it is not the final player subscription or interaction system. Door collision, walking/proximity and Activity integration are still pending.
 
 - Extracted one interpreter adapter into `spacetimedb/src/runtime/sandbox.ts`; the old `scripts.ts` forwards to it while the old release still exists. The replacement imports the adapter directly.

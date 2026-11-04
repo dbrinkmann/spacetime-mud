@@ -135,7 +135,25 @@ const workMeter = table(
   {},
   { key: t.string().primaryKey(), window: t.f64(), count: t.u32() },
 );
+export const walkArrival = table(
+  {},
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    walker: t.string().unique(),
+    scheduledAt: t.scheduleAt(),
+  },
+);
 export const db = schema({
+  walker: table(
+    {},
+    {
+      id: t.string().primaryKey(),
+      property: t.string().index("btree"),
+      room: t.string(),
+      data: t.string(),
+    },
+  ),
+  walkArrival,
   workMeter,
   community,
   membership,

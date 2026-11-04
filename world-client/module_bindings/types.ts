@@ -140,6 +140,21 @@ export const Wake = __t.object("Wake", {
 });
 export type Wake = __Infer<typeof Wake>;
 
+export const WalkArrival = __t.object("WalkArrival", {
+  scheduledId: __t.u64(),
+  walker: __t.string(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type WalkArrival = __Infer<typeof WalkArrival>;
+
+export const Walker = __t.object("Walker", {
+  id: __t.string(),
+  property: __t.string(),
+  room: __t.string(),
+  data: __t.string(),
+});
+export type Walker = __Infer<typeof Walker>;
+
 export const WorkMeter = __t.object("WorkMeter", {
   key: __t.string(),
   window: __t.f64(),

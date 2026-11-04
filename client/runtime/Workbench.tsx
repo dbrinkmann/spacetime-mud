@@ -78,15 +78,26 @@ export function RuntimeWorkbench() {
     if (!connection || !entity) return;
     setPending(true);
     try {
-      await connection.reducers.testEntityAction({
+      await connection.reducers.enterWalkRoom({ property, room });
+      await connection.reducers.walkTo({
+        x: 0,
+        z: 0,
         entity: entity.id,
-        name,
-        payload: "null",
+        action: name,
       });
     } catch (e) {
       setError(String(e));
     } finally {
       setPending(false);
+    }
+  };
+  const move = async (x: number, z: number) => {
+    if (!connection) return;
+    try {
+      await connection.reducers.enterWalkRoom({ property, room });
+      await connection.reducers.walkTo({ x, z, entity: "", action: "" });
+    } catch (e) {
+      setError(String(e));
     }
   };
   return (
@@ -96,7 +107,11 @@ export function RuntimeWorkbench() {
         <span>Local development · live server behaviors</span>
       </header>
       <section className="runtime-stage">
-        <RuntimeScene snapshot={snapshot} onSelect={setSelected} />
+        <RuntimeScene
+          snapshot={snapshot}
+          onSelect={setSelected}
+          onWalk={(x, z) => void move(x, z)}
+        />
       </section>
       <aside>
         <label>
@@ -111,7 +126,8 @@ export function RuntimeWorkbench() {
           Builder identity: <code data-testid="identity">{identity}</code>
         </p>
         <p>
-          Click an object to inspect its actions. Drag to orbit; scroll to zoom.
+          Click the floor to walk. Select an object and its action to walk over
+          and interact. Drag to orbit; scroll to zoom.
         </p>
         <label>
           Object{" "}
@@ -142,8 +158,17 @@ export function RuntimeWorkbench() {
           </pre>
         )}
         {error && <p role="alert">{error}</p>}
+        <p data-testid="walking-state">
+          {snapshot.walkers?.find((w) => w.id === identity)?.action
+            ? "Approaching object"
+            : snapshot.walkers?.find((w) => w.id === identity)?.walk.points
+                  .length
+              ? "Walking"
+              : "Standing"}
+        </p>
         <p>
-          Author preview: no player movement, collision or Discord session yet.
+          Development walking preview; Discord sessions and dynamic obstacle
+          avoidance are not connected yet.
         </p>
       </aside>
     </main>

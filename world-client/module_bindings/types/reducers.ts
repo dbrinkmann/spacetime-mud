@@ -10,6 +10,7 @@ import AttachBehaviorReducer from "../attach_behavior_reducer";
 import AuthorizeCommunityAgentReducer from "../authorize_community_agent_reducer";
 import CreateEntityReducer from "../create_entity_reducer";
 import CreatePropertyReducer from "../create_property_reducer";
+import EnterWalkRoomReducer from "../enter_walk_room_reducer";
 import InvokeActionReducer from "../invoke_action_reducer";
 import ProvisionCommunityReducer from "../provision_community_reducer";
 import PublishPackageReducer from "../publish_package_reducer";
@@ -20,11 +21,13 @@ import SetCommunityMemberReducer from "../set_community_member_reducer";
 import SuspendBehaviorReducer from "../suspend_behavior_reducer";
 import TestEntityActionReducer from "../test_entity_action_reducer";
 import UpgradeBehaviorReducer from "../upgrade_behavior_reducer";
+import WalkToReducer from "../walk_to_reducer";
 
 export type AttachBehaviorParams = __Infer<typeof AttachBehaviorReducer>;
 export type AuthorizeCommunityAgentParams = __Infer<typeof AuthorizeCommunityAgentReducer>;
 export type CreateEntityParams = __Infer<typeof CreateEntityReducer>;
 export type CreatePropertyParams = __Infer<typeof CreatePropertyReducer>;
+export type EnterWalkRoomParams = __Infer<typeof EnterWalkRoomReducer>;
 export type InvokeActionParams = __Infer<typeof InvokeActionReducer>;
 export type ProvisionCommunityParams = __Infer<typeof ProvisionCommunityReducer>;
 export type PublishPackageParams = __Infer<typeof PublishPackageReducer>;
@@ -35,3 +38,4 @@ export type SetCommunityMemberParams = __Infer<typeof SetCommunityMemberReducer>
 export type SuspendBehaviorParams = __Infer<typeof SuspendBehaviorReducer>;
 export type TestEntityActionParams = __Infer<typeof TestEntityActionReducer>;
 export type UpgradeBehaviorParams = __Infer<typeof UpgradeBehaviorReducer>;
+export type WalkToParams = __Infer<typeof WalkToReducer>;

@@ -152,6 +152,18 @@ export function cooperationEntities(
     components: {
       transform: { position: s.position, rotation: [0, 0, 0] },
       visual: { boxes: s.boxes },
+      ...(s.id === "floor"
+        ? { walkSurface: { width: 10, depth: 8, spawn: [3, 0, 3] } }
+        : {}),
+      ...(s.id === "switch"
+        ? {
+            collider: { size: [0.5, 0.5], center: [0, 0, 0], enabled: true },
+            interaction: { approach: [0, 0, 1] },
+          }
+        : {}),
+      ...(s.id === "door"
+        ? { collider: { size: [2, 0.18], center: [1, 0, 0], enabled: true } }
+        : {}),
       ...(s.id === "lamp" ? { light: { color: "#66ffaa", intensity: 0 } } : {}),
     },
   })) as Entity[];

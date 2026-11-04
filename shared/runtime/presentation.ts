@@ -1,5 +1,6 @@
 import type { Entity } from "./contracts";
 import type { Operation } from "./operations";
+import type { Walker } from "./walking";
 import { copyValue } from "./values";
 /** Client projection deliberately excludes variables, slot state, code and diagnostics. */
 export function presentEntity(
@@ -17,6 +18,7 @@ export function presentEntity(
 }
 export type PresentedEntity = ReturnType<typeof presentEntity>;
 export type RoomPresentation = {
+  walkers?: Walker[];
   serverTime: number;
   entities: PresentedEntity[];
 };

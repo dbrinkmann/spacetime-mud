@@ -1,6 +1,11 @@
 import { type Room, type Vec3, worldPoint, ContractError } from "./geometry";
 export const radius = 0.23;
-export function walkable(room: Room, x: number, z: number) {
+export type NavigationRoom = Pick<Room, "width" | "depth"> & {
+  objects: Array<
+    Pick<Room["objects"][number], "position" | "yaw" | "collision">
+  >;
+};
+export function walkable(room: NavigationRoom, x: number, z: number) {
   if (
     Math.abs(x) > room.width / 2 - radius ||
     Math.abs(z) > room.depth / 2 - radius
@@ -19,7 +24,7 @@ export function walkable(room: Room, x: number, z: number) {
     );
   });
 }
-export function clearSegment(room: Room, a: Vec3, b: Vec3) {
+export function clearSegment(room: NavigationRoom, a: Vec3, b: Vec3) {
   const steps = Math.max(
     1,
     Math.ceil(Math.hypot(b[0] - a[0], b[2] - a[2]) / 0.04),
@@ -35,7 +40,11 @@ export function clearSegment(room: Room, a: Vec3, b: Vec3) {
       return false;
   return true;
 }
-export function route(room: Room, start: Vec3, end: Vec3): Vec3[] | null {
+export function route(
+  room: NavigationRoom,
+  start: Vec3,
+  end: Vec3,
+): Vec3[] | null {
   if (!walkable(room, start[0], start[2]) || !walkable(room, end[0], end[2]))
     return null;
   if (clearSegment(room, start, end)) return [end];

@@ -18,6 +18,7 @@ import { operationDeadline } from "../../shared/runtime/operations";
 import type { Timer } from "../../shared/runtime/store";
 import { presentEntity } from "../../shared/runtime/presentation";
 export default db;
+export { enterWalkRoom, walkTo, arriveWalk } from "./walking";
 export const runtimeInfo = db.procedure({}, t.string(), () =>
   JSON.stringify({ apiVersion: 2, status: "development" }),
 );
@@ -351,6 +352,9 @@ export const previewRoom = db.procedure(
         throw new SenderError("Preview supports up to 256 entities.");
       return JSON.stringify({
         serverTime: now(tx),
+        walkers: [...tx.db.walker.property.filter(a.property)]
+          .filter((w) => w.room === a.room)
+          .map((w) => JSON.parse(w.data)),
         entities: entities.map((e) =>
           presentEntity(
             e,
