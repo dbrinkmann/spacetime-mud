@@ -107,6 +107,16 @@ try {
   )!;
   const interior = builderRoom();
   interior.name = home.name;
+  interior.models.road = {
+    boxes: [{ position: [0, 0, 0], size: [8, 0.04, 4], color: "#28282a" }],
+  };
+  interior.objects.push({
+    id: "road",
+    name: "Decorative road",
+    model: "road",
+    position: [0, 0, 2],
+    yaw: 0,
+  });
   interior.objects.forEach((o) => delete o.homeEntrance);
   interior.objects[0].exit = {
     id: String(outside.reverseId),
@@ -140,7 +150,9 @@ try {
   await expect(
     page.locator(".community-entrance").filter({ hasText: "Outside: Welcome" }),
   ).toBeHidden();
-  const target = await page.evaluate(() => window.boxWorld!.project([2, 0, 2]));
+  const target = await page.evaluate(() =>
+    window.boxWorld!.project([2, 0.02, 2]),
+  );
   await page.mouse.click(target.x, target.y);
   await expect
     .poll(() =>

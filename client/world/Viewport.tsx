@@ -459,7 +459,19 @@ export function Viewport(props: Props) {
       }
       const id = hit.object.userData.objectId;
       if (id) {
-        choose(room.objects.find((o) => o.id === id)!);
+        const placement = room.objects.find((o) => o.id === id)!;
+        if (
+          callbacks.current.live &&
+          !placement.collision &&
+          !placement.seat &&
+          !placement.objectId &&
+          !placement.homeEntrance &&
+          !placement.exit
+        ) {
+          // Roads, rugs and other non-colliding scenery do not consume movement
+          // clicks. Navigation remains on the ground plane and server-validated.
+          callbacks.current.live.onMove(hit.point.x, hit.point.z, "", "idle");
+        } else choose(placement);
       } else if (hit.object.userData.floor) {
         if (callbacks.current.live)
           callbacks.current.live.onMove(hit.point.x, hit.point.z, "", "idle");
