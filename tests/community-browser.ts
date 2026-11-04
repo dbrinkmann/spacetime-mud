@@ -67,10 +67,19 @@ try {
     source: JSON.stringify(entranceRoom()),
     baseRevision: 0,
   });
-  await page
-    .locator(".community-entrance")
-    .filter({ hasText: "Garden door 1" })
-    .click();
+  await expect(page.locator(".community-entrance")).toHaveCount(2);
+  await expect(page.locator(".community-entrance").first()).toBeHidden();
+  const vacantDoor = await page.evaluate(() =>
+    window.boxWorld!.project([-2, 1, -3]),
+  );
+  await page.mouse.move(vacantDoor.x, vacantDoor.y);
+  await expect(
+    page.locator(".community-entrance").filter({ hasText: "Garden door 1" }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".community-entrance").filter({ hasText: "Garden door 2" }),
+  ).toBeHidden();
+  await page.mouse.click(vacantDoor.x, vacantDoor.y);
   await expect(page.getByLabel("Home entrance")).toHaveValue("door-0");
   await page.getByLabel("Home name").fill("Alice's cottage");
   await page.getByRole("button", { name: "Create home", exact: true }).click();
@@ -118,7 +127,18 @@ try {
   });
   await expect(
     page.locator(".community-entrance").filter({ hasText: "Outside: Welcome" }),
+  ).toBeHidden();
+  const hoverDoor = await page.evaluate(() =>
+    window.boxWorld!.project([-2, 1, -3]),
+  );
+  await page.mouse.move(hoverDoor.x, hoverDoor.y);
+  await expect(
+    page.locator(".community-entrance").filter({ hasText: "Outside: Welcome" }),
   ).toBeVisible();
+  await page.mouse.move(5, 5);
+  await expect(
+    page.locator(".community-entrance").filter({ hasText: "Outside: Welcome" }),
+  ).toBeHidden();
   const target = await page.evaluate(() => window.boxWorld!.project([2, 0, 2]));
   await page.mouse.click(target.x, target.y);
   await expect
@@ -140,6 +160,10 @@ try {
   await expect(
     page.getByRole("heading", { name: "Welcome", exact: true }),
   ).toBeVisible();
+  const hoverHome = await page.evaluate(() =>
+    window.boxWorld!.project([-2, 1, -3]),
+  );
+  await page.mouse.move(hoverHome.x, hoverHome.y);
   await expect(
     page
       .locator(".community-entrance")

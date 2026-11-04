@@ -338,9 +338,10 @@ export function Viewport(props: Props) {
     const entranceLabels = room.objects
       .filter((o) => (o.homeEntrance || o.exit) && props.entrances?.[o.id])
       .map((o) => {
-        const element = document.createElement("button");
+        const element = document.createElement("div");
         element.className = "poc-nameplate community-entrance";
-        element.onclick = () => callbacks.current.entrances?.[o.id]?.onClick();
+        element.setAttribute("role", "tooltip");
+        element.style.visibility = "hidden";
         container.appendChild(element);
         return { element, id: o.id, root: objects.get(o.id)! };
       });
@@ -425,8 +426,19 @@ export function Viewport(props: Props) {
     };
     const pointer = new THREE.Vector2(),
       raycaster = new THREE.Raycaster();
+    let hoverPointer: [number, number] | undefined;
+    const pointerMove = (e: PointerEvent) => {
+      hoverPointer =
+        e.pointerType === "touch" || e.buttons
+          ? undefined
+          : [e.clientX, e.clientY];
+    };
+    const pointerLeave = () => {
+      hoverPointer = undefined;
+    };
     let down = [0, 0];
     const pointerDown = (e: PointerEvent) => {
+      hoverPointer = undefined;
       down = [e.clientX, e.clientY];
     };
     const pointerUp = (e: PointerEvent) => {
@@ -456,6 +468,8 @@ export function Viewport(props: Props) {
         else move([hit.point.x, 0, hit.point.z]);
       }
     };
+    renderer.domElement.addEventListener("pointermove", pointerMove);
+    renderer.domElement.addEventListener("pointerleave", pointerLeave);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointerup", pointerUp);
     controller.current = (c) => {
@@ -766,6 +780,25 @@ export function Viewport(props: Props) {
         element.style.visibility =
           Math.abs(point.x) > 1 || Math.abs(point.y) > 1 ? "hidden" : "visible";
       }
+      // Raycast the door geometry rather than the projected label. Re-evaluate as
+      // the camera moves so a stationary pointer cannot leave a stale tooltip.
+      let hoveredEntrance: string | undefined;
+      if (hoverPointer) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.set(
+          ((hoverPointer[0] - rect.left) / rect.width) * 2 - 1,
+          -((hoverPointer[1] - rect.top) / rect.height) * 2 + 1,
+        );
+        raycaster.setFromCamera(pointer, camera);
+        const hit = raycaster.intersectObjects(pickables, true)[0];
+        const id = hit?.object.userData.objectId;
+        if (id && callbacks.current.entrances?.[id]) hoveredEntrance = id;
+      }
+      for (const entry of entranceLabels) {
+        if (entry.id !== hoveredEntrance)
+          entry.element.style.visibility = "hidden";
+      }
+      renderer.domElement.style.cursor = hoveredEntrance ? "pointer" : "";
       renderer.render(scene, camera);
     });
     emit();
@@ -777,6 +810,8 @@ export function Viewport(props: Props) {
       renderer.setAnimationLoop(null);
       observer.disconnect();
       controls.dispose();
+      renderer.domElement.removeEventListener("pointermove", pointerMove);
+      renderer.domElement.removeEventListener("pointerleave", pointerLeave);
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointerup", pointerUp);
       const geometries = new Set<THREE.BufferGeometry>(),

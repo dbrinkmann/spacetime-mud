@@ -174,8 +174,7 @@ body {
 }
 
 .community-entrance {
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: none;
   max-width: 220px;
   white-space: normal;
   border: 1px solid #ad8747;
