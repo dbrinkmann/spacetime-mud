@@ -2,7 +2,7 @@
 
 Date: 2026-11-04. Branch: `refactor/programmable-world`.
 
-The core is implemented on the isolated replacement. This record distinguishes working capability from approval to replace the existing Discord release.
+Runtime v2 is now deployed at the existing Discord endpoint. Hosted verification is complete; actual embedded Discord launch is awaiting the user-assisted check. See `runtime-cutover.md` for release, rollback and performance caveats.
 
 ## Release targets
 
@@ -10,7 +10,7 @@ The core is implemented on the isolated replacement. This record distinguishes w
 - Hosted client/MCP/preview: https://lantern-runtime-v2.dbrinkmann.workers.dev.
 - Worker: `lantern-runtime-v2`; D1: `lantern-runtime-v2`, independent of production.
 - Local integration database: `lantern-runtime-refactor`.
-- Production `dbrinkmann-lantern-staging` and its Discord URL mapping remain unchanged.
+- Production Worker `lantern-staging` now serves runtime v2 at its unchanged URL, backed by `dbrinkmann-lantern-runtime-v2`. Original database `dbrinkmann-lantern-staging` is retained for rollback. Existing production D1 identity mappings are preserved.
 - GitHub Actions stay disabled. Commands below are run explicitly.
 
 ## Requested core capabilities

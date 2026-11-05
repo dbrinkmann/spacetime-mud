@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-05T01:09:24.845Z",
+  "measurements": [
+    {
+      "mode": "legacy",
+      "id": 23,
+      "name": "Neon-dōri",
+      "revision": 7,
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "coldMs": 1409,
+      "warmMs": 1275.8999998569489,
+      "p95FrameIntervalMs": 116.69999999999982,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "runtime",
+      "id": 23,
+      "name": "Neon-dōri",
+      "revision": 7,
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "coldMs": 1319.5999999046326,
+      "warmMs": 1280.4000000953674,
+      "p95FrameIntervalMs": 133.19999999999982,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    }
+  ]
+}

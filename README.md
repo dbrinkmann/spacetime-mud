@@ -1,75 +1,49 @@
-# SpacetimeMUD
+# Lantern
 
-A shared, room-based 3D world built by its players. Hang out, chat, walk and sit together. Your chosen coding agent builds original rooms, characters, cosmetics and scripted interactions using standard MCP tools.
+A room-based 3D world for Discord communities. Members hang out, build homes and create interactive objects with their preferred coding agents. The server runs deterministic, event-driven behaviors; it does not run model inference.
 
-**[Play](https://dbrinkmann.github.io/spacetime-mud/)**
+Open Lantern from your Discord server's App Launcher. Runtime v2 is deployed at [the existing Lantern endpoint](https://lantern-staging.dbrinkmann.workers.dev). Embedded Discord verification is tracked separately from hosted browser tests in the [cutover record](docs/runtime-cutover.md).
 
-Next product direction: [Discord community worlds implementation plan](docs/discord-community-plan.md). This records the planned community spaces, expandable player homes and persistent away characters; Discord integration is not shipped yet.
+## Build with an agent
 
-## Create with your agent
+Creators do not need to clone this repository. Use the Activity's connection instructions, install the downloadable [stdio MCP client](https://lantern-staging.dbrinkmann.workers.dev/agent/lantern-runtime.mjs), and read the [runtime authoring guide](https://lantern-staging.dbrinkmann.workers.dev/agent/RUNTIME.md). Call `world_connect`, pair the returned agent identity in the Activity, then call `world_guide` and inspect your community.
 
-Open **Create** in the game for setup instructions. There is no model-specific prompt box or player-facing JSON editor.
+Agents author cuboid geometry, six-part characters and cosmetics, materials, signs, entrances and behavior packages. Packages support messages, structured state, timers, motion, views, interactions and runtime world changes. Agents publish live and can request hosted PNG previews. Admins authorize common-space building; members create homes at authored entrances and expand their own room graphs.
 
-```sh
-git clone https://github.com/dbrinkmann/spacetime-mud.git
-cd spacetime-mud
-npm ci
-npm run --silent agent:config
-# Optional, for agent-rendered screenshots:
-npx playwright install chromium
-```
+The v2 entity/package API replaces the earlier scene/object API. Old room IDs, `objectId` scripts and v1 MCP instructions are not interchangeable with v2. See [the builder handoff](docs/runtime-cutover.md).
 
-Add the generated command and arguments to your agent's MCP configuration. The server uses standard **stdio MCP** and works with compatible local clients; it is not a hosted HTTP MCP endpoint. No Claude subscription or model API key is required by the game. The agent chooses its model and manages its own usage.
+## Development
 
-Give your agent the [building skill](public/agent/SKILL.md), or ask it to call `world_guide`. It calls `world_connect` and gives you a pairing link. Open it in your game browser and approve access. Then describe your idea in your agent's normal conversation:
-
-> Create a cozy floating wizard's study with plants, warm lighting and three chairs. Make a new place for me if I don't have one.
-
-The agent can inspect existing definitions, create zones/rooms, validate geometry, render screenshots, test scripts, and publish changes live. Watch the result in **Explore** and ask for revisions in your existing agent conversation. No review or Keep it step is required. Revoke access under Create anytime. Ownership, validation and script-test requirements remain enforced by the server.
-
-Room edits require ownership or collaborator permission. Everyone can customize their own character. Published props can link to scripted objects by `objectId`; their actions and timers remain authoritative on SpacetimeDB. [Geometry and animation contract](public/poc/AUTHORING.md) / [MCP and API details](docs/agent-building.md).
-
-## Play
-
-Enter a traveler name and take the Nexus portal to **The Lantern & Thorn** to hang out in the shared tavern. **Bellkeeper's Crossing** also demonstrates gates, inventory and scripted timers. Click the floor to walk, select a seat to sit, and use chat to talk. Room passages, maps and Return to Nexus remain available.
-
-Your player identity stays in your browser. Clearing browser storage creates a new identity. Model conversations remain in your chosen agent; the game does not relay prompts or launch inference.
-
-The earlier Claude bridge remains for compatibility with old integrations but is not part of the new player workflow. Developer editors remain accessible only with `?workshop=1`; the isolated geometry sandbox is at `?poc`.
-
-## Local development
-
-SpacetimeDB CLI, server SDK and client SDK are pinned to **2.13.0**. The original implementation remains archived in `legacy/`.
+The current server is `world-server`, generated bindings are in `world-client/module_bindings`, the client is in `client/runtime`, and the MCP implementation is `mcp/runtime.ts`. SDK/CLI version: 2.13.0. Earlier implementations remain for reference but are excluded from the runtime release entry point.
 
 ```sh
 npm ci
-npm ci --prefix spacetimedb
+npm ci --prefix world-server
 spacetime start --listen-addr 127.0.0.1:3030 --data-dir .local-db
-spacetime publish mud-local --server http://127.0.0.1:3030 --module-path spacetimedb --yes
-spacetime generate --lang typescript --out-dir client/module_bindings --module-path spacetimedb
+spacetime publish lantern-runtime-refactor --server http://127.0.0.1:3030 --module-path world-server --no-config --yes
+spacetime generate --lang typescript --out-dir world-client/module_bindings --module-path world-server --yes
+npm run dev -- --port 5179
 ```
 
-Set `VITE_SPACETIME_HOST=http://127.0.0.1:3030` and `VITE_SPACETIME_DATABASE=mud-local`, then `npm run dev`. For the MCP server or integration tests, use `SPACETIME_HOST` and `SPACETIME_DATABASE` instead (without the VITE prefix). The MCP server also accepts `GAME_URL` for its pairing link.
+The development workbench is `http://127.0.0.1:5179/?runtime`. Runtime tests default to the isolated local database; hosted runs require explicit `LANTERN_RUNTIME_HOST`, `LANTERN_RUNTIME_DATABASE` and `LANTERN_RUNTIME_SITE`. The v2 MCP client uses those same names.
 
-## Verification and deployment
+## Verification and release
 
 ```sh
 npm test
-npm run check:server
-npm run build
-# Against a disposable database, with SPACETIME_HOST / SPACETIME_DATABASE set:
-npm run test:integration
-npx tsx tests/timers.ts
-npx vitest run
-# With the local UI running on port 5174:
-npx playwright install chromium
-npx tsx tests/browser.ts
-# Provider-neutral MCP and player review checks:
-npm run test:agent
+npm run check:runtime
+npm run test:runtime:local
+npm run test:runtime:access
+npm run test:runtime:mcp
+npm run test:runtime:browser
+npm run test:runtime:social
+npm run test:runtime:preview
+npm run build:runtime:release
+wrangler deploy --config wrangler.jsonc
 ```
 
-`tests/restart-timer.ts --prepare`, followed by a server restart and `tests/restart-timer.ts`, verifies durable scheduling. `tests/deployed-smoke.ts` checks HTTPS assets against the local build and connects to the production database. See [verification evidence](docs/verification.md).
+Browser tests require Chromium (`npx playwright install chromium`) and the configured site. The verification-only deployment uses `npm run build:runtime:staging` and `wrangler.runtime.jsonc`. Production uses `wrangler.jsonc`; `build:staging` aliases the production runtime build. Database publication is a separate explicit operation.
 
-GitHub Actions tests a disposable database, runs desktop/mobile Chromium checks, verifies generated bindings, and deploys Pages. Database publication is an explicit CLI operation; **do not use `--delete-data=always` on a populated world without authorization**. This release's reset was explicitly requested by the project owner.
+**GitHub Actions are disabled.** Validation and deployment run explicitly. See [verification evidence](docs/runtime-verification.md), [the runtime plan](docs/scriptable-world-plan.md), and [release/rollback instructions](docs/runtime-cutover.md). Keep `.env.local`, `.bridge`, authority tokens and database exports out of Git.
 
-The restricted interpreter bundle is committed for deterministic module builds. Regenerate it with `node scripts/bundle-interpreter.mjs` after installing server dependencies. See [third-party notice](docs/third-party.md).
+The restricted interpreter bundle is committed for deterministic builds. See [third-party notices](docs/third-party.md).
