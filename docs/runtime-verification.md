@@ -2,7 +2,7 @@
 
 Date: 2026-11-04. Branch: `refactor/programmable-world`.
 
-Runtime v2 is now deployed at the existing Discord endpoint. Hosted verification is complete; actual embedded Discord launch is awaiting the user-assisted check. See `runtime-cutover.md` for release, rollback and performance caveats.
+Runtime v2 is deployed at the existing Discord endpoint. Hosted verification passed, and the user confirmed the embedded Discord launch works on November 5, 2026 (US Eastern). See `runtime-cutover.md` for release, rollback and performance caveats.
 
 ## Release targets
 
@@ -55,4 +55,4 @@ Verified in this implementation pass:
 
 Run `npm test`, `npm run check:runtime`, `npm run build:runtime:staging`, and the `test:runtime:local`, `:access`, `:mcp`, `:browser`, `:social`, `:preview` and `:release` suites. Browser/social tests accept explicit replacement host/database variables. The release fixture is deliberately fixed to the isolated hosted replacement.
 
-Actual embedded Discord launch, complete P01–P22 manual/performance sign-off, the plan's 30-minute release soak, and rollback rehearsal are still required before switching production. Standalone browser tests and virtual-time tests are not represented as those manual/release checks.
+Release update: production switched to Worker version `95bfd76d-c5a1-48ff-b164-f2fb2f2921c9`. All 82 tests passed, as did hosted browser checks on the stable production URL. The live soak completed in 1802.418 seconds with 350 checks and at least 105 cycles per moving instance; ten additional reconnect cycles passed. Rollback mechanics were exercised on the isolated Worker. The user confirmed embedded Discord launch on November 5, 2026. That confirmation does not establish a full manual P01-P22 audit or an embedded performance benchmark; comparative rendering evidence and its historical-baseline variance remain documented in `runtime-cutover.md`.

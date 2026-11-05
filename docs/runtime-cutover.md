@@ -52,7 +52,7 @@ Production switched to candidate `95bfd76d-c5a1-48ff-b164-f2fb2f2921c9` at appro
 
 The complete hosted browser suite also passed again on the stable production URL after the switch (fixture community `1793841661207`). The default release build reproduces the activated asset hashes.
 
-Actual embedded Discord launch is a separate user-assisted check: desktop automation reported that its native pipe was unavailable. The user has been asked to close/reopen as an administrator and confirm their common room and name. Do not describe standalone browser tests as embedded Discord verification or complete manual P01-P22 sign-off.
+On November 5, 2026 (US Eastern), the user replied "it works" to the request to reopen Lantern inside Discord and check the new common room and Discord name. This closes the user-assisted embedded launch check. It does not establish an embedded performance benchmark or complete manual P01-P22 sign-off. Desktop automation was unavailable; this confirmation comes from the user, separately from the hosted browser tests.
 
 ## Builder handoff
 

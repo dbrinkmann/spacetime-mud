@@ -1,6 +1,6 @@
 # Lantern programmable world refactor
 
-Status: runtime v2 deployed at Lantern?s existing Discord URL on `refactor/programmable-world`. Hosted verification, a 30-minute soak and rollback exercise are complete. User-assisted embedded Discord verification remains open. See `runtime-verification.md` and `runtime-cutover.md` for evidence and explicit limits.
+Status: runtime v2 deployed at Lantern's existing Discord URL on `refactor/programmable-world`. Hosted verification, a 30-minute soak and rollback exercise are complete. The user confirmed embedded Discord launch on November 5, 2026 (US Eastern). See `runtime-verification.md` and `runtime-cutover.md` for evidence and explicit limits.
 Date: 2026-11-04.
 
 ## Implementation evidence
@@ -26,7 +26,7 @@ Verification commands: `npm test`, `npm run build`, `npm run check:runtime`, `np
 
 Additional implemented core capabilities: behavior discovery/detach/reattach and bounded terminal lifecycle callbacks; room/home deletion with relocation and incoming-link cleanup; offline player trajectories; player-target selection with current-position validation; room entry/exit and native seat/portal notifications; renewal retry and copyable provider-neutral builder instructions.
 
-Hosted verification now includes a downloaded MCP client creating 20x14 and 60x16 rooms with geometry, seats, eight home entrances/signs, a multi-surface receptionist and six reusable moving instances. Hosted PNG previews and standalone browser interactions are exercised against Maincloud. Release update: the 30-minute soak passed with 350 checks and at least 105 cycles per instance; ten reconnect cycles also passed. The exact production candidate passed hosted browser and PNG-preview verification, paired old/new artwork checks and gateway checks. Rollback mechanics were exercised. The existing Discord URL now points to the replacement. Actual embedded Discord launch/performance and complete manual P01-P22 sign-off remain open; see the cutover record for the historical performance-baseline variance. No GitHub Actions are used.
+Hosted verification now includes a downloaded MCP client creating 20x14 and 60x16 rooms with geometry, seats, eight home entrances/signs, a multi-surface receptionist and six reusable moving instances. Hosted PNG previews and standalone browser interactions are exercised against Maincloud. Release update: the 30-minute soak passed with 350 checks and at least 105 cycles per instance; ten reconnect cycles also passed. The exact production candidate passed hosted browser and PNG-preview verification, paired old/new artwork checks and gateway checks. Rollback mechanics were exercised. The existing Discord URL now points to the replacement. The user confirmed embedded Discord launch on November 5, 2026; embedded performance and complete manual P01-P22 sign-off remain unverified; see the cutover record for the historical performance-baseline variance. No GitHub Actions are used.
 
 Static baseline evidence remains in `docs/baselines/runtime-render-2026-11-04.json`; comparable headless thresholds are at most 25% regression in scene preparation/p95 frame interval and one pixel of document overflow. Embedded Activity performance is not yet verified.
 
