@@ -50,6 +50,7 @@ export async function connectActivity(host = HOST): Promise<ActivityAccess> {
     post<DiscordSession>("/api/discord/session", {
       accessToken: access_token,
       guildId: sdk.guildId,
+      apiVersion: import.meta.env.VITE_RUNTIME_DATABASE ? 2 : 1,
     });
   return { session: await renew(), renew };
 }

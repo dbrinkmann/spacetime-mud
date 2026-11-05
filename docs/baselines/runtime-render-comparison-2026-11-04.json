@@ -1,0 +1,221 @@
+{
+  "date": "2026-11-05T01:00:28.335Z",
+  "measurements": [
+    {
+      "mode": "legacy",
+      "id": 3,
+      "name": "Welcome Station",
+      "revision": 5,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "coldMs": 1243,
+      "warmMs": 1092,
+      "p95FrameIntervalMs": 183.40000000000055,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "runtime",
+      "id": 3,
+      "name": "Welcome Station",
+      "revision": 5,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "coldMs": 1294.7999999523163,
+      "warmMs": 1095.3000001907349,
+      "p95FrameIntervalMs": 183.3000000000011,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "legacy",
+      "id": 23,
+      "name": "Neon-d\u014dri",
+      "revision": 7,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "coldMs": 1768.2000000476837,
+      "warmMs": 1751.8000001907349,
+      "p95FrameIntervalMs": 183.39999999999964,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "runtime",
+      "id": 23,
+      "name": "Neon-d\u014dri",
+      "revision": 7,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "coldMs": 1156.0999999046326,
+      "warmMs": 1118.3999998569489,
+      "p95FrameIntervalMs": 183.3000000000011,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "legacy",
+      "id": 3,
+      "name": "Welcome Station",
+      "revision": 5,
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "coldMs": 1524.5,
+      "warmMs": 1262.1000001430511,
+      "p95FrameIntervalMs": 116.69999999999982,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "runtime",
+      "id": 3,
+      "name": "Welcome Station",
+      "revision": 5,
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "coldMs": 1151.0999999046326,
+      "warmMs": 1218.0999999046326,
+      "p95FrameIntervalMs": 116.69999999999891,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "legacy",
+      "id": 23,
+      "name": "Neon-d\u014dri",
+      "revision": 7,
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "coldMs": 1714.7999999523163,
+      "warmMs": 1597.7000000476837,
+      "p95FrameIntervalMs": 116.69999999999982,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "runtime",
+      "id": 23,
+      "name": "Neon-d\u014dri",
+      "revision": 7,
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "coldMs": 1305.7000000476837,
+      "warmMs": 1239.2000000476837,
+      "p95FrameIntervalMs": 116.70000000000073,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "legacy",
+      "id": 3,
+      "name": "Welcome Station",
+      "revision": 5,
+      "viewport": {
+        "width": 390,
+        "height": 700
+      },
+      "coldMs": 1239.1000001430511,
+      "warmMs": 1160.2000000476837,
+      "p95FrameIntervalMs": 66.70000000000073,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "runtime",
+      "id": 3,
+      "name": "Welcome Station",
+      "revision": 5,
+      "viewport": {
+        "width": 390,
+        "height": 700
+      },
+      "coldMs": 1319.4000000953674,
+      "warmMs": 1203.7999999523163,
+      "p95FrameIntervalMs": 66.80000000000018,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "legacy",
+      "id": 23,
+      "name": "Neon-d\u014dri",
+      "revision": 7,
+      "viewport": {
+        "width": 390,
+        "height": 700
+      },
+      "coldMs": 1780.0999999046326,
+      "warmMs": 1592.7999999523163,
+      "p95FrameIntervalMs": 83.29999999999927,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    },
+    {
+      "mode": "runtime",
+      "id": 23,
+      "name": "Neon-d\u014dri",
+      "revision": 7,
+      "viewport": {
+        "width": 390,
+        "height": 700
+      },
+      "coldMs": 1180.1000001430511,
+      "warmMs": 1100.7000000476837,
+      "p95FrameIntervalMs": 83.39999999999964,
+      "overflow": {
+        "x": 0,
+        "y": 0
+      },
+      "errors": []
+    }
+  ]
+}

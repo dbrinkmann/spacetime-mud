@@ -1,7 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Identity } from "spacetimedb";
-import { membershipArgs, callReducer } from "../gateway/worker.ts";
+import worker, { membershipArgs, callReducer } from "../gateway/worker.ts";
+
+test("runtime cutover rejects stale Activity renewal before touching identity services", async () => {
+  const origin = "https://123.discordsays.com";
+  const env = {
+    RUNTIME_API_VERSION: "2",
+    DISCORD_ALLOWED_ORIGINS: origin,
+  } as any;
+  const response = await worker.fetch(
+    new Request("https://example.invalid/api/discord/session", {
+      method: "POST",
+      headers: { Origin: origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ accessToken: "test", guildId: "123" }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 409);
+  assert.match(((await response.json()) as any).error, /Close and reopen/);
+});
 
 test("gateway HTTP arguments preserve all 256 identity bits in SATS-JSON", () => {
   const identity =

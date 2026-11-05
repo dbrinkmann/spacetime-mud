@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { chromium } from "@playwright/test";
-import { PerspectiveCamera, Vector3 } from "three";
+import { OrthographicCamera, Vector3 } from "three";
 import { guidePackage } from "../shared/runtime/guide-example";
 import { canonical, sha256 } from "../shared/runtime/digest";
 import {
@@ -38,6 +38,7 @@ function call(name: string, ...args: unknown[]) {
   );
 }
 const browser = await chromium.launch({ headless: true });
+let renewal: ReturnType<typeof setInterval> | undefined;
 try {
   const page = await browser.newPage({
     viewport: { width: 1200, height: 800 },
@@ -54,13 +55,32 @@ try {
     property = `common:${guild}`,
     prefix = `demo${guild}`;
   call("provision_community", guild, "Runtime workshop", identity, "100");
+  // Standalone browser fixtures must emulate the Activity's verified renewal.
+  renewal = setInterval(
+    () => call("set_community_member", guild, identity, "100", true, true),
+    60000,
+  );
   const packages = cooperationPackages(prefix);
   packages.forEach((p) =>
     call("publish_package", JSON.stringify(p), "community", guild),
   );
-  cooperationEntities(prefix, property, guild, identity).forEach((e) =>
-    call("create_entity", e.id, property, "room", JSON.stringify(e.components)),
-  );
+  cooperationEntities(prefix, property, guild, identity).forEach((e) => {
+    // Leave enough travel time to cancel through a software-rendered browser.
+    if (e.components.walkSurface) {
+      e.components.walkSurface = { width: 40, depth: 20, spawn: [15, 0, 3] };
+      e.components.visual = {
+        boxes: [
+          {
+            position: [0, 0, 0],
+            size: [40, 0.2, 20],
+            color: "#424c54",
+            material: "concrete",
+          },
+        ],
+      };
+    }
+    call("create_entity", e.id, property, "room", JSON.stringify(e.components));
+  });
   call(
     "attach_behavior",
     `${prefix}.switch`,
@@ -176,9 +196,18 @@ try {
   call("attach_behavior", `${prefix}.bench`, "native", nativeHash, "{}");
   call("attach_behavior", `${prefix}.entrance`, "native", nativeHash, "{}");
   const rect = (await page.locator("canvas").boundingBox())!;
-  const camera = new PerspectiveCamera(40, rect.width / rect.height, 0.01, 500);
-  camera.position.set(9, 8, 12);
-  camera.lookAt(0, 1, 0);
+  const aspect = rect.width / rect.height,
+    span = Math.max(4.5, 3 / aspect);
+  const camera = new OrthographicCamera(
+    -span * aspect,
+    span * aspect,
+    span,
+    -span,
+    0.1,
+    500,
+  );
+  camera.position.set(11, 11, 15);
+  camera.lookAt(0, 0.65, 0);
   camera.updateMatrixWorld();
   const screen = new Vector3(-2, 0.75, 1).project(camera);
   await page.locator("canvas").click({
@@ -196,14 +225,8 @@ try {
     .getByTestId("walking-state")
     .filter({ hasText: "Approaching object" })
     .waitFor();
-  await page
-    .getByLabel("Object", { exact: true })
-    .selectOption(`${prefix}.lamp`);
-  assert.ok(
-    (await page.getByTestId("components").textContent())!.includes(
-      '"intensity": 0',
-    ),
-  );
+  // Cancel immediately; reading several inspector panels first can consume
+  // the entire approach on a software-rendered browser while server time runs.
   const destination = new Vector3(3, 0, -3).project(camera);
   await page.locator("canvas").click({
     position: {
@@ -219,6 +242,9 @@ try {
     .getByTestId("walking-state")
     .filter({ hasText: /^Standing$/ })
     .waitFor();
+  await page
+    .getByLabel("Object", { exact: true })
+    .selectOption(`${prefix}.lamp`);
   assert.ok(
     (await page.getByTestId("components").textContent())!.includes(
       '"intensity": 0',
@@ -300,6 +326,13 @@ try {
   await page.getByRole("button", { name: "Claim home", exact: true }).click();
   await page.getByRole("button", { name: "enter", exact: true }).click();
   await page.getByText("Room: home", { exact: true }).waitFor();
+  await page.waitForFunction(() =>
+    Array.from(
+      document.querySelectorAll<HTMLOptionElement>(
+        'select[aria-label="Object"] option',
+      ),
+    ).some((option) => option.value.startsWith("return")),
+  );
   const returnId = await page
     .locator('select[aria-label="Object"] option')
     .evaluateAll((options) =>
@@ -415,6 +448,15 @@ try {
         "live click, server messaging, door operation, light state, reload persistence and narrow layout passed",
     }),
   );
+} catch (error) {
+  const page = browser.contexts()[0]?.pages()[0];
+  if (page)
+    console.error(
+      "Browser failure state:",
+      await page.locator("body").innerText(),
+    );
+  throw error;
 } finally {
+  if (renewal) clearInterval(renewal);
   await browser.close();
 }

@@ -5,7 +5,12 @@ import { parts } from "../../shared/geometry";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { surfaceMaterial } from "../world/materials";
+import {
+  styledBox,
+  industrialPostprocessing,
+  floorSeams,
+  fadeRenderable,
+} from "../world/render-style";
 import { signMesh, loadSignFont } from "../world/signs";
 import type { Sign, Character } from "../../shared/geometry";
 import type { Box } from "../../shared/geometry";
@@ -81,23 +86,34 @@ export function RuntimeScene({
     const element = host.current!;
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.setClearColor("#10161c");
+    renderer.setClearColor("#11171c");
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     element.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xb9d2ed, 0x15100d, 2));
-    const sun = new THREE.DirectionalLight(0xffffff, 3);
-    sun.position.set(4, 8, 5);
+    scene.background = new THREE.Color("#11171c");
+    scene.add(new THREE.HemisphereLight("#9fb6ce", "#39332f", 1.1));
+    const sun = new THREE.DirectionalLight("#d3deeb", 1.65);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.normalBias = 0.035;
     scene.add(sun);
-    const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 500);
-    camera.position.set(9, 8, 12);
+    let lightingScale = 0;
+    const camera = new THREE.OrthographicCamera(-8, 8, 4.5, -4.5, 0.1, 500);
+    camera.position.set(11, 11, 15);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1, 0);
+    controls.enableDamping = true;
+    controls.screenSpacePanning = false;
+    controls.minPolarAngle = 0.35;
+    controls.maxPolarAngle = 1.35;
+    controls.target.set(0, 0.65, 0);
     if (preview) {
-      controls.target.fromArray(preview.focus ?? [0, 1, 0]);
+      controls.target.fromArray(preview.focus ?? [0, 0.65, 0]);
+      camera.zoom = preview.zoom ?? 1;
       camera.position
-        .set(9, 7, 12)
-        .multiplyScalar(1 / (preview.zoom ?? 1))
+        .set(11, 10.35, 15)
         .applyAxisAngle(
           new THREE.Vector3(0, 1, 0),
           THREE.MathUtils.degToRad(preview.yaw ?? 0),
@@ -128,7 +144,7 @@ export function RuntimeScene({
     let hovered = "";
     const dispose = (group: THREE.Group) => {
       group.traverse((node) => {
-        if (node instanceof THREE.Mesh) {
+        if (node instanceof THREE.Mesh || node instanceof THREE.LineSegments) {
           node.geometry.dispose();
           const materials = Array.isArray(node.material)
             ? node.material
@@ -141,10 +157,17 @@ export function RuntimeScene({
       });
       scene.remove(group);
     };
+    const effects = industrialPostprocessing(renderer, scene, camera);
     const resize = new ResizeObserver(() => {
       const { width, height } = element.getBoundingClientRect();
       renderer.setSize(width, height);
-      camera.aspect = width / Math.max(1, height);
+      const aspect = width / Math.max(1, height);
+      const span = Math.max(4.5, 3 / aspect);
+      camera.left = -span * aspect;
+      camera.right = span * aspect;
+      camera.top = span;
+      camera.bottom = -span;
+      effects.resize(width, height);
       camera.updateProjectionMatrix();
     });
     resize.observe(element);
@@ -233,6 +256,7 @@ export function RuntimeScene({
     });
     let frame = 0;
     let lastPlayer: THREE.Vector3 | undefined;
+    let cameraLocation = "";
     let manipulating = false;
     controls.addEventListener("start", () => {
       manipulating = true;
@@ -242,6 +266,23 @@ export function RuntimeScene({
     });
     const render = () => {
       const { snapshot: data, received } = current.current;
+      const surface = data.entities.find((e) => e.components.walkSurface)
+        ?.components.walkSurface as
+        { width: number; depth: number } | undefined;
+      const scale = Math.max(
+        1,
+        (surface?.width ?? 20) / 20,
+        (surface?.depth ?? 20) / 20,
+      );
+      if (scale !== lightingScale) {
+        lightingScale = scale;
+        sun.position.set(2 * scale, 10 * scale, 6 * scale);
+        sun.shadow.camera.left = sun.shadow.camera.bottom = -10 * scale;
+        sun.shadow.camera.right = sun.shadow.camera.top = 10 * scale;
+        sun.shadow.camera.far = 100 * scale;
+        sun.shadow.camera.updateProjectionMatrix();
+        scene.fog = new THREE.Fog("#11171c", 28 * scale, 55 * scale);
+      }
       const now =
         data.serverTime +
         (preview ? (preview.time ?? 0) : (performance.now() - received) / 1000);
@@ -270,19 +311,7 @@ export function RuntimeScene({
           const rig = buildCharacter(
             walker.character ?? neutralCharacter("Traveler"),
             (parent, box) => {
-              const mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(...box.size),
-                surfaceMaterial(box),
-              );
-              mesh.position.fromArray(box.position);
-              if (box.rotation)
-                mesh.rotation.set(
-                  ...(box.rotation.map(THREE.MathUtils.degToRad) as [
-                    number,
-                    number,
-                    number,
-                  ]),
-                );
+              const mesh = styledBox(box);
               parent.add(mesh);
             },
           );
@@ -363,6 +392,7 @@ export function RuntimeScene({
           visuals,
           signs,
           e.components.character,
+          e.components.walkSurface,
           texts,
         ]);
         let node = nodes.get(e.id);
@@ -379,20 +409,29 @@ export function RuntimeScene({
             }
             const boxes = (value as unknown as { boxes: Box[] }).boxes;
             for (const box of boxes) {
-              const mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(...box.size),
-                surfaceMaterial(box),
-              );
-              mesh.position.fromArray(box.position);
-              mesh.rotation.set(
-                ...((box.rotation ?? [0, 0, 0]).map(
-                  THREE.MathUtils.degToRad,
-                ) as [number, number, number]),
-              );
+              const mesh = styledBox(box);
               part.add(mesh);
             }
           }
           const authoredSigns = [...signs];
+          const surface = e.components.walkSurface as
+            { width: number; depth: number } | undefined;
+          const floorBox = (
+            e.components.visual as unknown as { boxes: Box[] } | undefined
+          )?.boxes[0];
+          if (
+            surface &&
+            floorBox &&
+            (!floorBox.material ||
+              ["plain", "concrete"].includes(floorBox.material))
+          )
+            group.add(
+              floorSeams(
+                surface.width,
+                surface.depth,
+                floorBox.position[1] + floorBox.size[1] / 2 + 0.002,
+              ),
+            );
           for (const [key, text] of texts) {
             const signKey = key.replace(/^text/, "sign");
             const existing = authoredSigns.findIndex(
@@ -442,19 +481,7 @@ export function RuntimeScene({
             rig = buildCharacter(
               e.components.character as unknown as Character,
               (parent, box) => {
-                const mesh = new THREE.Mesh(
-                  new THREE.BoxGeometry(...box.size),
-                  surfaceMaterial(box),
-                );
-                mesh.position.fromArray(box.position);
-                if (box.rotation)
-                  mesh.rotation.set(
-                    ...(box.rotation.map(THREE.MathUtils.degToRad) as [
-                      number,
-                      number,
-                      number,
-                    ]),
-                  );
+                const mesh = styledBox(box);
                 parent.add(mesh);
               },
             );
@@ -502,8 +529,9 @@ export function RuntimeScene({
           }
           const spec = value as { color: string; intensity: number };
           light.color.set(spec.color);
-          light.intensity = spec.intensity;
-          light.distance = 12;
+          light.intensity = spec.intensity * 1.15;
+          light.distance = 10;
+          light.decay = 1.5;
         }
         for (const [name, part] of node.parts) {
           const op = e.operations.find(
@@ -552,31 +580,17 @@ export function RuntimeScene({
           .sub(controls.target)
           .setY(0)
           .normalize();
-        const applyFade = (group: THREE.Group, amount: number) =>
-          group.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              const materials = Array.isArray(child.material)
-                ? child.material
-                : [child.material];
-              for (const m of materials) {
-                m.userData.baseOpacity ??= m.opacity;
-                m.opacity = m.userData.baseOpacity * amount;
-                m.transparent = m.opacity < 1;
-                m.depthWrite = m.opacity > 0.8;
-              }
-            }
-          });
         const wallFade =
           e.components.wall === true &&
           node.group.position.clone().sub(controls.target).dot(towardCamera) > 0
             ? 0.08
             : 1;
-        applyFade(node.group, fade * wallFade);
+        fadeRenderable(node.group, fade * wallFade);
         for (const [name, part] of node.parts)
           if (e.components[`wall.${name}`] === true) {
             const position = new THREE.Vector3();
             part.getWorldPosition(position);
-            applyFade(
+            fadeRenderable(
               part,
               fade *
                 (position.sub(controls.target).dot(towardCamera) > 0
@@ -587,6 +601,18 @@ export function RuntimeScene({
       }
       const local = avatars.get(current.current.self);
       if (local) {
+        const location =
+          data.location &&
+          `${data.location.property}/${data.location.room}/${current.current.self}`;
+        if (!preview && location && location !== cameraLocation) {
+          const target = local.position
+            .clone()
+            .add(new THREE.Vector3(0, 0.65, 0));
+          camera.position.add(target.clone().sub(controls.target));
+          controls.target.copy(target);
+          cameraLocation = location;
+          lastPlayer = local.position.clone();
+        }
         const moved =
           lastPlayer && local.position.distanceToSquared(lastPlayer) > 1e-8;
         if (moved && !manipulating) {
@@ -660,7 +686,7 @@ export function RuntimeScene({
         label.style.top = `${((1 - point.y) * element.clientHeight) / 2}px`;
         label.hidden = point.z > 1 || !anchor.visible;
       }
-      renderer.render(scene, camera);
+      effects.render();
       frame = requestAnimationFrame(render);
     };
     render();
@@ -673,6 +699,8 @@ export function RuntimeScene({
       bubbles.forEach((b) => b.remove());
       names.forEach((n) => n.remove());
       tooltip.remove();
+      effects.dispose();
+      sun.shadow.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     };

@@ -14,6 +14,7 @@ type Env = {
   SPACETIME_HOST: string;
   SPACETIME_DATABASE: string;
   SPACETIME_AUTHORITY_TOKEN: string;
+  RUNTIME_API_VERSION?: string;
 };
 type Principal = { identity: string; token: string };
 const reply = (body: unknown, status = 200, origin?: string) =>
@@ -137,7 +138,12 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === "/api/preview") return preview(req, env);
     if (url.pathname === "/health")
-      return reply({ ok: true, environment: "staging" });
+      return reply({
+        ok: true,
+        environment: "staging",
+        apiVersion: env.RUNTIME_API_VERSION ?? "1",
+        database: env.SPACETIME_DATABASE,
+      });
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
     const origin = req.headers.get("Origin") ?? "";
     const allowed = new Set(
@@ -177,6 +183,15 @@ export default {
           origin,
         );
       }
+      if (env.RUNTIME_API_VERSION === "2" && body.apiVersion !== 2)
+        return reply(
+          {
+            error:
+              "Lantern has been updated. Close and reopen the Activity to load the new world.",
+          },
+          409,
+          origin,
+        );
       if (
         typeof body.accessToken !== "string" ||
         typeof body.guildId !== "string"
