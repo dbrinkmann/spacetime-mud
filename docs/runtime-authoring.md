@@ -1,6 +1,6 @@
 # Lantern runtime v2 authoring
 
-This API belongs to the replacement runtime on `refactor/programmable-world`. The live Activity still uses the old API. The isolated replacement is hosted at https://lantern-runtime-v2.dbrinkmann.workers.dev with Maincloud database `dbrinkmann-lantern-runtime-v2`.
+This is the live Lantern API on `refactor/programmable-world`. The Discord Activity and downloadable tools are hosted at https://lantern-staging.dbrinkmann.workers.dev with Maincloud database `dbrinkmann-lantern-runtime-v2`. The alternate `lantern-runtime-v2` Worker shares that live database; it is not a disposable world. The old scene/object API is retired from the released client.
 
 Run `lantern-runtime.mjs` with Node 22+ as a stdio MCP server. Set `LANTERN_RUNTIME_HOST`, `LANTERN_RUNTIME_DATABASE` and `LANTERN_RUNTIME_SITE` to the matching replacement deployment. No repository clone is needed. Call `world_connect`, pair its identity in the Activity, then read `world_guide`. Credentials stay in `~/.lantern-agent/runtime-v2`; never paste them into chat.
 

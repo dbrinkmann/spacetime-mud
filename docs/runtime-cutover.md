@@ -56,4 +56,6 @@ On November 5, 2026 (US Eastern), the user replied "it works" to the request to 
 
 ## Builder handoff
 
+November 5 documentation correction: Worker version `1614b0ed-f683-4b24-bc9c-131525af79cc` publishes the corrected `/agent/RUNTIME.md`, removing the stale statement that the live Activity uses v1. Only that static asset changed; client assets, runtime module and database were unchanged. The release build and live gateway/artifact check passed. Shared engineering rules are now in root `AGENTS.md`, with a `CLAUDE.md` pointer and `docs/session-handoff.md` for session continuity.
+
 After cutover, use `/agent/RUNTIME.md` and `/agent/lantern-runtime.mjs` from the existing Lantern URL. Configure `LANTERN_RUNTIME_HOST=https://maincloud.spacetimedb.com`, `LANTERN_RUNTIME_DATABASE=dbrinkmann-lantern-runtime-v2`, and `LANTERN_RUNTIME_SITE=https://lantern-staging.dbrinkmann.workers.dev`. Call `world_connect`, pair in the Activity, then `world_guide` and inspect the newly provisioned community before rebuilding. Packages and entities replace the retired scene/object API; do not reuse v1 room IDs or scripts unchanged.

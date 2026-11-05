@@ -1,5 +1,7 @@
 # Lantern
 
+Coding agents: start with [AGENTS.md](AGENTS.md) and [the current session handoff](docs/session-handoff.md). Claude Code also loads the pointer in `CLAUDE.md`.
+
 A room-based 3D world for Discord communities. Members hang out, build homes and create interactive objects with their preferred coding agents. The server runs deterministic, event-driven behaviors; it does not run model inference.
 
 Open Lantern from your Discord server's App Launcher. Runtime v2 is deployed at [the existing Lantern endpoint](https://lantern-staging.dbrinkmann.workers.dev). Embedded Discord verification is tracked separately from hosted browser tests in the [cutover record](docs/runtime-cutover.md).
